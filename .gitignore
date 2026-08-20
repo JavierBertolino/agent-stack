@@ -1,0 +1,14 @@
+.DS_Store
+*.swp
+*.swo
+
+# Local files created when this repository is used as a target project.
+.agent-stack/config.conf
+.agent-stack/generated.manifest
+.claude/
+.codex/
+.cursor/
+.mcp.json
+opencode.jsonc
+UX_AGENTS.md
+UI_AGENTS.md

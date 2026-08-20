@@ -33,15 +33,15 @@ credentials too.
 
 ## Install Without Cloning
 
-The main setup script is self-contained. An authenticated GitHub CLI session
-can stream it directly into the target project:
+The top-level `setup.sh` is self-contained. An authenticated GitHub CLI
+session can stream it directly into the target project:
 
 ```sh
 gh auth login
 cd /path/to/your-project
 gh api \
   --header 'Accept: application/vnd.github.raw+json' \
-  '/repos/JavierBertolino/agent-stack/contents/scripts/setup-agent-stack.sh?ref=main' \
+  '/repos/JavierBertolino/agent-stack/contents/setup.sh?ref=main' \
   | sh -s -- init --root "$PWD" \
       --platforms opencode,claude,codex,cursor
 ```
@@ -52,14 +52,16 @@ For automation, use a GitHub token with read access to this private repository:
 curl -fsSL \
   -H "Authorization: Bearer $GITHUB_TOKEN" \
   -H 'Accept: application/vnd.github.raw+json' \
-  'https://api.github.com/repos/JavierBertolino/agent-stack/contents/scripts/setup-agent-stack.sh?ref=main' \
+  'https://api.github.com/repos/JavierBertolino/agent-stack/contents/setup.sh?ref=main' \
   | sh -s -- init --root "$PWD" \
       --platforms opencode,claude,codex,cursor
 ```
 
 This mode uses the script's embedded role prompts, templates, and defaults. It
 does not require a local kit checkout, but the caller must still authenticate
-to GitHub because the repository is private.
+to GitHub because the repository is private. A request to a plain
+`github.com/...` web URL returns the GitHub page, not the script; an
+unauthenticated raw/API request is denied.
 
 For a non-interactive install, choose platforms explicitly:
 

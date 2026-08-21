@@ -11,7 +11,7 @@ Usage:
 
 The target path must already exist. Options after --path are passed to the
 agent-stack setup script, including --platforms, --mcp, --select, and
---specs-repository.
+--specs-repository. A specs repository is required for setup.
 EOF
 }
 

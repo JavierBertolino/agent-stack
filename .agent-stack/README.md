@@ -18,7 +18,7 @@ platforms (OpenCode, Claude Code, Codex, Cursor); for non-interactive runs use
 `--platforms opencode,claude,codex,cursor` or the `--skip-*` flags. The
 interactive wizard detects existing harness files, discovers models from the
 installed OpenCode catalog when available, and asks for model plus thinking
-settings per selected role. It also asks for the GitHub `owner/repo` that will
+settings per selected role. It also requires the GitHub `owner/repo` that will
 receive finalized OpenSpec changes and its base branch.
 
 The script is a single self-contained file: role prompts, guide templates, and
@@ -32,7 +32,7 @@ enabled platform's config. Their names and URLs are stored in the generated
 `opencode.jsonc` (OpenCode), `.mcp.json` (Claude), `.cursor/mcp.json` (Cursor),
 and `.codex/config.toml` (Codex). Model pinning per role and platform is
 configurable in `config.conf`. Set `SPECS_REPOSITORY` and
-`SPECS_REPOSITORY_BASE_BRANCH` before closing a change. The resolver publishes
+`SPECS_REPOSITORY_BASE_BRANCH` during setup. The resolver publishes
 the finalized change there through a branch and PR.
 `TASK_STATE_IN_PROGRESS` and `TASK_STATE_IN_PR` configure the linked Linear
 task states used when work starts and when implementation PRs are open.

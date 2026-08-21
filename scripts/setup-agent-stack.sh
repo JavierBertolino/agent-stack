@@ -76,7 +76,8 @@ detected-harness multiselect menu for OpenCode, Claude Code, Codex, and Cursor,
 then asks for the specs repository, each selected role's model, and supported
 thinking level.
 Non-interactive runs use the ENABLE_* and model defaults from
-.agent-stack/config.conf.
+.agent-stack/config.conf. `SPECS_REPOSITORY` must be set through the wizard,
+`--specs-repository`, or that config file.
 
 MCP integrations: the wizard can register Linear and/or Trello in every
 enabled platform's config: opencode.jsonc (OpenCode), .mcp.json (Claude),
@@ -474,15 +475,20 @@ resolve_delivery_config() {
 }
 
 configure_delivery_interactive() {
-  current=$SPECS_REPOSITORY
-  printf '\nOpenSpec specs repository (GitHub owner/repo; required before closeout, blank keeps current):\n'
-  printf '  current: %s\n> ' "${current:-not configured}"
-  IFS= read -r repository || die 'interactive configuration aborted'
-  case "$repository" in
-    none|off) SPECS_REPOSITORY= ;;
-    '') ;;
-    *) SPECS_REPOSITORY=$repository ;;
-  esac
+  while :; do
+    current=$SPECS_REPOSITORY
+    printf '\nOpenSpec specs repository (GitHub owner/repo; required for setup, Enter keeps current):\n'
+    printf '  current: %s\n> ' "${current:-not configured}"
+    IFS= read -r repository || die 'interactive configuration aborted'
+    case "$repository" in
+      '') ;;
+      *) SPECS_REPOSITORY=$repository ;;
+    esac
+    if specs_repository_is_valid "$SPECS_REPOSITORY"; then
+      break
+    fi
+    printf 'a GitHub repository in OWNER/REPO form is required\n' >&2
+  done
 
   if [ -n "$SPECS_REPOSITORY" ]; then
     current=$SPECS_REPOSITORY_BASE_BRANCH
@@ -492,6 +498,17 @@ configure_delivery_interactive() {
     [ -n "$branch" ] && SPECS_REPOSITORY_BASE_BRANCH=$branch
   fi
   PERSIST_SELECTION=1
+}
+
+specs_repository_is_valid() {
+  case "$1" in
+    */*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+require_specs_repository() {
+  specs_repository_is_valid "$SPECS_REPOSITORY" || die 'SPECS_REPOSITORY is required; use --specs-repository OWNER/REPO or edit .agent-stack/config.conf'
 }
 
 resolve_platforms() {
@@ -1678,9 +1695,8 @@ MCP_TRELLO_ENABLED=0
 MCP_TRELLO_NAME=trello
 MCP_TRELLO_URL=https://mcp.trello.com/mcp
 
-# Finalized OpenSpec publication. Set this to a GitHub owner/repo before
-# closing a change so the resolver can upload the completed change and open a
-# specs PR against the configured base branch.
+# Finalized OpenSpec publication. Setup requires a GitHub owner/repo here or
+# through --specs-repository so the resolver can upload completed changes.
 SPECS_REPOSITORY=
 SPECS_REPOSITORY_BASE_BRANCH=main
 TASK_STATE_IN_PROGRESS=In Progress
@@ -2182,6 +2198,7 @@ case "$COMMAND" in
       configure_delivery_interactive
       configure_models_interactive
     fi
+    require_specs_repository
     persist_selection
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
       install_codex_bridge
@@ -2199,6 +2216,7 @@ case "$COMMAND" in
       configure_delivery_interactive
       configure_models_interactive
     fi
+    require_specs_repository
     persist_selection
     render_platform_outputs sync
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
@@ -2212,6 +2230,7 @@ case "$COMMAND" in
     [ -f "$CONFIG_FILE" ] || die "missing config: $CONFIG_FILE"
     resolve_mcp
     resolve_delivery_config
+    require_specs_repository
     render_platform_outputs check
     if [ "$CONFLICTS" -gt 0 ]; then
       exit 1

@@ -16,7 +16,8 @@ kit directory, and install into an existing project with an absolute path:
 gh auth login
 gh repo clone JavierBertolino/agent-stack "$HOME/.local/share/agent-stack"
 cd "$HOME/.local/share/agent-stack"
-./install.sh --path=/absolute/path/to/your-project
+./install.sh --path=/absolute/path/to/your-project \
+  --specs-repository=OWNER/specs-repository
 ```
 
 In Git Bash, `pwd` must be the consuming project directory, not the
@@ -38,7 +39,8 @@ SSH users can use the equivalent clone command:
 git clone git@github.com:JavierBertolino/agent-stack.git \
   "$HOME/.local/share/agent-stack"
 cd "$HOME/.local/share/agent-stack"
-./install.sh --path=/absolute/path/to/your-project
+./install.sh --path=/absolute/path/to/your-project \
+  --specs-repository=OWNER/specs-repository
 ```
 
 Private repository access is the distribution gate. Anyone with repository
@@ -158,6 +160,10 @@ thinking at the active model/session level rather than per agent.
 
 The default MCP selection is Linear on and Trello off. OAuth and credentials
 remain managed by the target tool and are never written by this kit.
+
+`SPECS_REPOSITORY` is required during setup. Interactive setup keeps prompting
+until a GitHub `OWNER/REPO` value is supplied; non-interactive setup requires
+`--specs-repository=OWNER/REPO` or the value in `.agent-stack/config.conf`.
 
 The resolver does not pause for a user specs-review gate. Once the OpenSpec
 artifacts are complete, it delegates directly to `developer`. At closeout it

@@ -23,18 +23,29 @@ scope.
    change name from free-form input.
 2. **Clarify**: ask one batched question round for missing scope, repositories,
    UX/UI impact, constraints, and tracking requirements.
-3. **Branch**: inspect every affected repository and follow its branch or
-   worktree policy before implementation delegation.
-4. **Specify**: create the OpenSpec proposal, design, tasks, and applicable
-   UX proposal. Every task includes a runnable `verification:` line.
-5. **Implement**: delegate to `developer`, who works task by task and checks
-   each task only after its verification passes.
-6. **Review**: verify command evidence, changed-file scope, and OpenSpec
+3. **Status**: move a linked Linear task to `TASK_STATE_IN_PROGRESS` when work
+   begins and record the transition in the pipeline ledger.
+4. **Branch**: inspect every affected repository, select the explicit base
+   branch when one exists, and create the implementation worktree under the
+   repository's ignored `.worktrees/` directory.
+5. **Specify**: create the OpenSpec proposal, design, tasks, and applicable
+   UX proposal. Every task includes a runnable `verification:` line. Do not
+   pause for user approval after the artifacts are complete.
+6. **Implement**: immediately delegate to `developer`, who works task by task
+   in the supplied `.worktrees/` path and checks each task only after its
+   verification passes.
+7. **Review**: verify command evidence, changed-file scope, and OpenSpec
    status. For UI changes, delegate `design-qa` and route only `BLOCKING`
    findings to the developer.
-7. **Close**: archive the completed change and synchronize the linked Linear
-   issue when one exists. Record remaining work as a new follow-up rather than
-   silently widening the change.
+8. **Publish**: upload the finalized OpenSpec change to the configured
+   `SPECS_REPOSITORY` through a specs PR, then push the implementation branch
+   and create a PR against its recorded base. A feature-branch base remains the
+   base for a stacked PR.
+9. **Status**: move the linked Linear task to `TASK_STATE_IN_PR` after all
+   implementation PRs are open. Leave it there until the PRs are merged.
+10. **Close**: archive the completed change and synchronize the linked Linear
+    issue when one exists. Record remaining work as a new follow-up rather than
+    silently widening the change.
 
 ## Governance
 
@@ -72,6 +83,7 @@ The installer renders the same role bodies into:
 - `.claude/agents/*.md` with Claude Code metadata and tool boundaries;
 - `.codex/agents/*.toml` with Codex model, effort, and sandbox settings;
 - `.cursor/agents/*.md` with Cursor metadata and read-only QA marking.
+- `.worktrees/` as the ignored root for resolver-managed worktrees.
 
 It also writes project-local platform configuration and optionally registers
 the selected Linear and Trello MCP servers. Credentials and OAuth state remain
@@ -93,6 +105,7 @@ The consuming project owns and reviews these files after installation:
 .cursor/agents/
 UX_AGENTS.md
 UI_AGENTS.md
+.gitignore             # includes .worktrees/
 ```
 
 Edit neutral role behavior under `.agent-stack/roles/` first, then run

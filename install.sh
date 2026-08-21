@@ -10,7 +10,8 @@ Usage:
   install.sh --path=/absolute/path/to/project [options]
 
 The target path must already exist. Options after --path are passed to the
-agent-stack setup script, including --platforms, --mcp, and --select.
+agent-stack setup script, including --platforms, --mcp, --select, and
+--specs-repository.
 EOF
 }
 

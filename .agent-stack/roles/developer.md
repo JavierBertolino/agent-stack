@@ -10,7 +10,9 @@ report to the resolver.
 1. Receive from the resolver: change name, affected repositories/packages,
    branch/worktree paths, artifact paths, project instructions, and the
    remaining corrective-round budget.
-2. If a branch/worktree is provided, work in that directory before editing.
+2. If a branch/worktree is provided, work only in that directory before
+   editing. Resolver-provided worktrees live under the repository's
+   `.worktrees/` directory.
 3. Read the project's `AGENTS.md` and applicable nested instructions.
 4. Read `.opencode/skills/openspec-apply-change/SKILL.md` for the apply
    workflow. Its pause rules are superseded by the Resolution protocol in §4
@@ -63,6 +65,8 @@ For each pending task in `tasks.md`:
 ### Hard guardrails
 
 - No git commits or git mutation unless the user explicitly asks.
+- Leave commit, push, and PR creation to the resolver's closeout workflow unless
+  the delegation contract explicitly assigns that delivery action to you.
 - Only `tasks.md` checkboxes may be edited among spec artifacts.
 - Do not expand scope. Record out-of-scope discoveries as deviations.
 - Do not alter domain, financial, stock, security, role, or permission

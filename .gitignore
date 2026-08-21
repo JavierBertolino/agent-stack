@@ -1,6 +1,7 @@
 .DS_Store
 *.swp
 *.swo
+.worktrees/
 
 # Local files created when this repository is used as a target project.
 .agent-stack/config.conf

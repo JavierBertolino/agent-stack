@@ -100,7 +100,8 @@ The repository checkout workflow is equivalent to:
 ```sh
 ./install.sh --path=/absolute/path/to/your-project \
   --platforms opencode,claude,codex,cursor \
-  --mcp linear
+  --mcp linear \
+  --specs-repository OWNER/specs-repository
 ```
 
 ## What It Installs
@@ -112,6 +113,7 @@ The repository checkout workflow is equivalent to:
 - Project-owned `UX_AGENTS.md` and `UI_AGENTS.md` starter templates.
 - Platform-specific agent files for the selected tools.
 - Selected Linear and/or Trello MCP entries for enabled platforms.
+- An ignored `.worktrees/` directory for resolver and specs-repository worktrees.
 
 The generated project files are intentionally not stored in this repository.
 They belong to the project being configured.
@@ -140,6 +142,10 @@ file to configure:
 
 - enabled platforms;
 - Linear and Trello MCP selection, names, and URLs;
+- `SPECS_REPOSITORY` and `SPECS_REPOSITORY_BASE_BRANCH` for finalized OpenSpec
+  uploads;
+- `TASK_STATE_IN_PROGRESS` and `TASK_STATE_IN_PR` for linked Linear task
+  transitions;
 - model and reasoning settings per role and platform;
 - Codex concurrency.
 
@@ -152,6 +158,15 @@ thinking at the active model/session level rather than per agent.
 
 The default MCP selection is Linear on and Trello off. OAuth and credentials
 remain managed by the target tool and are never written by this kit.
+
+The resolver does not pause for a user specs-review gate. Once the OpenSpec
+artifacts are complete, it delegates directly to `developer`. At closeout it
+uploads the finalized change to `SPECS_REPOSITORY`, pushes the implementation
+branch, and opens a PR against the recorded base branch. A non-default base
+branch produces a stacked PR instead of silently targeting `main`.
+For linked Linear tasks, the resolver sets `In Progress` when work starts and
+`In PR` after the implementation PRs are open. It does not mark an open PR as
+completed.
 
 ## Workflow
 

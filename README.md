@@ -136,6 +136,14 @@ setup-agent-stack.sh prune    # remove only safe, stale generated files
 The wrapper `install.sh` is equivalent to `init` with this repository as the
 kit root.
 
+### Herdr + OpenCode
+
+When the resolver is running as OpenCode inside Herdr, its current pane remains
+the main coordinator. It creates a sibling pane only when it delegates to
+`designer`, `developer`, or `design-qa`, starts that role there, waits for the
+structured report, and leaves the pane visible. It does not pre-start idle
+roles. Outside Herdr, the normal native delegation workflow is used.
+
 ## Configuration
 
 The installer copies `.agent-stack/defaults.conf` to the consuming project's
@@ -151,15 +159,22 @@ file to configure:
 - model and reasoning settings per role and platform;
 - Codex concurrency.
 
-On an interactive install, the wizard detects existing harness configuration,
-queries the installed OpenCode model catalog when available, and asks for a
-model plus thinking setting for each selected role. Claude Code, Codex, and
-Cursor do not expose a stable local model-list command, so their wizard steps
-offer existing values and accept a model ID or alias directly. Cursor controls
-thinking at the active model/session level rather than per agent.
+On an interactive install, the wizard runs five visible steps: platforms,
+MCP integrations, specs repository, model strategy, and final review. It
+detects existing harness configuration and keeps current or harness-default
+models unless the operator explicitly chooses one model per platform or a
+model per role. OpenCode model search uses the local catalog when available;
+`gum`/`fzf` provide fuzzy navigation, while the shell fallback remains
+available. Cursor controls thinking at the active model/session level rather
+than per agent.
 
 The default MCP selection is Linear on and Trello off. OAuth and credentials
 remain managed by the target tool and are never written by this kit.
+
+The interactive wizard uses `gum` menus and `fzf` model search when available.
+It falls back to POSIX shell prompts when they are not installed. Set
+`AGENT_STACK_PLAIN=1` to force the fallback, which is useful in CI or when
+testing scripted TTY input.
 
 `SPECS_REPOSITORY` is required during setup. Interactive setup keeps prompting
 until a GitHub `OWNER/REPO` value is supplied; non-interactive setup requires
@@ -170,9 +185,10 @@ artifacts are complete, it delegates directly to `developer`. At closeout it
 uploads the finalized change to `SPECS_REPOSITORY`, pushes the implementation
 branch, and opens a PR against the recorded base branch. A non-default base
 branch produces a stacked PR instead of silently targeting `main`.
-For linked Linear tasks, the resolver sets `In Progress` when work starts and
-`In PR` after the implementation PRs are open. It does not mark an open PR as
-completed.
+For linked Linear tasks, the resolver assigns the authenticated user only when
+the task has no assignee, preserves an existing assignee, then sets the task to
+`In Progress` when work starts and `In PR` after the implementation PRs are
+open. It does not mark an open PR as completed.
 
 ## Workflow
 

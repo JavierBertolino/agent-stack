@@ -13,12 +13,12 @@ used by the Agent Stack installer.
 Run `install.sh --path=/absolute/path/to/project` from the kit repository, or run
 `scripts/setup-agent-stack.sh init --kit-root /path/to/agent-stack` from a
 project root. The setup is idempotent and does not overwrite existing
-human-owned files. Interactively it shows a multiselect for the target
-platforms (OpenCode, Claude Code, Codex, Cursor); for non-interactive runs use
-`--platforms opencode,claude,codex,cursor` or the `--skip-*` flags. The
-interactive wizard detects existing harness files, discovers models from the
-installed OpenCode catalog when available, and asks for model plus thinking
-settings per selected role. It also requires the GitHub `owner/repo` that will
+human-owned files. Interactively it walks through platforms, MCP integrations,
+the specs repository, model strategy, and a final review. `gum`/`fzf` are used
+when available, with a POSIX shell fallback; set `AGENT_STACK_PLAIN=1` to force
+the fallback. For non-interactive runs use `--platforms opencode,claude,codex,cursor`
+or the `--skip-*` flags. Model selection is optional and defaults to current or
+harness-default values. It also requires the GitHub `owner/repo` that will
 receive finalized OpenSpec changes and its base branch.
 
 The script is a single self-contained file: role prompts, guide templates, and
@@ -35,7 +35,9 @@ configurable in `config.conf`. Set `SPECS_REPOSITORY` and
 `SPECS_REPOSITORY_BASE_BRANCH` during setup. The resolver publishes
 the finalized change there through a branch and PR.
 `TASK_STATE_IN_PROGRESS` and `TASK_STATE_IN_PR` configure the linked Linear
-task states used when work starts and when implementation PRs are open.
+task states used when work starts and when implementation PRs are open. When
+work starts, the resolver assigns the authenticated user only if the task has
+no assignee and preserves an existing assignee.
 
 Resolver worktrees are always kept under `.worktrees/` in each repository, and
 the installer adds that directory to the repository's `.gitignore` without
@@ -50,6 +52,8 @@ Useful commands:
   the first `init` when no neutral role sources exist.
 - `scripts/setup-agent-stack.sh prune` removes only stale files recorded in the
   manifest and leaves changed files in place.
+- When OpenCode runs inside Herdr, the resolver opens sibling panes on demand
+  for delegated roles and keeps the main resolver pane visible.
 
 Use `--install-codex-bridge` only when the project wants the short UX/UI and
 Linear guidance block added to `AGENTS.md`. The installer never adds project

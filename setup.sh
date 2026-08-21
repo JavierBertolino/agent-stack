@@ -22,9 +22,13 @@ SPECS_REPOSITORY_BASE_BRANCH_ARG=
 INTERACTIVE_WIZARD=0
 PERSIST_SELECTION=0
 CONFLICTS=0
+INTERACTIVE_CONFIG_FILE=
+INTERACTIVE_CONFIG_ORIGINAL=
+MODEL_STRATEGY=keep
+MODEL_STRATEGY_LABEL='Keep current/default values'
 
 # Per-platform enable flags (0 = skip, 1 = render). Resolved later from config
-# defaults, CLI flags, or the interactive multiselect menu.
+# defaults, CLI flags, or the interactive wizard.
 ENABLE_OPENCODE=1
 ENABLE_CLAUDE=1
 ENABLE_CODEX=1
@@ -59,7 +63,7 @@ Options:
                               Missing kit files fall back to embedded content.
   --platforms LIST            Comma-separated platforms to configure:
                               opencode, claude, codex, cursor.
-  --select                    Force the interactive platform multiselect.
+  --select                    Force the interactive setup wizard.
   --mcp LIST                  MCP integrations: none, linear, trello, both.
   --specs-repository REPO     GitHub owner/repo for finalized OpenSpec uploads.
   --specs-base-branch BRANCH  Base branch for the specs repository PR.
@@ -72,9 +76,10 @@ Options:
   -h, --help                  Show this help.
 
 Platforms: running interactively (init/sync) with no platform flag shows a
-detected-harness multiselect menu for OpenCode, Claude Code, Codex, and Cursor,
-then asks for the specs repository, each selected role's model, and supported
-thinking level.
+guided wizard with progress, keyboard menus when gum is installed, and a final
+review before writing the project configuration. Model configuration is
+optional; the default keeps the current or harness-default values.
+Set `AGENT_STACK_PLAIN=1` to force the keyboard-only fallback.
 Non-interactive runs use the ENABLE_* and model defaults from
 .agent-stack/config.conf. `SPECS_REPOSITORY` must be set through the wizard,
 `--specs-repository`, or that config file.
@@ -353,6 +358,51 @@ platform_marker() {
   fi
 }
 
+has_gum() {
+  [ "${AGENT_STACK_PLAIN:-0}" != 1 ] && command -v gum >/dev/null 2>&1
+}
+
+has_fzf() {
+  [ "${AGENT_STACK_PLAIN:-0}" != 1 ] && command -v fzf >/dev/null 2>&1
+}
+
+wizard_step() {
+  if has_gum; then
+    gum style --border double --padding '0 1' --foreground 99 "$1"
+  else
+    printf '\n== %s ==\n' "$1"
+  fi
+}
+
+csv_add() {
+  if [ -n "$1" ]; then
+    printf '%s,%s\n' "$1" "$2"
+  else
+    printf '%s\n' "$2"
+  fi
+}
+
+summary_add() {
+  if [ -n "$1" ]; then
+    printf '%s, %s\n' "$1" "$2"
+  else
+    printf '%s\n' "$2"
+  fi
+}
+
+prompt_text_value() {
+  label=$1
+  current=$2
+  if has_gum; then
+    PROMPT_VALUE=$(gum input --header "$label" --prompt '> ' --value "$current") || die 'interactive configuration aborted'
+    return 0
+  fi
+
+  printf '%s\n' "$label"
+  printf '  current: %s\n> ' "${current:-not configured}"
+  IFS= read -r PROMPT_VALUE || die 'interactive configuration aborted'
+}
+
 select_platforms_interactive() {
   [ -t 0 ] || die "--select requires an interactive terminal"
 
@@ -361,8 +411,42 @@ select_platforms_interactive() {
   x=$(platform_default_enabled codex)
   r=$(platform_default_enabled cursor)
 
+  wizard_step 'Step 1/5 - Platforms'
+
+  if has_gum; then
+    selected=
+    [ "$o" = 1 ] && selected=$(csv_add "$selected" 'OpenCode')
+    [ "$c" = 1 ] && selected=$(csv_add "$selected" 'Claude Code')
+    [ "$x" = 1 ] && selected=$(csv_add "$selected" 'Codex')
+    [ "$r" = 1 ] && selected=$(csv_add "$selected" 'Cursor')
+    selected=$(gum choose --no-limit --ordered --height=8 \
+      --header 'Choose platforms (Space selects, Enter confirms)' \
+      --selected "$selected" \
+      'OpenCode' 'Claude Code' 'Codex' 'Cursor') || die 'interactive platform selection aborted'
+    [ -n "$selected" ] || die 'select at least one platform'
+
+    o=0; c=0; x=0; r=0
+    while IFS= read -r platform; do
+      case "$platform" in
+        OpenCode) o=1 ;;
+        'Claude Code') c=1 ;;
+        Codex) x=1 ;;
+        Cursor) r=1 ;;
+      esac
+    done <<EOF
+$selected
+EOF
+    ENABLE_OPENCODE=$o
+    ENABLE_CLAUDE=$c
+    ENABLE_CODEX=$x
+    ENABLE_CURSOR=$r
+    INTERACTIVE_WIZARD=1
+    PERSIST_SELECTION=1
+    return 0
+  fi
+
   while :; do
-    printf '\nSelect platforms to configure (enter number to toggle, Enter to confirm):\n'
+    printf 'Select platforms to configure (enter number to toggle, Enter to confirm):\n'
     if [ "$o" = 1 ]; then m='[x]'; else m='[ ]'; fi
     printf '  1 %s OpenCode%s\n' "$m" "$(platform_marker opencode)"
     if [ "$c" = 1 ]; then m='[x]'; else m='[ ]'; fi
@@ -385,6 +469,8 @@ select_platforms_interactive() {
       *) printf 'choose 1-4, a, n, or Enter\n' ;;
     esac
   done
+
+  [ "$o$c$x$r" != 0000 ] || die 'select at least one platform'
 
   ENABLE_OPENCODE=$o
   ENABLE_CLAUDE=$c
@@ -420,8 +506,33 @@ select_mcp_interactive() {
   linear=$MCP_LINEAR_ENABLED
   trello=$MCP_TRELLO_ENABLED
 
+  wizard_step 'Step 2/5 - Integrations'
+
+  if has_gum; then
+    selected=
+    [ "$linear" = 1 ] && selected=$(csv_add "$selected" 'Linear')
+    [ "$trello" = 1 ] && selected=$(csv_add "$selected" 'Trello')
+    selected=$(gum choose --no-limit --ordered --height=6 \
+      --header 'Choose MCP integrations (Space selects, Enter confirms)' \
+      --selected "$selected" 'Linear' 'Trello') || die 'interactive MCP selection aborted'
+    linear=0
+    trello=0
+    while IFS= read -r integration; do
+      case "$integration" in
+        Linear) linear=1 ;;
+        Trello) trello=1 ;;
+      esac
+    done <<EOF
+$selected
+EOF
+    MCP_LINEAR_ENABLED=$linear
+    MCP_TRELLO_ENABLED=$trello
+    PERSIST_SELECTION=1
+    return 0
+  fi
+
   while :; do
-    printf '\nSelect MCP integrations to configure (enter number to toggle, Enter to confirm):\n'
+    printf 'Select MCP integrations to configure (enter number to toggle, Enter to confirm):\n'
     if [ "$linear" = 1 ]; then m='[x]'; else m='[ ]'; fi
     printf '  1 %s Linear\n' "$m"
     if [ "$trello" = 1 ]; then m='[x]'; else m='[ ]'; fi
@@ -475,11 +586,12 @@ resolve_delivery_config() {
 }
 
 configure_delivery_interactive() {
+  wizard_step 'Step 3/5 - Specs repository'
+
   while :; do
     current=$SPECS_REPOSITORY
-    printf '\nOpenSpec specs repository (GitHub owner/repo; required for setup, Enter keeps current):\n'
-    printf '  current: %s\n> ' "${current:-not configured}"
-    IFS= read -r repository || die 'interactive configuration aborted'
+    prompt_text_value 'OpenSpec specs repository (GitHub OWNER/REPO)' "$current"
+    repository=$PROMPT_VALUE
     case "$repository" in
       '') ;;
       *) SPECS_REPOSITORY=$repository ;;
@@ -492,9 +604,8 @@ configure_delivery_interactive() {
 
   if [ -n "$SPECS_REPOSITORY" ]; then
     current=$SPECS_REPOSITORY_BASE_BRANCH
-    printf 'Specs repository base branch (Enter keeps current):\n'
-    printf '  current: %s\n> ' "$current"
-    IFS= read -r branch || die 'interactive configuration aborted'
+    prompt_text_value 'Specs repository base branch' "$current"
+    branch=$PROMPT_VALUE
     [ -n "$branch" ] && SPECS_REPOSITORY_BASE_BRANCH=$branch
   fi
   PERSIST_SELECTION=1
@@ -660,6 +771,19 @@ prompt_option() {
   done
 }
 
+prompt_single_choice() {
+  label=$1
+  current=$2
+  shift 2
+
+  if has_gum; then
+    PROMPT_VALUE=$(gum choose --height=8 --header "$label" --selected "$current" "$@") || die 'interactive configuration aborted'
+    return 0
+  fi
+
+  prompt_option "$label" "$current" "$@"
+}
+
 discover_configured_models() {
   platform=$1
   case "$platform" in
@@ -701,15 +825,13 @@ discover_models_for() {
 prompt_custom_model() {
   label=$1
   current=$2
-  printf '%s\n' "$label"
-  printf '  current: %s\n' "${current:-harness default}"
-  printf 'Model ID or alias (Enter keeps current): '
-  IFS= read -r custom || die 'interactive configuration aborted'
-  if [ -n "$custom" ]; then
-    PROMPT_VALUE=$custom
-  else
-    PROMPT_VALUE=$current
-  fi
+  while :; do
+    prompt_text_value "$label model ID or alias" "$current"
+    if [ -n "$PROMPT_VALUE" ]; then
+      return 0
+    fi
+    printf 'model value cannot be empty\n' >&2
+  done
 }
 
 prompt_discovered_model() {
@@ -721,6 +843,45 @@ prompt_discovered_model() {
     printf 'No local model catalog is available for %s.\n' "$label"
     prompt_custom_model "$label" "$current"
     return 0
+  fi
+
+  if has_gum; then
+    while :; do
+      action=$(gum choose --height=8 --header "$label" \
+        'Search the model catalog' \
+        "Keep current: ${current:-harness default}" \
+        'Enter a custom model ID') || die 'interactive model selection aborted'
+      case "$action" in
+        'Search the model catalog')
+          selected=$(gum filter --height=15 --header "$label" \
+            --placeholder 'Type to filter models...' --no-strict < "$catalog") || continue
+          if [ -n "$selected" ]; then
+            PROMPT_VALUE=$selected
+            return 0
+          fi
+          ;;
+        'Keep current:'*)
+          PROMPT_VALUE=$current
+          return 0
+          ;;
+        'Enter a custom model ID')
+          prompt_custom_model "$label" "$current"
+          return 0
+          ;;
+      esac
+    done
+  fi
+
+  if has_fzf; then
+    selected=$(fzf --height=15 --layout=reverse --cycle \
+      --header="$label" --prompt='Model> ' --query="$current" < "$catalog") || {
+      PROMPT_VALUE=$current
+      return 0
+    }
+    if [ -n "$selected" ]; then
+      PROMPT_VALUE=$selected
+      return 0
+    fi
   fi
 
   active=$catalog
@@ -786,7 +947,7 @@ prompt_discovered_model() {
   done
 }
 
-prompt_model_value() {
+prompt_model_only() {
   platform=$1
   role=$2
   current=$3
@@ -803,6 +964,13 @@ prompt_model_value() {
   prompt_discovered_model "$platform $role model" "$current" "$catalog"
   PROMPT_MODEL_VALUE=$PROMPT_VALUE
   rm -f "$catalog"
+}
+
+prompt_model_value() {
+  platform=$1
+  role=$2
+  current=$3
+  prompt_model_only "$platform" "$role" "$current"
 
   thinking_key=$(thinking_key_for "$platform" "$role")
   if [ -n "$thinking_key" ]; then
@@ -839,7 +1007,59 @@ prompt_thinking_value() {
   esac
 }
 
+prompt_model_strategy() {
+  prompt_single_choice 'Model configuration' 'Keep current/default values' \
+    'Keep current/default values' \
+    'Use one model per platform' \
+    'Choose a model for each role'
+  case "$PROMPT_VALUE" in
+    'Keep current/default values')
+      MODEL_STRATEGY=keep
+      MODEL_STRATEGY_LABEL='Keep current/default values'
+      ;;
+    'Use one model per platform')
+      MODEL_STRATEGY=platform
+      MODEL_STRATEGY_LABEL='One model per platform'
+      ;;
+    'Choose a model for each role')
+      MODEL_STRATEGY=role
+      MODEL_STRATEGY_LABEL='Model per role'
+      ;;
+    *)
+      die 'unknown model configuration selection'
+      ;;
+  esac
+}
+
 configure_models_interactive() {
+  wizard_step 'Step 4/5 - Models'
+  prompt_model_strategy
+
+  if [ "$MODEL_STRATEGY" = keep ]; then
+    printf 'Keeping current model settings.\n'
+    return 0
+  fi
+
+  if [ "$MODEL_STRATEGY" = platform ]; then
+    for platform in opencode claude codex cursor; do
+      case "$platform" in
+        opencode) enabled=$ENABLE_OPENCODE ;;
+        claude) enabled=$ENABLE_CLAUDE ;;
+        codex) enabled=$ENABLE_CODEX ;;
+        cursor) enabled=$ENABLE_CURSOR ;;
+      esac
+      [ "$enabled" = 1 ] || continue
+
+      model_key=$(model_key_for "$platform" resolver)
+      model_current=$(get_config "$model_key" "$(model_default_for "$platform" resolver)")
+      prompt_model_only "$platform" resolver "$model_current"
+      for role in resolver designer design-qa developer; do
+        set_config "$(model_key_for "$platform" "$role")" "$PROMPT_MODEL_VALUE"
+      done
+    done
+    return 0
+  fi
+
   for platform in opencode claude codex cursor; do
     case "$platform" in
       opencode) enabled=$ENABLE_OPENCODE ;;
@@ -861,6 +1081,39 @@ configure_models_interactive() {
       fi
     done
   done
+}
+
+print_wizard_summary() {
+  wizard_step 'Step 5/5 - Review'
+  printf 'Target: %s\n' "$ROOT"
+  printf 'Platforms: '
+  summary=
+  [ "$ENABLE_OPENCODE" = 1 ] && summary=$(summary_add "$summary" 'OpenCode')
+  [ "$ENABLE_CLAUDE" = 1 ] && summary=$(summary_add "$summary" 'Claude Code')
+  [ "$ENABLE_CODEX" = 1 ] && summary=$(summary_add "$summary" 'Codex')
+  [ "$ENABLE_CURSOR" = 1 ] && summary=$(summary_add "$summary" 'Cursor')
+  printf '%s\n' "$summary"
+  printf 'MCP: '
+  summary=
+  [ "$MCP_LINEAR_ENABLED" = 1 ] && summary=$(summary_add "$summary" 'Linear')
+  [ "$MCP_TRELLO_ENABLED" = 1 ] && summary=$(summary_add "$summary" 'Trello')
+  printf '%s\n' "${summary:-none}"
+  printf 'Specs repository: %s (base: %s)\n' "$SPECS_REPOSITORY" "$SPECS_REPOSITORY_BASE_BRANCH"
+  printf 'Models: %s\n' "$MODEL_STRATEGY_LABEL"
+}
+
+confirm_wizard() {
+  if has_gum; then
+    gum confirm 'Apply this configuration?' --default --affirmative Apply --negative Cancel
+    return $?
+  fi
+
+  printf '\nApply this configuration? [Y/n] '
+  IFS= read -r choice || return 1
+  case "$choice" in
+    ''|y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 persist_selection() {
@@ -902,7 +1155,7 @@ render_opencode() {
     printf '%s\n' 'permission:'
     case "$role" in
       resolver)
-        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
+        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
         ;;
       designer)
         printf '%s\n' '  bash: deny' '  task: deny' '  edit:' '    "*": deny' '    "openspec/changes/**/ux.md": allow'
@@ -1100,13 +1353,22 @@ review or approve the OpenSpec artifacts.
 
 For a linked Linear task, update its state through the connected Linear MCP:
 
-1. Once intake and clarification are complete and work is starting, set the
-   task to `TASK_STATE_IN_PROGRESS` from `.agent-stack/config.conf` (default
-   `In Progress`). Record the state change in the pipeline ledger.
-2. After every affected implementation repository has a pushed branch and an
+1. Once intake and clarification are complete and work is starting, inspect the
+   task's current assignee before changing its state.
+   - If the task has no assignee, resolve the authenticated Linear user with
+     the connected user lookup using `me`, then assign that user to the issue.
+   - If the task already has an assignee, preserve it and do not overwrite it.
+   - If the user lookup or assignment fails, stop before changing the task
+     state or delegating work. Do not claim ownership without a successful
+     Linear update.
+   - Record whether ownership was assigned or an existing assignee was
+     preserved in the pipeline ledger.
+2. Set the task to `TASK_STATE_IN_PROGRESS` from `.agent-stack/config.conf`
+   (default `In Progress`) and record the state change in the pipeline ledger.
+3. After every affected implementation repository has a pushed branch and an
    open PR, set the task to `TASK_STATE_IN_PR` (default `In PR`). Record every
    PR URL and the state change.
-3. Do not mark the task completed merely because a PR exists. Keep it `In PR`
+4. Do not mark the task completed merely because a PR exists. Keep it `In PR`
    until the project's merge/closeout policy says it is complete. If either
    configured state does not exist for the team, stop and ask the user which
    team state to use instead of silently substituting another state.
@@ -1234,6 +1496,36 @@ Call `developer` with:
 The delegation contract supersedes conflicting skill pause rules. The resolver
 must make this delegation immediately after finalizing the required specs; no
 spec-review approval gate is allowed.
+
+### 6.1 Herdr pane delegation for OpenCode
+
+When this resolver is running as OpenCode inside Herdr (`HERDR_ENV=1`), keep the
+current pane as the main coordinator and use Herdr as the visible execution
+surface for every delegated subagent:
+
+1. Do not pre-start `designer`, `developer`, or `design-qa`. Create a pane only
+   when that role is actually being delegated.
+2. Split a sibling pane in the current Herdr tab with
+   `herdr pane split --current --direction right --cwd "$PWD" --no-focus`.
+   Use a down split when the current layout needs a second row. Keep the pane
+   ID returned by Herdr and do not focus the new pane.
+3. Start the requested role in that pane with a unique name:
+   `herdr agent start <name> --kind opencode --pane <pane-id> --timeout 30000 -- --agent <role>`.
+4. Send the complete delegation contract to that pane with
+   `herdr agent prompt <pane-id> "<contract>" --wait --timeout <milliseconds>`.
+   The contract must include the change, artifact paths, repository and
+   worktree boundaries, scope, verification commands, remaining budget, and
+   the required structured report format.
+5. Read the returned report from the same pane with `herdr agent read <pane-id>`
+   and verify its evidence before continuing. If more information is needed,
+   prompt the same agent again instead of creating a hidden task session.
+6. Leave delegated panes visible for traceability. Do not close or reuse them
+   for a different role during the change.
+
+When Herdr is active, do not silently use the native hidden `task` delegation
+path. If a Herdr split, agent start, prompt, or report read fails, stop and
+report the failure. When Herdr is not active, use the normal platform-native
+delegation path described above.
 
 ## 7. Review — evidence first
 
@@ -1678,7 +1970,7 @@ MAX_CORRECTIVE_ROUNDS=3
 TIMEBOX_MINUTES=25
 
 # Platforms (1 = enabled, 0 = skipped). Used when the script runs
-# non-interactively; the interactive multiselect overrides these.
+# non-interactively; the interactive wizard overrides these.
 ENABLE_OPENCODE=1
 ENABLE_CLAUDE=1
 ENABLE_CODEX=1
@@ -1765,6 +2057,38 @@ ensure_config() {
     printf 'created %s\n' "$ROOT/.agent-stack/config.conf"
   fi
 }
+
+begin_interactive_config() {
+  [ "$INTERACTIVE_WIZARD" = 1 ] || return 0
+  [ -f "$CONFIG_FILE" ] || return 0
+  INTERACTIVE_CONFIG_ORIGINAL=$CONFIG_FILE
+  INTERACTIVE_CONFIG_FILE=$(mktemp "$ROOT/.agent-stack/.config.interactive.XXXXXX")
+  cp "$CONFIG_FILE" "$INTERACTIVE_CONFIG_FILE"
+  CONFIG_FILE=$INTERACTIVE_CONFIG_FILE
+}
+
+commit_interactive_config() {
+  [ -n "$INTERACTIVE_CONFIG_FILE" ] || return 0
+  staged=$INTERACTIVE_CONFIG_FILE
+  CONFIG_FILE=$INTERACTIVE_CONFIG_ORIGINAL
+  mv "$staged" "$CONFIG_FILE"
+  INTERACTIVE_CONFIG_FILE=
+  INTERACTIVE_CONFIG_ORIGINAL=
+}
+
+discard_interactive_config() {
+  [ -n "$INTERACTIVE_CONFIG_FILE" ] || return 0
+  rm -f "$INTERACTIVE_CONFIG_FILE"
+  CONFIG_FILE=$INTERACTIVE_CONFIG_ORIGINAL
+  INTERACTIVE_CONFIG_FILE=
+  INTERACTIVE_CONFIG_ORIGINAL=
+}
+
+cleanup_interactive_config() {
+  [ -n "$INTERACTIVE_CONFIG_FILE" ] && rm -f "$INTERACTIVE_CONFIG_FILE"
+}
+
+trap cleanup_interactive_config EXIT
 
 ensure_worktree_ignore() {
   ignore_file=$ROOT/.gitignore
@@ -2192,6 +2516,7 @@ resolve_platforms
 case "$COMMAND" in
   init)
     ensure_scaffolds
+    begin_interactive_config
     resolve_mcp
     resolve_delivery_config
     if [ "$INTERACTIVE_WIZARD" = 1 ]; then
@@ -2200,6 +2525,14 @@ case "$COMMAND" in
     fi
     require_specs_repository
     persist_selection
+    if [ "$INTERACTIVE_WIZARD" = 1 ]; then
+      print_wizard_summary
+      if ! confirm_wizard; then
+        discard_interactive_config
+        die 'interactive setup cancelled; no configuration was applied'
+      fi
+      commit_interactive_config
+    fi
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
       install_codex_bridge
     fi
@@ -2209,6 +2542,7 @@ case "$COMMAND" in
   sync)
     ensure_config
     ensure_worktree_ignore
+    begin_interactive_config
     resolve_mcp
     resolve_delivery_config
     ensure_role_sources
@@ -2218,6 +2552,14 @@ case "$COMMAND" in
     fi
     require_specs_repository
     persist_selection
+    if [ "$INTERACTIVE_WIZARD" = 1 ]; then
+      print_wizard_summary
+      if ! confirm_wizard; then
+        discard_interactive_config
+        die 'interactive setup cancelled; no configuration was applied'
+      fi
+      commit_interactive_config
+    fi
     render_platform_outputs sync
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
       install_codex_bridge

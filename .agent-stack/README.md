@@ -10,21 +10,24 @@ used by the Agent Stack installer.
 - `defaults.conf` contains safe setup defaults.
 - `generated.manifest` records hashes for files managed by the renderer.
 
-Run `install.sh --root /path/to/project` from the kit repository, or run
+Run `install.sh --path=/absolute/path/to/project` from the kit repository, or run
 `scripts/setup-agent-stack.sh init --kit-root /path/to/agent-stack` from a
 project root. The setup is idempotent and does not overwrite existing
 human-owned files. Interactively it shows a multiselect for the target
 platforms (OpenCode, Claude Code, Codex, Cursor); for non-interactive runs use
-`--platforms opencode,claude,codex,cursor` or the `--skip-*` flags.
+`--platforms opencode,claude,codex,cursor` or the `--skip-*` flags. The
+interactive wizard detects existing harness files, discovers models from the
+installed OpenCode catalog when available, and asks for model plus thinking
+settings per selected role.
 
 The script is a single self-contained file: role prompts, guide templates, and
 defaults are embedded as fallbacks, so you can copy `setup-agent-stack.sh` alone
 to another project (or share it) and it still works. When the `.agent-stack/`
 kit directory is present, its files are used as overrides.
 
-The bootstrap also registers the configured Linear MCP server
-(`LINEAR_MCP_NAME` / `LINEAR_MCP_URL` in the generated `config.conf`) in every
-enabled platform's config:
+The bootstrap optionally registers Linear and Trello MCP servers in every
+enabled platform's config. Their names and URLs are stored in the generated
+`config.conf`:
 `opencode.jsonc` (OpenCode), `.mcp.json` (Claude), `.cursor/mcp.json` (Cursor),
 and `.codex/config.toml` (Codex). Model pinning per role and platform is
 configurable in `config.conf`.

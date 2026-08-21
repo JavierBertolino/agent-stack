@@ -15,6 +15,10 @@ INSTALL_CODEX_BRIDGE=0
 INTERACTIVE_SELECT=0
 EXPLICIT_PLATFORM=0
 PLATFORMS_ARG=
+MCP_ARG=
+EXPLICIT_MCP=0
+INTERACTIVE_WIZARD=0
+PERSIST_SELECTION=0
 CONFLICTS=0
 
 # Per-platform enable flags (0 = skip, 1 = render). Resolved later from config
@@ -23,6 +27,15 @@ ENABLE_OPENCODE=1
 ENABLE_CLAUDE=1
 ENABLE_CODEX=1
 ENABLE_CURSOR=1
+
+# MCP and model settings are loaded from project config, then optionally
+# changed by the interactive installer wizard.
+MCP_LINEAR_ENABLED=1
+MCP_LINEAR_NAME=linear
+MCP_LINEAR_URL=https://mcp.linear.app/mcp
+MCP_TRELLO_ENABLED=0
+MCP_TRELLO_NAME=trello
+MCP_TRELLO_URL=https://mcp.trello.com/mcp
 
 usage() {
   cat <<'EOF'
@@ -43,6 +56,7 @@ Options:
   --platforms LIST            Comma-separated platforms to configure:
                               opencode, claude, codex, cursor.
   --select                    Force the interactive platform multiselect.
+  --mcp LIST                  MCP integrations: none, linear, trello, both.
   --claude-only               Only render/check Claude mirrors.
   --skip-opencode             Do not render/check OpenCode agents.
   --skip-claude               Do not render/check Claude agents.
@@ -52,12 +66,13 @@ Options:
   -h, --help                  Show this help.
 
 Platforms: running interactively (init/sync) with no platform flag shows a
-multiselect menu for OpenCode, Claude Code, Codex, and Cursor. Non-interactive
-runs use the ENABLE_* defaults from .agent-stack/config.conf (all on).
+detected-harness multiselect menu for OpenCode, Claude Code, Codex, and Cursor,
+then asks for each selected role's model and supported thinking level.
+Non-interactive runs use the ENABLE_* and model defaults from
+.agent-stack/config.conf.
 
-Linear MCP: when a platform is enabled, the script registers the connected
-Linear MCP server (name/URL from LINEAR_MCP_NAME / LINEAR_MCP_URL) in that
-platform's config: opencode.jsonc (OpenCode), .mcp.json (Claude),
+MCP integrations: the wizard can register Linear and/or Trello in every
+enabled platform's config: opencode.jsonc (OpenCode), .mcp.json (Claude),
 .cursor/mcp.json (Cursor), and .codex/config.toml (Codex).
 
 The script never overwrites an existing untracked human-owned file. Use
@@ -121,6 +136,45 @@ get_config() {
   else
     printf '%s\n' "$fallback"
   fi
+}
+
+has_config_key() {
+  key=$1
+  [ -f "$CONFIG_FILE" ] || return 1
+  awk -F= -v wanted="$key" '$1 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$CONFIG_FILE"
+}
+
+set_config() {
+  key=$1
+  value=$2
+  ensure_dir "$(dirname -- "$CONFIG_FILE")"
+  temporary=$(mktemp "$CONFIG_FILE.XXXXXX")
+
+  if [ -f "$CONFIG_FILE" ]; then
+    awk -F= -v wanted="$key" -v replacement="$key=$value" '
+      BEGIN { found = 0 }
+      $1 == wanted {
+        if (!found) print replacement
+        found = 1
+        next
+      }
+      { print }
+      END {
+        if (!found) print replacement
+      }
+    ' "$CONFIG_FILE" > "$temporary"
+  else
+    printf '%s\n' "$key=$value" > "$temporary"
+  fi
+
+  mv "$temporary" "$CONFIG_FILE"
+}
+
+file_contains() {
+  file=$1
+  needle=$2
+  [ -f "$file" ] || return 1
+  awk -v wanted="$needle" 'index($0, wanted) { found=1; exit } END { exit(found ? 0 : 1) }' "$file"
 }
 
 manifest_hash() {
@@ -236,24 +290,79 @@ enable_platform() {
   esac
 }
 
+platform_is_configured() {
+  case "$1" in
+    opencode)
+      [ -d "$ROOT/.opencode/agents" ] || [ -f "$ROOT/opencode.jsonc" ]
+      ;;
+    claude)
+      [ -d "$ROOT/.claude/agents" ] || [ -f "$ROOT/.mcp.json" ] || [ -f "$ROOT/CLAUDE.md" ]
+      ;;
+    codex)
+      [ -d "$ROOT/.codex/agents" ] || [ -f "$ROOT/.codex/config.toml" ]
+      ;;
+    cursor)
+      [ -d "$ROOT/.cursor/agents" ] || [ -f "$ROOT/.cursor/mcp.json" ]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+any_platform_configured() {
+  platform_is_configured opencode ||
+  platform_is_configured claude ||
+  platform_is_configured codex ||
+  platform_is_configured cursor
+}
+
+platform_default_enabled() {
+  platform=$1
+  configured=0
+  platform_is_configured "$platform" && configured=1
+
+  case "$platform" in
+    opencode) key=ENABLE_OPENCODE ;;
+    claude) key=ENABLE_CLAUDE ;;
+    codex) key=ENABLE_CODEX ;;
+    cursor) key=ENABLE_CURSOR ;;
+    *) return 1 ;;
+  esac
+
+  if [ "$(get_config "$key" 1)" = 0 ]; then
+    printf '%s\n' 0
+  elif [ "$configured" = 1 ] || ! any_platform_configured; then
+    printf '%s\n' 1
+  else
+    printf '%s\n' 0
+  fi
+}
+
+platform_marker() {
+  if platform_is_configured "$1"; then
+    printf '%s\n' ' (detected)'
+  else
+    printf '%s\n' ''
+  fi
+}
+
 select_platforms_interactive() {
   [ -t 0 ] || die "--select requires an interactive terminal"
 
-  o=$ENABLE_OPENCODE
-  c=$ENABLE_CLAUDE
-  x=$ENABLE_CODEX
-  r=$ENABLE_CURSOR
+  o=$(platform_default_enabled opencode)
+  c=$(platform_default_enabled claude)
+  x=$(platform_default_enabled codex)
+  r=$(platform_default_enabled cursor)
 
   while :; do
     printf '\nSelect platforms to configure (enter number to toggle, Enter to confirm):\n'
     if [ "$o" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  1 %s OpenCode\n' "$m"
+    printf '  1 %s OpenCode%s\n' "$m" "$(platform_marker opencode)"
     if [ "$c" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  2 %s Claude Code\n' "$m"
+    printf '  2 %s Claude Code%s\n' "$m" "$(platform_marker claude)"
     if [ "$x" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  3 %s Codex\n' "$m"
+    printf '  3 %s Codex%s\n' "$m" "$(platform_marker codex)"
     if [ "$r" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  4 %s Cursor\n' "$m"
+    printf '  4 %s Cursor%s\n' "$m" "$(platform_marker cursor)"
     printf '  a) select all   n) select none\n'
     printf '> '
     IFS= read -r choice || { printf '\n'; break; }
@@ -273,6 +382,74 @@ select_platforms_interactive() {
   ENABLE_CLAUDE=$c
   ENABLE_CODEX=$x
   ENABLE_CURSOR=$r
+  INTERACTIVE_WIZARD=1
+  PERSIST_SELECTION=1
+}
+
+apply_mcp_selection() {
+  case "$1" in
+    none)
+      MCP_LINEAR_ENABLED=0
+      MCP_TRELLO_ENABLED=0
+      ;;
+    linear)
+      MCP_LINEAR_ENABLED=1
+      MCP_TRELLO_ENABLED=0
+      ;;
+    trello)
+      MCP_LINEAR_ENABLED=0
+      MCP_TRELLO_ENABLED=1
+      ;;
+    both)
+      MCP_LINEAR_ENABLED=1
+      MCP_TRELLO_ENABLED=1
+      ;;
+    *) die "unknown MCP selection: $1 (use none, linear, trello, or both)" ;;
+  esac
+}
+
+select_mcp_interactive() {
+  linear=$MCP_LINEAR_ENABLED
+  trello=$MCP_TRELLO_ENABLED
+
+  while :; do
+    printf '\nSelect MCP integrations to configure (enter number to toggle, Enter to confirm):\n'
+    if [ "$linear" = 1 ]; then m='[x]'; else m='[ ]'; fi
+    printf '  1 %s Linear\n' "$m"
+    if [ "$trello" = 1 ]; then m='[x]'; else m='[ ]'; fi
+    printf '  2 %s Trello\n' "$m"
+    printf '  a) select both   n) select none\n'
+    printf '> '
+    IFS= read -r choice || die 'interactive MCP selection aborted'
+    case "$choice" in
+      1) [ "$linear" = 1 ] && linear=0 || linear=1 ;;
+      2) [ "$trello" = 1 ] && trello=0 || trello=1 ;;
+      a|all) linear=1; trello=1 ;;
+      n|none) linear=0; trello=0 ;;
+      ''|d|done) break ;;
+      *) printf 'choose 1-2, a, n, or Enter\n' ;;
+    esac
+  done
+
+  MCP_LINEAR_ENABLED=$linear
+  MCP_TRELLO_ENABLED=$trello
+  PERSIST_SELECTION=1
+}
+
+resolve_mcp() {
+  MCP_LINEAR_ENABLED=$(get_config MCP_LINEAR_ENABLED 1)
+  MCP_LINEAR_NAME=$(get_config MCP_LINEAR_NAME "$(get_config LINEAR_MCP_NAME linear)")
+  MCP_LINEAR_URL=$(get_config MCP_LINEAR_URL "$(get_config LINEAR_MCP_URL https://mcp.linear.app/mcp)")
+  MCP_TRELLO_ENABLED=$(get_config MCP_TRELLO_ENABLED 0)
+  MCP_TRELLO_NAME=$(get_config MCP_TRELLO_NAME trello)
+  MCP_TRELLO_URL=$(get_config MCP_TRELLO_URL https://mcp.trello.com/mcp)
+
+  if [ -n "$MCP_ARG" ]; then
+    apply_mcp_selection "$MCP_ARG"
+    PERSIST_SELECTION=1
+  elif [ "$INTERACTIVE_WIZARD" = 1 ]; then
+    select_mcp_interactive
+  fi
 }
 
 resolve_platforms() {
@@ -309,6 +486,336 @@ resolve_platforms() {
   if [ "$INTERACTIVE_SELECT" = 1 ] || { [ -t 0 ] && { [ "$COMMAND" = init ] || [ "$COMMAND" = sync ]; }; }; then
     select_platforms_interactive
   fi
+
+}
+
+model_key_for() {
+  case "$1:$2" in
+    opencode:resolver) printf '%s\n' OPENCODE_RESOLVER_MODEL ;;
+    opencode:designer) printf '%s\n' OPENCODE_DESIGNER_MODEL ;;
+    opencode:design-qa) printf '%s\n' OPENCODE_DESIGN_QA_MODEL ;;
+    opencode:developer) printf '%s\n' OPENCODE_DEVELOPER_MODEL ;;
+    claude:resolver) printf '%s\n' CLAUDE_RESOLVER_MODEL ;;
+    claude:designer) printf '%s\n' CLAUDE_DESIGNER_MODEL ;;
+    claude:design-qa) printf '%s\n' CLAUDE_DESIGN_QA_MODEL ;;
+    claude:developer) printf '%s\n' CLAUDE_DEVELOPER_MODEL ;;
+    codex:resolver) printf '%s\n' CODEX_RESOLVER_MODEL ;;
+    codex:designer) printf '%s\n' CODEX_DESIGNER_MODEL ;;
+    codex:design-qa) printf '%s\n' CODEX_DESIGN_QA_MODEL ;;
+    codex:developer) printf '%s\n' CODEX_DEVELOPER_MODEL ;;
+    cursor:resolver) printf '%s\n' CURSOR_RESOLVER_MODEL ;;
+    cursor:designer) printf '%s\n' CURSOR_DESIGNER_MODEL ;;
+    cursor:design-qa) printf '%s\n' CURSOR_DESIGN_QA_MODEL ;;
+    cursor:developer) printf '%s\n' CURSOR_DEVELOPER_MODEL ;;
+    *) return 1 ;;
+  esac
+}
+
+thinking_key_for() {
+  case "$1:$2" in
+    opencode:resolver) printf '%s\n' OPENCODE_RESOLVER_VARIANT ;;
+    opencode:designer) printf '%s\n' OPENCODE_DESIGNER_VARIANT ;;
+    opencode:design-qa) printf '%s\n' OPENCODE_DESIGN_QA_VARIANT ;;
+    opencode:developer) printf '%s\n' OPENCODE_DEVELOPER_VARIANT ;;
+    claude:resolver) printf '%s\n' CLAUDE_RESOLVER_EFFORT ;;
+    claude:designer) printf '%s\n' CLAUDE_DESIGNER_EFFORT ;;
+    claude:design-qa) printf '%s\n' CLAUDE_DESIGN_QA_EFFORT ;;
+    claude:developer) printf '%s\n' CLAUDE_DEVELOPER_EFFORT ;;
+    codex:resolver) printf '%s\n' CODEX_RESOLVER_EFFORT ;;
+    codex:designer) printf '%s\n' CODEX_DESIGNER_EFFORT ;;
+    codex:design-qa) printf '%s\n' CODEX_DESIGN_QA_EFFORT ;;
+    codex:developer) printf '%s\n' CODEX_DEVELOPER_EFFORT ;;
+    cursor:*) printf '%s\n' '' ;;
+    *) return 1 ;;
+  esac
+}
+
+model_default_for() {
+  # Models are discovered from the active harness/catalog. An empty value
+  # means the generated agent inherits the harness default.
+  printf '%s\n' ''
+}
+
+thinking_default_for() {
+  case "$1:$2" in
+    opencode:resolver|opencode:designer|opencode:design-qa) printf '%s\n' max ;;
+    opencode:developer) printf '%s\n' high ;;
+    claude:resolver|claude:designer|claude:design-qa|claude:developer) printf '%s\n' high ;;
+    codex:resolver|codex:designer|codex:design-qa) printf '%s\n' xhigh ;;
+    codex:developer) printf '%s\n' high ;;
+    cursor:*) printf '%s\n' '' ;;
+    *) return 1 ;;
+  esac
+}
+
+prompt_option() {
+  label=$1
+  current=$2
+  shift 2
+
+  while :; do
+    printf '\n%s\n' "$label"
+    printf '  current: %s\n' "$current"
+    index=1
+    for option in "$@"; do
+      printf '  %s) %s\n' "$index" "$option"
+      index=$((index + 1))
+    done
+    printf '  c) custom value\n'
+    printf '  Enter keeps the current value\n> '
+    IFS= read -r choice || die 'interactive configuration aborted'
+
+    if [ -z "$choice" ]; then
+      PROMPT_VALUE=$current
+      return 0
+    fi
+
+    case "$choice" in
+      c|custom)
+        printf 'Custom value: '
+        IFS= read -r custom || die 'interactive configuration aborted'
+        [ -n "$custom" ] || { printf 'value cannot be empty\n' >&2; continue; }
+        PROMPT_VALUE=$custom
+        return 0
+        ;;
+      *[!0-9]*)
+        printf 'choose a listed number, c, or Enter\n' >&2
+        continue
+        ;;
+    esac
+
+    index=1
+    selected=
+    for option in "$@"; do
+      if [ "$choice" = "$index" ]; then
+        selected=$option
+        break
+      fi
+      index=$((index + 1))
+    done
+    if [ -n "$selected" ]; then
+      PROMPT_VALUE=$selected
+      return 0
+    fi
+    printf 'choose a listed number, c, or Enter\n' >&2
+  done
+}
+
+discover_configured_models() {
+  platform=$1
+  case "$platform" in
+    opencode|claude|cursor)
+      for file in "$ROOT/.${platform}/agents/"*.md; do
+        [ -f "$file" ] || continue
+        awk -F': ' '/^model: / && $2 != "" { print $2 }' "$file"
+      done
+      ;;
+    codex)
+      for file in "$ROOT/.codex/agents/"*.toml; do
+        [ -f "$file" ] || continue
+        awk -F'"' '/^model = / && $2 != "" { print $2 }' "$file"
+      done
+      ;;
+  esac
+}
+
+discover_models_for() {
+  platform=$1
+  case "$platform" in
+    opencode)
+      if command -v opencode >/dev/null 2>&1; then
+        opencode models 2>/dev/null | awk 'index($0, "/") > 0 { print }' || true
+      elif command -v pi >/dev/null 2>&1; then
+        # Pi exposes the same provider/model-shaped catalog when OpenCode is
+        # not installed. It is a discovery source, not a required runtime.
+        pi --list-models 2>/dev/null | awk 'NR > 1 && $1 != "provider" && NF >= 2 { print $1 "/" $2 }' || true
+      fi
+      ;;
+    claude|codex|cursor)
+      # These CLIs do not expose a stable local model-list command. Existing
+      # generated models are still offered, and the prompt accepts any ID.
+      ;;
+  esac
+  discover_configured_models "$platform"
+}
+
+prompt_custom_model() {
+  label=$1
+  current=$2
+  printf '%s\n' "$label"
+  printf '  current: %s\n' "${current:-harness default}"
+  printf 'Model ID or alias (Enter keeps current): '
+  IFS= read -r custom || die 'interactive configuration aborted'
+  if [ -n "$custom" ]; then
+    PROMPT_VALUE=$custom
+  else
+    PROMPT_VALUE=$current
+  fi
+}
+
+prompt_discovered_model() {
+  label=$1
+  current=$2
+  catalog=$3
+
+  if [ ! -s "$catalog" ]; then
+    printf 'No local model catalog is available for %s.\n' "$label"
+    prompt_custom_model "$label" "$current"
+    return 0
+  fi
+
+  active=$catalog
+  while :; do
+    count=$(awk 'END { print NR + 0 }' "$active")
+    printf '\n%s\n' "$label"
+    printf '  current: %s\n' "${current:-harness default}"
+    if [ "$count" -gt 40 ]; then
+      printf '  Showing the first 40 of %s available models.\n' "$count"
+    fi
+    index=1
+    while IFS= read -r option; do
+      printf '  %s) %s\n' "$index" "$option"
+      index=$((index + 1))
+      [ "$index" -gt 40 ] && break
+    done < "$active"
+    printf '  s) search the available model catalog\n'
+    printf '  c) enter a custom model ID or alias\n'
+    printf '  Enter keeps the current value\n> '
+    IFS= read -r choice || die 'interactive configuration aborted'
+
+    if [ -z "$choice" ]; then
+      PROMPT_VALUE=$current
+      [ "$active" = "$catalog" ] || rm -f "$active"
+      return 0
+    fi
+
+    case "$choice" in
+      c|custom)
+        prompt_custom_model "$label" "$current"
+        [ "$active" = "$catalog" ] || rm -f "$active"
+        return 0
+        ;;
+      s|search)
+        printf 'Search term: '
+        IFS= read -r query || die 'interactive configuration aborted'
+        [ -n "$query" ] || continue
+        searched=$(mktemp "$ROOT/.agent-stack/.models.filtered.XXXXXX")
+        awk -v query="$query" 'index(tolower($0), tolower(query)) { print }' "$catalog" > "$searched"
+        if [ ! -s "$searched" ]; then
+          rm -f "$searched"
+          printf 'No available models matched "%s".\n' "$query" >&2
+          continue
+        fi
+        if [ "$active" != "$catalog" ]; then
+          rm -f "$active"
+        fi
+        active=$searched
+        ;;
+      *[!0-9]*)
+        printf 'choose a listed number, s, c, or Enter\n' >&2
+        ;;
+      *)
+        selected=$(awk -v wanted="$choice" 'NR == wanted { print; exit }' "$active")
+        if [ -n "$selected" ]; then
+          PROMPT_VALUE=$selected
+          [ "$active" = "$catalog" ] || rm -f "$active"
+          return 0
+        fi
+        printf 'choose a listed number, s, c, or Enter\n' >&2
+        ;;
+    esac
+  done
+}
+
+prompt_model_value() {
+  platform=$1
+  role=$2
+  current=$3
+  catalog=$(mktemp "$ROOT/.agent-stack/.models.XXXXXX")
+  {
+    discover_models_for "$platform"
+  } | awk 'NF && !seen[$0]++' > "$catalog"
+  if [ -n "$current" ] && ! awk -v wanted="$current" '$0 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$catalog"; then
+    temporary=$(mktemp "$ROOT/.agent-stack/.models.current.XXXXXX")
+    printf '%s\n' "$current" > "$temporary"
+    awk '{ print }' "$catalog" >> "$temporary"
+    mv "$temporary" "$catalog"
+  fi
+  prompt_discovered_model "$platform $role model" "$current" "$catalog"
+  PROMPT_MODEL_VALUE=$PROMPT_VALUE
+  rm -f "$catalog"
+
+  thinking_key=$(thinking_key_for "$platform" "$role")
+  if [ -n "$thinking_key" ]; then
+    thinking_current=$(get_config "$thinking_key" "$(thinking_default_for "$platform" "$role")")
+    prompt_thinking_value "$platform" "$role" "$thinking_current"
+    PROMPT_THINKING_VALUE=$PROMPT_VALUE
+  else
+    PROMPT_THINKING_VALUE=
+  fi
+}
+
+prompt_thinking_value() {
+  platform=$1
+  role=$2
+  current=$3
+  case "$platform" in
+    opencode)
+      prompt_option "$platform $role thinking variant" "$current" \
+        minimal low medium high max
+      ;;
+    claude)
+      prompt_option "$platform $role thinking effort" "$current" \
+        low medium high xhigh max
+      ;;
+    codex)
+      prompt_option "$platform $role thinking effort" "$current" \
+        minimal low medium high xhigh
+      ;;
+    cursor)
+      printf 'Cursor %s thinking is controlled by the active Cursor model.\n' "$role"
+      PROMPT_VALUE=$current
+      ;;
+    *) die "unknown platform: $platform" ;;
+  esac
+}
+
+configure_models_interactive() {
+  for platform in opencode claude codex cursor; do
+    case "$platform" in
+      opencode) enabled=$ENABLE_OPENCODE ;;
+      claude) enabled=$ENABLE_CLAUDE ;;
+      codex) enabled=$ENABLE_CODEX ;;
+      cursor) enabled=$ENABLE_CURSOR ;;
+    esac
+    [ "$enabled" = 1 ] || continue
+
+    printf '\nConfigure models and thinking for %s.\n' "$platform"
+    for role in resolver designer design-qa developer; do
+      model_key=$(model_key_for "$platform" "$role")
+      model_current=$(get_config "$model_key" "$(model_default_for "$platform" "$role")")
+      prompt_model_value "$platform" "$role" "$model_current"
+      set_config "$model_key" "$PROMPT_MODEL_VALUE"
+      thinking_key=$(thinking_key_for "$platform" "$role")
+      if [ -n "$thinking_key" ]; then
+        set_config "$thinking_key" "$PROMPT_THINKING_VALUE"
+      fi
+    done
+  done
+}
+
+persist_selection() {
+  [ "$PERSIST_SELECTION" = 1 ] || return 0
+  set_config ENABLE_OPENCODE "$ENABLE_OPENCODE"
+  set_config ENABLE_CLAUDE "$ENABLE_CLAUDE"
+  set_config ENABLE_CODEX "$ENABLE_CODEX"
+  set_config ENABLE_CURSOR "$ENABLE_CURSOR"
+  set_config MCP_LINEAR_ENABLED "$MCP_LINEAR_ENABLED"
+  set_config MCP_TRELLO_ENABLED "$MCP_TRELLO_ENABLED"
+  set_config MCP_LINEAR_NAME "$MCP_LINEAR_NAME"
+  set_config MCP_LINEAR_URL "$MCP_LINEAR_URL"
+  set_config MCP_TRELLO_NAME "$MCP_TRELLO_NAME"
+  set_config MCP_TRELLO_URL "$MCP_TRELLO_URL"
 }
 
 render_opencode() {
@@ -317,17 +824,17 @@ render_opencode() {
   description=$(description_for "$role")
 
   case "$role" in
-    resolver) model=$(get_config OPENCODE_RESOLVER_MODEL 'openai/gpt-5.6-luna'); variant=$(get_config OPENCODE_RESOLVER_VARIANT 'max'); mode='primary'; color='primary' ;;
-    designer) model=$(get_config OPENCODE_DESIGNER_MODEL 'openai/gpt-5.6-luna'); variant=$(get_config OPENCODE_DESIGNER_VARIANT 'max'); mode='subagent'; color='accent' ;;
-    design-qa) model=$(get_config OPENCODE_DESIGN_QA_MODEL 'openai/gpt-5.6-luna'); variant=$(get_config OPENCODE_DESIGN_QA_VARIANT 'max'); mode='subagent'; color='accent' ;;
-    developer) model=$(get_config OPENCODE_DEVELOPER_MODEL 'openrouter/deepseek-v4-pro'); variant=$(get_config OPENCODE_DEVELOPER_VARIANT 'high'); mode='subagent'; color='success' ;;
+    resolver) model=$(get_config OPENCODE_RESOLVER_MODEL ''); variant=$(get_config OPENCODE_RESOLVER_VARIANT 'max'); mode='primary'; color='primary' ;;
+    designer) model=$(get_config OPENCODE_DESIGNER_MODEL ''); variant=$(get_config OPENCODE_DESIGNER_VARIANT 'high'); mode='subagent'; color='accent' ;;
+    design-qa) model=$(get_config OPENCODE_DESIGN_QA_MODEL ''); variant=$(get_config OPENCODE_DESIGN_QA_VARIANT 'high'); mode='subagent'; color='accent' ;;
+    developer) model=$(get_config OPENCODE_DEVELOPER_MODEL ''); variant=$(get_config OPENCODE_DEVELOPER_VARIANT 'high'); mode='subagent'; color='success' ;;
     *) die "unknown role: $role" ;;
   esac
 
   {
     printf '%s\n' '---'
     printf 'description: %s\n' "$description"
-    printf 'model: %s\n' "$model"
+    [ -n "$model" ] && printf 'model: %s\n' "$model"
     printf 'variant: %s\n' "$variant"
     printf 'mode: %s\n' "$mode"
     printf 'color: %s\n' "$color"
@@ -358,15 +865,17 @@ render_claude() {
   description=$(description_for "$role")
 
   case "$role" in
-    resolver) model=$(get_config CLAUDE_RESOLVER_MODEL 'opus'); tools='' ;;
-    designer) model=$(get_config CLAUDE_DESIGNER_MODEL 'opus'); tools='Read, Grep, Glob, Write' ;;
-    design-qa) model=$(get_config CLAUDE_DESIGN_QA_MODEL 'opus'); tools='Read, Grep, Glob' ;;
-    developer) model=$(get_config CLAUDE_DEVELOPER_MODEL 'sonnet'); tools='Read, Grep, Glob, Edit, Write, Bash' ;;
+    resolver) model=$(get_config CLAUDE_RESOLVER_MODEL ''); effort=$(get_config CLAUDE_RESOLVER_EFFORT 'high'); tools='' ;;
+    designer) model=$(get_config CLAUDE_DESIGNER_MODEL ''); effort=$(get_config CLAUDE_DESIGNER_EFFORT 'high'); tools='Read, Grep, Glob, Write' ;;
+    design-qa) model=$(get_config CLAUDE_DESIGN_QA_MODEL ''); effort=$(get_config CLAUDE_DESIGN_QA_EFFORT 'high'); tools='Read, Grep, Glob' ;;
+    developer) model=$(get_config CLAUDE_DEVELOPER_MODEL ''); effort=$(get_config CLAUDE_DEVELOPER_EFFORT 'high'); tools='Read, Grep, Glob, Edit, Write, Bash' ;;
     *) die "unknown role: $role" ;;
   esac
 
   {
-    printf '%s\n' '---' "name: $role" "description: $description" "model: $model"
+    printf '%s\n' '---' "name: $role" "description: $description"
+    [ -n "$model" ] && printf 'model: %s\n' "$model"
+    printf 'effort: %s\n' "$effort"
     [ -n "$tools" ] && printf 'tools: %s\n' "$tools"
     printf '%s\n' '---' ''
   } > "$output"
@@ -384,17 +893,17 @@ render_codex() {
   fi
 
   case "$role" in
-    resolver) model=$(get_config CODEX_RESOLVER_MODEL 'gpt-5.6-luna'); effort=$(get_config CODEX_RESOLVER_EFFORT 'xhigh') ;;
-    designer) model=$(get_config CODEX_DESIGNER_MODEL 'gpt-5.6-luna'); effort=$(get_config CODEX_DESIGNER_EFFORT 'xhigh') ;;
-    design-qa) model=$(get_config CODEX_DESIGN_QA_MODEL 'gpt-5.6-luna'); effort=$(get_config CODEX_DESIGN_QA_EFFORT 'xhigh') ;;
-    developer) model=$(get_config CODEX_DEVELOPER_MODEL 'gpt-5.6'); effort=$(get_config CODEX_DEVELOPER_EFFORT 'high') ;;
+    resolver) model=$(get_config CODEX_RESOLVER_MODEL ''); effort=$(get_config CODEX_RESOLVER_EFFORT 'xhigh') ;;
+    designer) model=$(get_config CODEX_DESIGNER_MODEL ''); effort=$(get_config CODEX_DESIGNER_EFFORT 'xhigh') ;;
+    design-qa) model=$(get_config CODEX_DESIGN_QA_MODEL ''); effort=$(get_config CODEX_DESIGN_QA_EFFORT 'xhigh') ;;
+    developer) model=$(get_config CODEX_DEVELOPER_MODEL ''); effort=$(get_config CODEX_DEVELOPER_EFFORT 'high') ;;
     *) die "unknown role: $role" ;;
   esac
 
   {
     printf 'name = "%s"\n' "$role"
     printf 'description = "%s"\n' "$description"
-    printf 'model = "%s"\n' "$model"
+    [ -n "$model" ] && printf 'model = "%s"\n' "$model"
     printf 'model_reasoning_effort = "%s"\n' "$effort"
     printf 'sandbox_mode = "%s"\n' "$sandbox_mode"
     printf '%s\n' 'developer_instructions = """'
@@ -409,10 +918,10 @@ render_cursor() {
   description=$(description_for "$role")
 
   case "$role" in
-    resolver) model=$(get_config CURSOR_RESOLVER_MODEL 'gpt-5.6-luna'); readonly=false ;;
-    designer) model=$(get_config CURSOR_DESIGNER_MODEL 'gpt-5.6-luna'); readonly=false ;;
-    design-qa) model=$(get_config CURSOR_DESIGN_QA_MODEL 'gpt-5.6-luna'); readonly=true ;;
-    developer) model=$(get_config CURSOR_DEVELOPER_MODEL 'gpt-5.6-terra'); readonly=false ;;
+    resolver) model=$(get_config CURSOR_RESOLVER_MODEL ''); readonly=false ;;
+    designer) model=$(get_config CURSOR_DESIGNER_MODEL ''); readonly=false ;;
+    design-qa) model=$(get_config CURSOR_DESIGN_QA_MODEL ''); readonly=true ;;
+    developer) model=$(get_config CURSOR_DEVELOPER_MODEL ''); readonly=false ;;
     *) die "unknown role: $role" ;;
   esac
 
@@ -420,7 +929,7 @@ render_cursor() {
     printf '%s\n' '---'
     printf 'name: %s\n' "$role"
     printf 'description: %s\n' "$description"
-    printf 'model: %s\n' "$model"
+    [ -n "$model" ] && printf 'model: %s\n' "$model"
     if [ "$readonly" = true ]; then
       printf '%s\n' 'readonly: true'
     fi
@@ -433,15 +942,19 @@ render_cursor() {
 render_config() {
   output=$1
   max_threads=$(get_config CODEX_MAX_CONCURRENT_THREADS 4)
-  mcp_name=$(get_config LINEAR_MCP_NAME 'linear')
-  mcp_url=$(get_config LINEAR_MCP_URL 'https://mcp.linear.app/mcp')
   {
     printf '%s\n' '# Project-local Codex configuration generated by setup-agent-stack.sh.'
     printf '%s\n' '# This file does not contain credentials or global settings.'
     printf '%s\n' '' '[agents]'
     printf '%s\n' 'enabled = true' "max_concurrent_threads_per_session = $max_threads"
-    printf '%s\n' '' "[mcp_servers.$mcp_name]"
-    printf '%s\n' "url = \"$mcp_url\""
+    if [ "$MCP_LINEAR_ENABLED" = 1 ]; then
+      printf '%s\n' '' "[mcp_servers.$MCP_LINEAR_NAME]"
+      printf '%s\n' "url = \"$MCP_LINEAR_URL\""
+    fi
+    if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
+      printf '%s\n' '' "[mcp_servers.$MCP_TRELLO_NAME]"
+      printf '%s\n' "url = \"$MCP_TRELLO_URL\""
+    fi
   } > "$output"
 }
 
@@ -1044,41 +1557,51 @@ ENABLE_CODEX=1
 ENABLE_CURSOR=1
 CODEX_MAX_CONCURRENT_THREADS=4
 
-# Linear MCP server registered by the bootstrap for every enabled platform.
-LINEAR_MCP_NAME=linear
-LINEAR_MCP_URL=https://mcp.linear.app/mcp
+# Optional MCP integrations registered by the bootstrap for every enabled
+# platform. Trello is opt-in by default; the interactive wizard can change
+# either selection.
+MCP_LINEAR_ENABLED=1
+MCP_LINEAR_NAME=linear
+MCP_LINEAR_URL=https://mcp.linear.app/mcp
+MCP_TRELLO_ENABLED=0
+MCP_TRELLO_NAME=trello
+MCP_TRELLO_URL=https://mcp.trello.com/mcp
 
 # OpenCode model pinning (provider/model + variant).
-OPENCODE_RESOLVER_MODEL=openai/gpt-5.6-luna
+OPENCODE_RESOLVER_MODEL=
 OPENCODE_RESOLVER_VARIANT=max
-OPENCODE_DESIGNER_MODEL=openai/gpt-5.6-luna
+OPENCODE_DESIGNER_MODEL=
 OPENCODE_DESIGNER_VARIANT=max
-OPENCODE_DESIGN_QA_MODEL=openai/gpt-5.6-luna
+OPENCODE_DESIGN_QA_MODEL=
 OPENCODE_DESIGN_QA_VARIANT=max
-OPENCODE_DEVELOPER_MODEL=openrouter/deepseek-v4-pro
+OPENCODE_DEVELOPER_MODEL=
 OPENCODE_DEVELOPER_VARIANT=high
 
 # Claude Code mirrors (Claude model aliases; OpenCode provider IDs are unsupported).
-CLAUDE_RESOLVER_MODEL=opus
-CLAUDE_DESIGNER_MODEL=opus
-CLAUDE_DESIGN_QA_MODEL=opus
-CLAUDE_DEVELOPER_MODEL=sonnet
+CLAUDE_RESOLVER_MODEL=
+CLAUDE_RESOLVER_EFFORT=high
+CLAUDE_DESIGNER_MODEL=
+CLAUDE_DESIGNER_EFFORT=high
+CLAUDE_DESIGN_QA_MODEL=
+CLAUDE_DESIGN_QA_EFFORT=high
+CLAUDE_DEVELOPER_MODEL=
+CLAUDE_DEVELOPER_EFFORT=high
 
 # Codex custom agents (Codex model IDs + reasoning effort: minimal|low|medium|high|xhigh).
-CODEX_RESOLVER_MODEL=gpt-5.6-luna
+CODEX_RESOLVER_MODEL=
 CODEX_RESOLVER_EFFORT=xhigh
-CODEX_DESIGNER_MODEL=gpt-5.6-luna
+CODEX_DESIGNER_MODEL=
 CODEX_DESIGNER_EFFORT=xhigh
-CODEX_DESIGN_QA_MODEL=gpt-5.6-luna
+CODEX_DESIGN_QA_MODEL=
 CODEX_DESIGN_QA_EFFORT=xhigh
-CODEX_DEVELOPER_MODEL=gpt-5.6
+CODEX_DEVELOPER_MODEL=
 CODEX_DEVELOPER_EFFORT=high
 
 # Cursor subagents (Cursor model IDs).
-CURSOR_RESOLVER_MODEL=gpt-5.6-luna
-CURSOR_DESIGNER_MODEL=gpt-5.6-luna
-CURSOR_DESIGN_QA_MODEL=gpt-5.6-luna
-CURSOR_DEVELOPER_MODEL=gpt-5.6-terra
+CURSOR_RESOLVER_MODEL=
+CURSOR_DESIGNER_MODEL=
+CURSOR_DESIGN_QA_MODEL=
+CURSOR_DEVELOPER_MODEL=
 DEFAULTS_EOF
 }
 
@@ -1097,7 +1620,7 @@ ensure_role_sources() {
   ROLE_DIR=$ROOT/.agent-stack/roles
 }
 
-ensure_scaffolds() {
+ensure_config() {
   ensure_dir "$ROOT/.agent-stack"
 
   if [ -f "$KIT_ROOT/.agent-stack/defaults.conf" ]; then
@@ -1106,6 +1629,10 @@ ensure_scaffolds() {
     write_embedded_defaults "$ROOT/.agent-stack/config.conf"
     printf 'created %s\n' "$ROOT/.agent-stack/config.conf"
   fi
+}
+
+ensure_scaffolds() {
+  ensure_config
 
   if [ -f "$KIT_ROOT/.agent-stack/templates/UX_AGENTS.md" ]; then
     copy_if_missing "$KIT_ROOT/.agent-stack/templates/UX_AGENTS.md" "$ROOT/UX_AGENTS.md"
@@ -1224,7 +1751,7 @@ merge_mcp_json() {
   server_name=$3
   payload=$4
   seed=${5:-}
-  command -v node >/dev/null 2>&1 || die 'node is required to merge Linear MCP config'
+  command -v node >/dev/null 2>&1 || die 'node is required to merge MCP config'
   node - "$file" "$root_key" "$server_name" "$payload" "$seed" <<'NODE_EOF'
 'use strict';
 const fs = require('fs');
@@ -1293,9 +1820,19 @@ console.log('merged ' + serverName + ' into ' + file);
 NODE_EOF
 }
 
-ensure_linear_mcp() {
-  name=$(get_config LINEAR_MCP_NAME 'linear')
-  url=$(get_config LINEAR_MCP_URL 'https://mcp.linear.app/mcp')
+ensure_mcp_server() {
+  server=$1
+  case "$server" in
+    linear)
+      name=$MCP_LINEAR_NAME
+      url=$MCP_LINEAR_URL
+      ;;
+    trello)
+      name=$MCP_TRELLO_NAME
+      url=$MCP_TRELLO_URL
+      ;;
+    *) die "unknown MCP server: $server" ;;
+  esac
 
   if [ "$ENABLE_OPENCODE" -eq 1 ]; then
     merge_mcp_json \
@@ -1319,6 +1856,15 @@ ensure_linear_mcp() {
   # Codex MCP is rendered into .codex/config.toml by render_config (TOML).
 }
 
+ensure_mcp_config() {
+  if [ "$MCP_LINEAR_ENABLED" = 1 ]; then
+    ensure_mcp_server linear
+  fi
+  if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
+    ensure_mcp_server trello
+  fi
+}
+
 install_codex_bridge() {
   bridge_start='<!-- agent-stack:codex-bridge:start -->'
   bridge_end='<!-- agent-stack:codex-bridge:end -->'
@@ -1327,9 +1873,9 @@ install_codex_bridge() {
 ## Agent Stack UX/UI Guidance
 
 For user-facing UX/UI work, read the nearest `UX_AGENTS.md` and `UI_AGENTS.md`.
-These are the only project-specific UX/UI context files. Linear is the fixed
-project tracker; use the connected Linear MCP and derive the project name from
-the linked issue.
+These are the only project-specific UX/UI context files. Use the configured
+project-tracking MCP when one is enabled and derive project metadata from the
+linked issue.
 <!-- agent-stack:codex-bridge:end -->
 EOF
 )
@@ -1418,6 +1964,12 @@ while [ "$#" -gt 0 ]; do
       EXPLICIT_PLATFORM=1
       shift
       ;;
+    --mcp)
+      [ "$#" -gt 1 ] || die '--mcp requires none, linear, trello, or both'
+      MCP_ARG=$2
+      EXPLICIT_MCP=1
+      shift
+      ;;
     --select)
       INTERACTIVE_SELECT=1
       ;;
@@ -1469,24 +2021,36 @@ resolve_platforms
 case "$COMMAND" in
   init)
     ensure_scaffolds
+    resolve_mcp
+    if [ "$INTERACTIVE_WIZARD" = 1 ]; then
+      configure_models_interactive
+    fi
+    persist_selection
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
       install_codex_bridge
     fi
     render_platform_outputs sync
-    ensure_linear_mcp
+    ensure_mcp_config
     ;;
   sync)
+    ensure_config
+    resolve_mcp
     ensure_role_sources
+    if [ "$INTERACTIVE_WIZARD" = 1 ]; then
+      configure_models_interactive
+    fi
+    persist_selection
     render_platform_outputs sync
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
       install_codex_bridge
     fi
-    ensure_linear_mcp
+    ensure_mcp_config
     ;;
   check)
     ROLE_DIR=$ROOT/.agent-stack/roles
     [ -d "$ROLE_DIR" ] || die "missing role source directory: $ROLE_DIR"
     [ -f "$CONFIG_FILE" ] || die "missing config: $CONFIG_FILE"
+    resolve_mcp
     render_platform_outputs check
     if [ "$CONFLICTS" -gt 0 ]; then
       exit 1

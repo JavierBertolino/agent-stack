@@ -9,14 +9,14 @@ configuration and keeps generated files safe to synchronize.
 
 ## Quick Start
 
-Users who have been granted access can clone this private repository and run
-the wrapper from the project they want to configure:
+Users who have been granted access can clone this private repository, enter the
+kit directory, and install into an existing project with an absolute path:
 
 ```sh
 gh auth login
 gh repo clone JavierBertolino/agent-stack "$HOME/.local/share/agent-stack"
-cd /path/to/your-project
-"$HOME/.local/share/agent-stack/install.sh" --root "$PWD"
+cd "$HOME/.local/share/agent-stack"
+./install.sh --path=/absolute/path/to/your-project
 ```
 
 SSH users can use the equivalent clone command:
@@ -24,6 +24,8 @@ SSH users can use the equivalent clone command:
 ```sh
 git clone git@github.com:JavierBertolino/agent-stack.git \
   "$HOME/.local/share/agent-stack"
+cd "$HOME/.local/share/agent-stack"
+./install.sh --path=/absolute/path/to/your-project
 ```
 
 Private repository access is the distribution gate. Anyone with repository
@@ -66,7 +68,7 @@ unauthenticated raw/API request is denied.
 For a non-interactive install, choose platforms explicitly:
 
 ```sh
-/path/to/agent-stack/install.sh --root "$PWD" \
+./install.sh --path=/absolute/path/to/your-project \
   --platforms opencode,claude,codex,cursor
 ```
 
@@ -80,6 +82,14 @@ sh /path/to/agent-stack/scripts/setup-agent-stack.sh init \
   --kit-root /path/to/agent-stack
 ```
 
+The repository checkout workflow is equivalent to:
+
+```sh
+./install.sh --path=/absolute/path/to/your-project \
+  --platforms opencode,claude,codex,cursor \
+  --mcp linear
+```
+
 ## What It Installs
 
 - `resolver`: primary delivery manager and sole user-facing coordinator.
@@ -88,7 +98,7 @@ sh /path/to/agent-stack/scripts/setup-agent-stack.sh init \
 - `developer`: OpenSpec implementer with task-level verification evidence.
 - Project-owned `UX_AGENTS.md` and `UI_AGENTS.md` starter templates.
 - Platform-specific agent files for the selected tools.
-- Configured Linear MCP entries for enabled platforms.
+- Selected Linear and/or Trello MCP entries for enabled platforms.
 
 The generated project files are intentionally not stored in this repository.
 They belong to the project being configured.
@@ -116,12 +126,19 @@ The installer copies `.agent-stack/defaults.conf` to the consuming project's
 file to configure:
 
 - enabled platforms;
-- Linear MCP name and URL;
+- Linear and Trello MCP selection, names, and URLs;
 - model and reasoning settings per role and platform;
 - Codex concurrency.
 
-The default Linear MCP name is `linear`; OAuth and credentials remain managed
-by the target tool and are never written by this kit.
+On an interactive install, the wizard detects existing harness configuration,
+queries the installed OpenCode model catalog when available, and asks for a
+model plus thinking setting for each selected role. Claude Code, Codex, and
+Cursor do not expose a stable local model-list command, so their wizard steps
+offer existing values and accept a model ID or alias directly. Cursor controls
+thinking at the active model/session level rather than per agent.
+
+The default MCP selection is Linear on and Trello off. OAuth and credentials
+remain managed by the target tool and are never written by this kit.
 
 ## Workflow
 

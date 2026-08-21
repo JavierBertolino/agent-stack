@@ -19,6 +19,19 @@ cd "$HOME/.local/share/agent-stack"
 ./install.sh --path=/absolute/path/to/your-project
 ```
 
+In Git Bash, `pwd` must be the consuming project directory, not the
+`agent-stack` checkout. For example:
+
+```sh
+cd /c/Users/Name/Documents/my-project
+TARGET=$(pwd)
+cd /c/Users/Name/.local/share/agent-stack
+./install.sh --path="$TARGET"
+```
+
+Git Bash paths beginning with `C:/` are also accepted when `cygpath` is
+available. WSL paths should use `/mnt/c/...`.
+
 SSH users can use the equivalent clone command:
 
 ```sh

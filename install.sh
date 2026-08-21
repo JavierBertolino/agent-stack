@@ -14,6 +14,31 @@ agent-stack setup script, including --platforms, --mcp, and --select.
 EOF
 }
 
+path_error() {
+  printf '%s\n' "install.sh: $*" >&2
+  exit 2
+}
+
+normalize_target() {
+  case "$1" in
+    /*)
+      printf '%s\n' "$1"
+      ;;
+    [A-Za-z]:/*)
+      if command -v cygpath >/dev/null 2>&1; then
+        cygpath -u "$1"
+      elif command -v wslpath >/dev/null 2>&1; then
+        wslpath -u "$1"
+      else
+        path_error "cannot convert Windows path without cygpath or wslpath: $1"
+      fi
+      ;;
+    *)
+      path_error "--path must be absolute: $1"
+      ;;
+  esac
+}
+
 case "${1:-}" in
   --path=*)
     TARGET=${1#--path=}
@@ -34,14 +59,10 @@ case "${1:-}" in
     ;;
 esac
 
-case "$TARGET" in
-  /*) ;;
-  *) printf '%s\n' "install.sh: --path must be absolute: $TARGET" >&2; exit 2 ;;
-esac
+TARGET=$(normalize_target "$TARGET")
 
 [ -d "$TARGET" ] || {
-  printf '%s\n' "install.sh: target directory does not exist: $TARGET" >&2
-  exit 2
+  path_error "target directory does not exist: $TARGET"
 }
 
 exec sh "$SCRIPT_DIR/scripts/setup-agent-stack.sh" init \

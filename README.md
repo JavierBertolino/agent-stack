@@ -87,6 +87,30 @@ For a non-interactive install, choose platforms explicitly:
   --platforms opencode,claude,codex,cursor
 ```
 
+## Global Install
+
+To call `agent-stack` directly from any project directory, install it once:
+
+```sh
+./install.sh --global                # prefix defaults to $HOME/.local
+./install.sh --global --prefix=/opt  # custom prefix
+```
+
+This copies the kit to `<prefix>/share/agent-stack` and writes an
+`agent-stack` dispatcher to `<prefix>/bin` (an export line is printed when
+that directory is not on `PATH`). Afterwards, from any project:
+
+```sh
+cd /path/to/your-project
+agent-stack init --platforms opencode
+agent-stack check
+agent-stack doctor
+agent-stack upgrade --check
+```
+
+Re-run `install.sh --global` from a fresh checkout to update the global
+copy to a newer kit revision.
+
 The default install creates missing files only. Existing human-owned files are
 preserved. Use `--kit-root` with the main script when the kit is stored at a
 different path:

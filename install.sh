@@ -8,10 +8,16 @@ usage() {
   cat <<'EOF'
 Usage:
   install.sh --path=/absolute/path/to/project [options]
+  install.sh --global [--prefix DIR]
 
 The target path must already exist. Options after --path are passed to the
 agent-stack setup script, including --platforms, --mcp, --select, and
---specs-repository. A specs repository is required for setup.
+--specs-repository (sets SPECS_REPOSITORY and mirror publication mode;
+local mode needs no specs repository).
+
+--global installs the kit to <prefix>/share/agent-stack (default
+$HOME/.local) and puts an `agent-stack` dispatcher on <prefix>/bin, so
+any project directory can run `agent-stack init` directly.
 EOF
 }
 
@@ -41,6 +47,41 @@ normalize_target() {
 }
 
 case "${1:-}" in
+  --global)
+    shift
+    PREFIX=$HOME/.local
+    for arg in "$@"; do
+      case "$arg" in
+        --prefix=*) PREFIX=${arg#--prefix=} ;;
+        --prefix) path_error "--prefix requires a value (use --prefix=DIR)" ;;
+        -h|--help) usage; exit 0 ;;
+        *) path_error "unknown global option: $arg" ;;
+      esac
+    done
+    case "$PREFIX" in
+      /*) ;;
+      *) path_error "--prefix must be absolute: $PREFIX" ;;
+    esac
+    SHARE=$PREFIX/share/agent-stack
+    mkdir -p "$SHARE" "$PREFIX/bin"
+    cp -r "$SCRIPT_DIR/scripts" "$SCRIPT_DIR/.agent-stack" "$SHARE/"
+    # shellcheck disable=SC2086
+    sed "s|^SHARE=\"@SHARE@\"$|SHARE=\"$SHARE\"|" \
+      "$SCRIPT_DIR/scripts/agent-stack" > "$PREFIX/bin/agent-stack"
+    chmod +x "$PREFIX/bin/agent-stack"
+    printf 'installed agent-stack %s to %s\n' \
+      "$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$SHARE/.agent-stack/defaults.conf")" \
+      "$PREFIX/bin/agent-stack"
+    case ":$PATH:" in
+      *":$PREFIX/bin:"*) ;;
+      *)
+        printf 'note: %s is not on PATH; add this to your shell profile:\n' "$PREFIX/bin" >&2
+        printf '  export PATH="%s:$PATH"\n' "$PREFIX/bin" >&2
+        ;;
+    esac
+    printf 'from a project directory run: agent-stack init --platforms opencode\n'
+    exit 0
+    ;;
   --path=*)
     TARGET=${1#--path=}
     shift

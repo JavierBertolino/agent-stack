@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack/contract/report.schema.json",
+  "title": "Agent Stack agent report",
+  "description": "Structured report returned by designer, developer, and design-qa to the resolver. A command string without an observed result is not evidence.",
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "runId",
+    "changeId",
+    "role",
+    "status",
+    "outputs",
+    "filesChanged",
+    "skillsUsed",
+    "commands",
+    "results",
+    "evidence",
+    "assumptions",
+    "blockers",
+    "nextAction"
+  ],
+  "properties": {
+    "contractVersion": { "type": "string", "const": "1" },
+    "runId": { "type": "string", "minLength": 1 },
+    "changeId": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "enum": ["designer", "developer", "design-qa"] },
+    "status": { "type": "string", "enum": ["done", "partial", "blocked"] },
+    "verdict": { "type": ["string", "null"], "enum": ["PASS", "BLOCKING", "UNVERIFIED", null] },
+    "outputs": { "type": "array", "items": { "type": "string" } },
+    "filesChanged": { "type": "array", "items": { "type": "string" } },
+    "skillsUsed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source", "version", "reason"],
+        "properties": {
+          "name": { "type": "string" },
+          "source": { "type": "string" },
+          "version": { "type": "string" },
+          "sha256": { "type": ["string", "null"] },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "workdir", "result"],
+        "properties": {
+          "command": { "type": "string" },
+          "workdir": { "type": "string" },
+          "result": { "type": "string" },
+          "exitCode": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "results": { "type": "string" },
+    "evidence": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "nextAction": { "type": "string", "minLength": 1 }
+  }
+}

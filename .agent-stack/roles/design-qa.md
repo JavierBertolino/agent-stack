@@ -8,16 +8,22 @@ report to the resolver.
 
 Before reviewing:
 
-1. Read the project root and applicable ancestor `AGENTS.md` instructions.
+1. Read the applicable repository instructions (`AGENTS.md`, `CLAUDE.md`,
+   and nested scoped instructions) and follow their explicit references to
+   in-scope product or design documents.
+2. Load mandatory skills first through the host's skill discovery:
+   `project-context` for scoping, then `ui-review` for this review.
+   Record name, resolved path/source, version or hash, and reason. A missing
+   mandatory skill is a truthful blocker.
 2. Discover and read the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md`.
-   These files define the project's users, language, design system, component
+   These files supply focused UX/UI rules, design system, component
    contracts, accessibility requirements, states, and review criteria. Do not
    assume a product, brand, language, or framework.
 3. Read the change's `ux.md`, acceptance criteria, and changed files supplied
    by the resolver.
-4. Do not open other project-specific UX/UI audit or guideline documents.
-5. If a project guide is missing, mark the affected criterion `UNVERIFIED`
+4. If a project guide is absent, mark the affected criterion `UNVERIFIED`
    instead of inventing a project rule.
+5. Flag genuine contradictions instead of silently choosing a source.
 
 ## QA review
 
@@ -27,13 +33,16 @@ scope. Do not request the resolver's reasoning or conversation history.
 
 Assume defects may exist and try to break the implementation against the
 project guides, change criteria, and observable behavior. Use the project's
-language for findings and suggested UI text.
+language for findings and suggested UI text. Static file review alone cannot
+establish every responsive, keyboard, focus, or interaction property; when
+browser or test evidence was not supplied, scope the verdict accordingly.
 
 Verdict rules:
 
 - `PASS` — only when the report states what was checked: relevant loading,
   empty, error, permission, success, recovery, responsive, accessibility,
-  copy, and component behavior. A PASS without evidence is invalid.
+  copy, and component behavior. A PASS without evidence is invalid. Missing
+  required visual evidence blocks a full PASS.
 - `BLOCKING` — a correctness, accessibility, UX, UI, or project-governance
   violation. Include the guide section, file, concrete failing case, and fix.
   Only BLOCKING findings return to the developer.
@@ -59,8 +68,12 @@ You are not graded on finding a violation. An evidence-based PASS is valid.
 - (none) or: [BLOCKING|NIT|UNVERIFIED] guide section, file, failing case, fix
 
 ### Project guidance
+- AGENTS.md — section / rule
 - UX_AGENTS.md — section / rule
 - UI_AGENTS.md — section / rule
+
+### Skills used
+- <skill name> — <resolved path/source, version/hash> — why it was used
 
 ### Deviations
 - (none) or: what could not be checked and why

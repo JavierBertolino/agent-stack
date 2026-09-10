@@ -19,8 +19,16 @@ updates verifiable. Never hardcode an MCP server name.
 2. Normalize: project name and id, team, issue identifier and URL, cycle,
    milestone, branch name, repository, acceptance criteria, closeout
    requirements. Use `none` for unavailable values; never guess.
-3. Preserve existing assignees. An open PR is not completed work.
-4. On closeout, move the issue to the configured review/PR state and attach
+3. Preserve existing assignees. When work starts on an unassigned task,
+   resolve the authenticated user via the connected lookup using `me` and
+   assign them; if lookup or assignment fails, stop before changing state.
+   An open PR is not completed work.
+4. Move the issue through the configured states: `TASK_STATE_IN_PROGRESS`
+   (default `In Progress`) when work starts, `TASK_STATE_IN_PR` (default
+   `In PR`) once every affected repository has a pushed branch and an open
+   PR. If a configured state does not exist for the team, stop and ask
+   instead of substituting another state.
+5. On closeout, move the issue to the configured review/PR state and attach
    closing evidence (scope, verification, branches, files, rounds used).
 
 ## Output

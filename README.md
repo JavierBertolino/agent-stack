@@ -190,7 +190,8 @@ file to configure:
 - model and reasoning settings per role and platform;
 - Codex concurrency;
 - specification publication (`SPECS_MODE=local|mirror`, repository, merge
-  gate) and archive stage.
+  gate) and archive stage. `--specs-repository OWNER/REPO` implies mirror
+  mode; local mode (default) needs no specs repository.
 
 On an interactive install, the wizard runs five visible steps: platforms,
 MCP integrations, specs repository, model strategy, and final review. It

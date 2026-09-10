@@ -5,10 +5,20 @@ used by the Agent Stack installer.
 
 - `roles/` contains platform-neutral resolver, designer, design-qa, and
   developer instructions.
+- `skills/` contains canonical skill sources plus `manifest.json` (versions).
+- `contracts/` contains the versioned handoff and report JSON schemas.
+- `context/` (project-local) holds bootstrap provenance when produced.
 - `templates/` contains scaffolds for project-owned `UX_AGENTS.md` and
   `UI_AGENTS.md` files.
-- `defaults.conf` contains safe setup defaults.
+- `defaults.conf` contains safe setup defaults, including `SPECS_MODE`,
+  publication, budget, and archive settings.
 - `generated.manifest` records hashes for files managed by the renderer.
+- `runs/` (project-local, ignored) holds resolver-owned run state:
+  `<run-id>/state.json` plus append-only `events.jsonl` and `evidence/`.
+  Legacy `.opencode/pipeline-state/` ledgers are not used for new runs.
+- `sources.manifest` (project-local) records kit base hashes so
+  `scripts/upgrade-agent-stack.sh` can three-way merge revised defaults
+  without overwriting project customizations.
 
 Run `install.sh --path=/absolute/path/to/project` from the kit repository, or run
 `scripts/setup-agent-stack.sh init --kit-root /path/to/agent-stack` from a

@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Shell syntax
+        run: |
+          sh -n scripts/setup-agent-stack.sh
+          sh -n setup.sh
+          sh -n scripts/doctor.sh
+          sh -n scripts/upgrade-agent-stack.sh
+          sh -n install.sh
+          sh -n scripts/sync-agent-mirrors.sh
+          for t in tests/test-*.sh tests/run.sh; do sh -n "$t"; done
+      - name: Python syntax
+        run: |
+          python3 -m py_compile scripts/run-state.py scripts/validate-contracts.py scripts/build-installer.sh
+      - name: Reproducible standalone build
+        run: |
+          python3 scripts/build-installer.sh --kit-root "$PWD" --check
+      - name: Fixture and installer tests
+        run: |
+          sh tests/run.sh --kit-root "$PWD"
+      - name: Doctor on a fixture install
+        run: |
+          T=$(mktemp -d)
+          trap 'rm -rf "$T"' EXIT
+          sh scripts/setup-agent-stack.sh init --root "$T" --kit-root "$PWD" --platforms opencode,claude,codex,cursor --mcp none
+          sh scripts/doctor.sh --root "$T" --kit-root "$PWD"

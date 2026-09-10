@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack/contract/event.schema.json",
+  "title": "Agent Stack run event",
+  "description": "One line of .agent-stack/runs/<run-id>/events.jsonl. Append-only; never edited or reordered. The resolver appends an event for every transition, evidence item, verification result, and external side effect.",
+  "type": "object",
+  "required": ["ts", "runId", "type", "phase", "detail"],
+  "properties": {
+    "ts": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "type": {
+      "type": "string",
+      "enum": [
+        "init",
+        "transition",
+        "evidence",
+        "external",
+        "verify",
+        "code",
+        "lock",
+        "note",
+        "budget",
+        "close"
+      ]
+    },
+    "phase": { "type": "string", "minLength": 1 },
+    "detail": { "type": "string", "minLength": 1 }
+  }
+}

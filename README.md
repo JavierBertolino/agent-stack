@@ -87,6 +87,30 @@ For a non-interactive install, choose platforms explicitly:
   --platforms opencode,claude,codex,cursor
 ```
 
+## Global Install
+
+To call `agent-stack` directly from any project directory, install it once:
+
+```sh
+./install.sh --global                # prefix defaults to $HOME/.local
+./install.sh --global --prefix=/opt  # custom prefix
+```
+
+This copies the kit to `<prefix>/share/agent-stack` and writes an
+`agent-stack` dispatcher to `<prefix>/bin` (an export line is printed when
+that directory is not on `PATH`). Afterwards, from any project:
+
+```sh
+cd /path/to/your-project
+agent-stack init --platforms opencode
+agent-stack check
+agent-stack doctor
+agent-stack upgrade --check
+```
+
+Re-run `install.sh --global` from a fresh checkout to update the global
+copy to a newer kit revision.
+
 The default install creates missing files only. Existing human-owned files are
 preserved. Use `--kit-root` with the main script when the kit is stored at a
 different path:
@@ -112,6 +136,10 @@ The repository checkout workflow is equivalent to:
 - `designer`: UX proposal writer for user-facing changes.
 - `design-qa`: read-only, adversarial UI/UX review gate.
 - `developer`: OpenSpec implementer with task-level verification evidence.
+- Canonical skills (`project-context`, `linear-workflow`,
+  `governance-bootstrap`, `openspec-workflow`, `ux-design`,
+  `implementation`, `ui-review`, `git-delivery`) mirrored per platform.
+- Versioned handoff/report contracts under `.agent-stack/contracts/`.
 - Project-owned `UX_AGENTS.md` and `UI_AGENTS.md` starter templates.
 - Platform-specific agent files for the selected tools.
 - Selected Linear and/or Trello MCP entries for enabled platforms.
@@ -131,6 +159,9 @@ setup-agent-stack.sh sync     # render missing or managed files
 setup-agent-stack.sh check    # fail when generated files drift
 setup-agent-stack.sh adopt    # import existing OpenCode role prompts
 setup-agent-stack.sh prune    # remove only safe, stale generated files
+scripts/doctor.sh             # dependencies, skills, governance, collisions
+scripts/upgrade-agent-stack.sh --check  # dry-run safe source migration
+scripts/run-state.py --help   # validated run state (init/lock/transition/verify/resume)
 ```
 
 The wrapper `install.sh` is equivalent to `init` with this repository as the
@@ -157,7 +188,10 @@ file to configure:
 - `TASK_STATE_IN_PROGRESS` and `TASK_STATE_IN_PR` for linked Linear task
   transitions;
 - model and reasoning settings per role and platform;
-- Codex concurrency.
+- Codex concurrency;
+- specification publication (`SPECS_MODE=local|mirror`, repository, merge
+  gate) and archive stage. `--specs-repository OWNER/REPO` implies mirror
+  mode; local mode (default) needs no specs repository.
 
 On an interactive install, the wizard runs five visible steps: platforms,
 MCP integrations, specs repository, model strategy, and final review. It
@@ -195,14 +229,20 @@ open. It does not mark an open PR as completed.
 The intended flow is:
 
 ```text
-resolver -> designer (UI changes only) -> developer -> design-qa (UI changes)
+resolver -> designer (UI changes only) -> spec publication (mirror mode only)
+  -> developer -> design-qa (UI changes) -> implementation PR(s)
 ```
 
-The resolver owns clarification, OpenSpec artifacts, delegation, evidence,
-corrective-round limits, and closeout. See
+The resolver owns preflight, clarification, OpenSpec artifacts, delegation,
+evidence, publication, corrective-round limits, and closeout. See
+[`docs/PRODUCT_INTENT.md`](docs/PRODUCT_INTENT.md) for product intent and
 [`docs/AGENT_PIPELINE.md`](docs/AGENT_PIPELINE.md) for the portable workflow
-contract. The target project's `AGENTS.md`, `CLAUDE.md`, `UX_AGENTS.md`, and
-`UI_AGENTS.md` remain authoritative for project-specific rules.
+contract. The target project's `AGENTS.md`, `CLAUDE.md`, linked product
+documents, `UX_AGENTS.md`, and `UI_AGENTS.md` remain authoritative for
+project-specific rules. `SPECS_MODE=local` (default) needs no external specs
+repository; `SPECS_MODE=mirror` publishes the ready spec before
+implementation. Run state lives under `.agent-stack/runs/` with the
+resolver as sole writer.
 
 ## Safety
 
@@ -210,4 +250,16 @@ contract. The target project's `AGENTS.md`, `CLAUDE.md`, `UX_AGENTS.md`, and
 - Generated hashes are recorded in `.agent-stack/generated.manifest`.
 - Drift is reported by `check` instead of being silently repaired.
 - `prune` removes only unchanged files tracked in the generated manifest.
+- Kit revisions propagate through `upgrade-agent-stack.sh` three-way merge;
+  customizations survive with visible `.kit-new` conflicts.
+- Interrupted runs report partial progress and resume idempotently.
 - The kit contains no credentials or project data.
+
+## Development
+
+- Author neutral sources once under `.agent-stack/`; regenerate the
+  standalone `setup.sh` with `scripts/build-installer.sh` (CI enforces
+  reproducibility with `--check`).
+- Run `sh tests/run.sh` for fixture, contract, installer, upgrade,
+  equivalence, and render-matrix tests.
+- See `docs/RUN_STATE.md` and `docs/UPGRADES.md` for delivery hardening.

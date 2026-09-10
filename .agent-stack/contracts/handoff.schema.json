@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack/contract/handoff.schema.json",
+  "title": "Agent Stack delegation handoff",
+  "description": "Versioned contract shared by resolver, designer, developer, and design-qa. Handoff and skill contracts never override authorization, security, destructive-action, or verification requirements.",
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "runId",
+    "changeId",
+    "issueId",
+    "phase",
+    "worktree",
+    "artifacts",
+    "governance",
+    "skills",
+    "verification",
+    "budget",
+    "reportSchema"
+  ],
+  "properties": {
+    "contractVersion": { "type": "string", "const": "1" },
+    "runId": { "type": "string", "minLength": 1 },
+    "changeId": { "type": "string", "minLength": 1 },
+    "issueId": { "type": ["string", "null"] },
+    "phase": {
+      "type": "string",
+      "enum": ["proposal", "implement", "qa-review", "rework"]
+    },
+    "worktree": {
+      "type": "object",
+      "required": ["root", "repositoryId", "baseRef", "baseSha", "allowedScope"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1 },
+        "repositoryId": { "type": "string", "minLength": 1 },
+        "baseRef": { "type": "string", "minLength": 1 },
+        "baseSha": { "type": "string", "minLength": 1 },
+        "branch": { "type": ["string", "null"] },
+        "allowedScope": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["paths", "acceptanceCriteria", "exclusions"],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "type": "string" },
+              "sha256": { "type": "string" }
+            }
+          }
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "exclusions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "required": ["sources", "gaps"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sections", "sha256", "authority"],
+            "properties": {
+              "path": { "type": "string" },
+              "sections": { "type": "array", "items": { "type": "string" } },
+              "sha256": { "type": "string" },
+              "authority": {
+                "type": "string",
+                "enum": ["declared", "observed", "proposed", "unknown-conflicting"]
+              }
+            }
+          }
+        },
+        "gaps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "skills": {
+      "type": "object",
+      "required": ["required", "selected"],
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "source", "version", "reason"],
+            "properties": {
+              "name": { "type": "string" },
+              "source": { "type": "string" },
+              "version": { "type": "string" },
+              "sha256": { "type": ["string", "null"] },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["plan", "authorizedActions"],
+      "properties": {
+        "plan": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "authorizedActions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": ["correctiveRoundsRemaining", "reportSchema"],
+      "properties": {
+        "correctiveRoundsRemaining": { "type": "integer", "minimum": 0 },
+        "timeboxMinutes": { "type": ["integer", "null"] },
+        "reportSchema": { "type": "string" }
+      }
+    },
+    "reportSchema": { "type": "string", "const": "report.schema.json#1" }
+  }
+}

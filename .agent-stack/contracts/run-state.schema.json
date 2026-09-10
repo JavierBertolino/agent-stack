@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack/contract/run-state.schema.json",
+  "title": "Agent Stack run state",
+  "description": "Sole-writer state for one delivery run, owned by the resolver. Lives at .agent-stack/runs/<run-id>/state.json with append-only events.jsonl beside it. State is local/ignored by default; only approved summaries are published.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "changeId",
+    "phase",
+    "correctiveRoundsUsed",
+    "maxCorrectiveRounds",
+    "worktree",
+    "artifacts",
+    "governance",
+    "skills",
+    "verification",
+    "external",
+    "budget",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1" },
+    "runId": { "type": "string", "minLength": 1 },
+    "issueId": { "type": ["string", "null"] },
+    "changeId": { "type": "string", "minLength": 1 },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "intake",
+        "preflight",
+        "clarify",
+        "branch",
+        "specify",
+        "publish-spec",
+        "implement",
+        "review",
+        "qa",
+        "close",
+        "awaiting_merge",
+        "blocked",
+        "dropped"
+      ]
+    },
+    "correctiveRoundsUsed": { "type": "integer", "minimum": 0 },
+    "maxCorrectiveRounds": { "type": "integer", "minimum": 0 },
+    "worktree": {
+      "type": "object",
+      "required": ["root", "repositoryId", "baseRef", "baseSha", "allowedScope"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1 },
+        "repositoryId": { "type": "string", "minLength": 1 },
+        "baseRef": { "type": "string", "minLength": 1 },
+        "baseSha": { "type": "string", "minLength": 1 },
+        "branch": { "type": ["string", "null"] },
+        "allowedScope": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "required": ["sources", "gaps"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256", "authority"],
+            "properties": {
+              "path": { "type": "string" },
+              "sections": { "type": "array", "items": { "type": "string" } },
+              "sha256": { "type": "string" },
+              "authority": {
+                "type": "string",
+                "enum": ["declared", "observed", "proposed", "unknown-conflicting"]
+              }
+            }
+          }
+        },
+        "gaps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source", "version", "reason"],
+        "properties": {
+          "name": { "type": "string" },
+          "source": { "type": "string" },
+          "version": { "type": "string" },
+          "sha256": { "type": ["string", "null"] },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["plan", "lastCodeHash", "lastVerifiedHash", "stale"],
+      "properties": {
+        "plan": { "type": "array", "items": { "type": "string" } },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["command", "workdir", "result", "codeHash"],
+            "properties": {
+              "command": { "type": "string" },
+              "workdir": { "type": "string" },
+              "result": { "type": "string" },
+              "codeHash": { "type": "string" }
+            }
+          }
+        },
+        "lastCodeHash": { "type": ["string", "null"] },
+        "lastVerifiedHash": { "type": ["string", "null"] },
+        "stale": { "type": "boolean" }
+      }
+    },
+    "external": {
+      "type": "object",
+      "required": ["issueState", "specPr", "implPrs"],
+      "properties": {
+        "issueUrl": { "type": ["string", "null"] },
+        "issueState": { "type": ["string", "null"] },
+        "specPr": { "type": ["string", "null"] },
+        "specBranch": { "type": ["string", "null"] },
+        "implPrs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": ["correctiveRoundsRemaining"],
+      "properties": {
+        "correctiveRoundsRemaining": { "type": "integer", "minimum": 0 },
+        "timeboxMinutes": { "type": ["integer", "null"] }
+      }
+    },
+    "nextAction": { "type": ["string", "null"] },
+    "updatedAt": { "type": "string", "minLength": 1 }
+  }
+}

@@ -19,6 +19,9 @@ jobs:
           sh -n setup.sh
           sh -n scripts/doctor.sh
           sh -n scripts/upgrade-agent-stack.sh
+          sh -n scripts/update-astack.sh
+          sh -n scripts/astack
+          sh -n scripts/bootstrap-install.sh
           sh -n install.sh
           sh -n scripts/sync-agent-mirrors.sh
           for t in tests/test-*.sh tests/run.sh; do sh -n "$t"; done

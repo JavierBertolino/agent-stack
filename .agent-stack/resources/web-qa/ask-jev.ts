@@ -125,11 +125,11 @@ async function postWithRetry(url: string, init: RequestInit, attempts = 4): Prom
   throw lastErr instanceof Error ? lastErr : new Error("request failed");
 }
 
-type JevProvider = "typesafe" | "vercel" | "gateway" | "openrouter";
+type JevProvider = "typesafe" | "vercel" | "gateway" | "cloudflare" | "openrouter";
 
 function providerFromEnv(): JevProvider {
   const value = (process.env.JEV_PROVIDER ?? "typesafe").toLowerCase();
-  if (value === "typesafe" || value === "vercel" || value === "gateway" || value === "openrouter") {
+  if (value === "typesafe" || value === "vercel" || value === "gateway" || value === "cloudflare" || value === "openrouter") {
     return value;
   }
   throw new Error(`unsupported JEV_PROVIDER: ${value}`);
@@ -171,7 +171,7 @@ function providerConfig(provider: JevProvider, model: string): {
     };
   }
 
-  if (provider === "gateway") {
+  if (provider === "gateway" || provider === "cloudflare") {
     const apiKey = process.env.JEV_GATEWAY_API_KEY ?? "";
     const url = process.env.JEV_GATEWAY_URL ?? "";
     if (!url) throw new Error("JEV_GATEWAY_URL is required for gateway provider");

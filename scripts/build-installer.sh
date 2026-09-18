@@ -46,6 +46,8 @@ ROLE_MARKERS = {
     "designer": "ROLE_DESIGNER_EOF",
     "design-qa": "ROLE_DESIGN_QA_EOF",
     "developer": "ROLE_DEVELOPER_EOF",
+    "web-qa": "ROLE_WEB_QA_EOF",
+    "mobile-qa": "ROLE_MOBILE_QA_EOF",
 }
 
 ROLE_STARTS = {
@@ -53,6 +55,8 @@ ROLE_STARTS = {
     "designer": "    designer) cat > \"$target\" <<'ROLE_DESIGNER_EOF'\n",
     "design-qa": "    design-qa) cat > \"$target\" <<'ROLE_DESIGN_QA_EOF'\n",
     "developer": "    developer) cat > \"$target\" <<'ROLE_DEVELOPER_EOF'\n",
+    "web-qa": "    web-qa) cat > \"$target\" <<'ROLE_WEB_QA_EOF'\n",
+    "mobile-qa": "    mobile-qa) cat > \"$target\" <<'ROLE_MOBILE_QA_EOF'\n",
 }
 
 

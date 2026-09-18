@@ -14,6 +14,8 @@ publication policy.
 | `designer` | UX proposal for user-facing changes | `openspec/changes/**/ux.md` only |
 | `design-qa` | Adversarial UI/UX review after implementation | Read-only |
 | `developer` | Implements OpenSpec tasks and proves each task | Project implementation plus task checkboxes |
+| `web-qa` | Standalone browser + Jev QA (functional / view / business logic) | `reports/qa/*.md` only; browser actions on the test target |
+| `mobile-qa` | Standalone Maestro + Jev QA on device/emulator | `reports/qa/*.md` + scratch flows only; device actions on the test target |
 
 The resolver is the only role that communicates with the user. Subagents
 return one structured report to the resolver and do not independently expand
@@ -23,6 +25,8 @@ plus append-only `events.jsonl`, managed with `scripts/run-state.py`
 `record-verify`, `resume`, `validate`). Transitions are validated, external
 side effects are recorded immediately so retries reuse branches and PRs, and
 a code change after verification marks prior results stale.
+`web-qa` and `mobile-qa` are the exception: they are standalone and run on
+demand outside the delivery critical path.
 
 ## Flow
 

@@ -3,15 +3,15 @@
 This directory contains the reusable role prompts, templates, and setup defaults
 used by the Agent Stack installer.
 
-- `roles/` contains platform-neutral resolver, designer, design-qa, and
-  developer instructions.
+- `roles/` contains platform-neutral resolver, designer, design-qa,
+  developer, and standalone web-qa and mobile-qa instructions.
 - `skills/` contains canonical skill sources plus `manifest.json` (versions).
 - `contracts/` contains the versioned handoff and report JSON schemas.
 - `context/` (project-local) holds bootstrap provenance when produced.
-- `templates/` contains scaffolds for project-owned `UX_AGENTS.md` and
-  `UI_AGENTS.md` files.
-- `defaults.conf` contains safe setup defaults, including `SPECS_MODE`,
-  publication, budget, and archive settings.
+- `resources/web-qa/` contains the Jev helper (`ask-jev.ts`) and question
+  library (`questions.ts`) copied to the project as `scripts/qa/`.
+- `resources/mobile-qa/` contains the mobile question library
+  (`questions-mobile.ts`) copied to the project as `scripts/mobile-qa/`.
 - `generated.manifest` records hashes for files managed by the renderer.
 - `runs/` (project-local, ignored) holds resolver-owned run state:
   `<run-id>/state.json` plus append-only `events.jsonl` and `evidence/`.
@@ -62,6 +62,9 @@ Useful commands:
   the first `init` when no neutral role sources exist.
 - `scripts/setup-agent-stack.sh prune` removes only stale files recorded in the
   manifest and leaves changed files in place.
+- `scripts/setup-agent-stack.sh auth jev` stores `TYPESAFE_API_KEY` for the
+  web-qa Jev helper in user-level config (never in the repo). `scripts/as`
+  wraps every command (`as sync`, `as auth jev`, ...).
 - When OpenCode runs inside Herdr, the resolver opens sibling panes on demand
   for delegated roles and keeps the main resolver pane visible.
 

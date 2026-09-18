@@ -45,7 +45,7 @@ for cmd in git node gh openspec; do
 done
 
 # --- Kit sources ---
-for role in resolver designer design-qa developer; do
+for role in resolver designer design-qa developer web-qa mobile-qa; do
   if [ -f "$KIT_ROOT/.agent-stack/roles/$role.md" ]; then pass "kit role $role";
   else fail "kit role $role missing"; fi
 done

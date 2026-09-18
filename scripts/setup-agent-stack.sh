@@ -6,6 +6,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 KIT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 ROOT=$(pwd)
 COMMAND=init
+AUTH_PROVIDER=
+AUTH_ARGS=
 CLAUDE_ONLY=0
 SKIP_OPENCODE=0
 SKIP_CLAUDE=0
@@ -44,6 +46,11 @@ MCP_TRELLO_ENABLED=0
 MCP_TRELLO_NAME=trello
 MCP_TRELLO_URL=https://mcp.trello.com/mcp
 
+# Maestro MCP for the mobile-qa agent. Local stdio server (maestro CLI +
+# Java required on PATH); opt-in because it needs a local toolchain.
+MCP_MAESTRO_ENABLED=0
+MCP_MAESTRO_NAME=maestro
+MCP_MAESTRO_COMMAND=maestro
 # Spec publication policy (resolved from config, flags, or wizard).
 SPECS_MODE=local
 SPECS_REPOSITORY=
@@ -55,14 +62,17 @@ ARCHIVE_STAGE=after-merge
 usage() {
   cat <<'EOF'
 Usage:
-  setup-agent-stack.sh [init|sync|check|adopt|prune] [options]
+  setup-agent-stack.sh [init|sync|check|adopt|prune|auth] [options]
 
 Commands:
   init       Create missing project guides, config, and generated agents.
   sync       Generate missing or previously-managed platform files.
   check      Check files without changing anything.
   adopt      Create neutral role sources from existing OpenCode agents.
-  prune      Remove only stale files recorded as generated.
+  prune      Remove only safe, stale generated files.
+  auth jev   Store TYPESAFE_API_KEY for web-qa (user-level, never in repo).
+
+  scripts/as is a short alias: as sync, as auth jev, ...
 
 Options:
   --root PATH                 Target project root. Defaults to the current directory.
@@ -71,9 +81,11 @@ Options:
   --platforms LIST            Comma-separated platforms to configure:
                               opencode, claude, codex, cursor.
   --select                    Force the interactive platform multiselect.
-  --mcp LIST                  MCP integrations: none, linear, trello, both.
+  --mcp LIST                  MCP integrations: none, linear, trello, maestro,
+                               both, or comma-separated combos
+                               (e.g. linear,maestro).
   --specs-repository OWNER/REPO
-                              Specs publication mirror (implies mirror mode).
+                               Specs publication mirror (implies mirror mode).
   --specs-base-branch BRANCH    Specs repository base branch.
   --specs-mode MODE             Publication policy: local or mirror.
   --claude-only               Only render/check Claude mirrors.
@@ -90,9 +102,11 @@ then asks for each selected role's model and supported thinking level.
 Non-interactive runs use the ENABLE_* and model defaults from
 .agent-stack/config.conf.
 
-MCP integrations: the wizard can register Linear and/or Trello in every
-enabled platform's config: opencode.jsonc (OpenCode), .mcp.json (Claude),
-.cursor/mcp.json (Cursor), and .codex/config.toml (Codex).
+MCP integrations: the wizard can register Linear, Trello, and Maestro in
+every enabled platform's config: opencode.jsonc (OpenCode), .mcp.json
+(Claude), .cursor/mcp.json (Cursor), and .codex/config.toml (Codex).
+Linear/Trello are remote servers; Maestro is a local stdio server
+(`maestro mcp`, needs the Maestro CLI and Java) for the mobile-qa agent.
 
 The script never overwrites an existing untracked human-owned file. Use
 adopt to import an existing OpenCode prompt into the neutral role source.
@@ -299,6 +313,8 @@ description_for() {
     designer) printf '%s\n' "Project-agnostic UX designer — produces UX proposals from the current project's UX_AGENTS.md and UI_AGENTS.md guidance. Invoked by resolver." ;;
     design-qa) printf '%s\n' "Project-agnostic UI QA reviewer — performs read-only, adversarial, severity-tagged review from the current project's UX_AGENTS.md and UI_AGENTS.md guidance." ;;
     developer) printf '%s\n' 'Project-agnostic implementer — executes OpenSpec tasks with minimal diffs, follows project UX/UI guidance, verifies each task, and reports evidence. Invoked by resolver.' ;;
+    web-qa) printf '%s\n' 'Standalone web QA — drives the app through the browser MCP and judges with TypeSafe Jev across functional, view, and business-logic dimensions.' ;;
+    mobile-qa) printf '%s\n' 'Standalone mobile QA — drives the app on device/emulator through the Maestro MCP and judges with TypeSafe Jev across functional, view, and business-logic dimensions.' ;;
     *) die "unknown role: $1" ;;
   esac
 }
@@ -410,30 +426,90 @@ select_platforms_interactive() {
 }
 
 apply_mcp_selection() {
+  # Legacy single values keep exclusive semantics; comma-separated combos
+  # (e.g. linear,maestro) are additive on top of current config.
   case "$1" in
     none)
       MCP_LINEAR_ENABLED=0
       MCP_TRELLO_ENABLED=0
+      MCP_MAESTRO_ENABLED=0
+      return 0
       ;;
     linear)
       MCP_LINEAR_ENABLED=1
       MCP_TRELLO_ENABLED=0
+      return 0
       ;;
     trello)
       MCP_LINEAR_ENABLED=0
       MCP_TRELLO_ENABLED=1
+      return 0
       ;;
     both)
       MCP_LINEAR_ENABLED=1
       MCP_TRELLO_ENABLED=1
+      return 0
       ;;
-    *) die "unknown MCP selection: $1 (use none, linear, trello, or both)" ;;
+    maestro)
+      MCP_MAESTRO_ENABLED=1
+      return 0
+      ;;
   esac
+  oldIFS=$IFS
+  IFS=','
+  for token in $1; do
+    case "$token" in
+      none)
+        MCP_LINEAR_ENABLED=0
+        MCP_TRELLO_ENABLED=0
+        MCP_MAESTRO_ENABLED=0
+        ;;
+      linear) MCP_LINEAR_ENABLED=1 ;;
+      trello) MCP_TRELLO_ENABLED=1 ;;
+      maestro) MCP_MAESTRO_ENABLED=1 ;;
+      both)
+        MCP_LINEAR_ENABLED=1
+        MCP_TRELLO_ENABLED=1
+        ;;
+      *) die "unknown MCP selection: $token (use none, linear, trello, maestro, both, or comma-separated combos)" ;;
+    esac
+  done
+  IFS=$oldIFS
 }
 
 select_mcp_interactive() {
   linear=$MCP_LINEAR_ENABLED
   trello=$MCP_TRELLO_ENABLED
+  maestro=$MCP_MAESTRO_ENABLED
+
+  wizard_step 'Step 2/5 - Integrations'
+
+  if has_gum; then
+    selected=
+    [ "$linear" = 1 ] && selected=$(csv_add "$selected" 'Linear')
+    [ "$trello" = 1 ] && selected=$(csv_add "$selected" 'Trello')
+    [ "$maestro" = 1 ] && selected=$(csv_add "$selected" 'Maestro (local: mobile-qa)')
+    selected=$(gum choose --no-limit --ordered --height=7 \
+      --header 'Choose MCP integrations (Space selects, Enter confirms)' \
+      --selected "$selected" 'Linear' 'Trello' 'Maestro (local: mobile-qa)') || die 'interactive MCP selection aborted'
+    linear=0
+    trello=0
+    maestro=0
+    while IFS= read -r integration; do
+      case "$integration" in
+        Linear) linear=1 ;;
+        Trello) trello=1 ;;
+        'Maestro (local: mobile-qa)') maestro=1 ;;
+      esac
+    done <<EOF
+$selected
+EOF
+    MCP_LINEAR_ENABLED=$linear
+    MCP_TRELLO_ENABLED=$trello
+    MCP_MAESTRO_ENABLED=$maestro
+    PERSIST_SELECTION=1
+    return 0
+  fi
 
   while :; do
     printf '\nSelect MCP integrations to configure (enter number to toggle, Enter to confirm):\n'
@@ -441,21 +517,25 @@ select_mcp_interactive() {
     printf '  1 %s Linear\n' "$m"
     if [ "$trello" = 1 ]; then m='[x]'; else m='[ ]'; fi
     printf '  2 %s Trello\n' "$m"
-    printf '  a) select both   n) select none\n'
+    if [ "$maestro" = 1 ]; then m='[x]'; else m='[ ]'; fi
+    printf '  3 %s Maestro (local stdio, needs maestro CLI + Java)\n' "$m"
+    printf '  a) select all (Linear+Trello)   n) select none\n'
     printf '> '
     IFS= read -r choice || die 'interactive MCP selection aborted'
     case "$choice" in
       1) [ "$linear" = 1 ] && linear=0 || linear=1 ;;
       2) [ "$trello" = 1 ] && trello=0 || trello=1 ;;
+      3) [ "$maestro" = 1 ] && maestro=0 || maestro=1 ;;
       a|all) linear=1; trello=1 ;;
-      n|none) linear=0; trello=0 ;;
+      n|none) linear=0; trello=0; maestro=0 ;;
       ''|d|done) break ;;
-      *) printf 'choose 1-2, a, n, or Enter\n' ;;
+      *) printf 'choose 1-3, a, n, or Enter\n' ;;
     esac
   done
 
   MCP_LINEAR_ENABLED=$linear
   MCP_TRELLO_ENABLED=$trello
+  MCP_MAESTRO_ENABLED=$maestro
   PERSIST_SELECTION=1
 }
 
@@ -466,6 +546,9 @@ resolve_mcp() {
   MCP_TRELLO_ENABLED=$(get_config MCP_TRELLO_ENABLED 0)
   MCP_TRELLO_NAME=$(get_config MCP_TRELLO_NAME trello)
   MCP_TRELLO_URL=$(get_config MCP_TRELLO_URL https://mcp.trello.com/mcp)
+  MCP_MAESTRO_ENABLED=$(get_config MCP_MAESTRO_ENABLED 0)
+  MCP_MAESTRO_NAME=$(get_config MCP_MAESTRO_NAME maestro)
+  MCP_MAESTRO_COMMAND=$(get_config MCP_MAESTRO_COMMAND maestro)
 
   if [ -n "$MCP_ARG" ]; then
     apply_mcp_selection "$MCP_ARG"
@@ -591,18 +674,26 @@ model_key_for() {
     opencode:designer) printf '%s\n' OPENCODE_DESIGNER_MODEL ;;
     opencode:design-qa) printf '%s\n' OPENCODE_DESIGN_QA_MODEL ;;
     opencode:developer) printf '%s\n' OPENCODE_DEVELOPER_MODEL ;;
+    opencode:web-qa) printf '%s\n' OPENCODE_WEB_QA_MODEL ;;
+    opencode:mobile-qa) printf '%s\n' OPENCODE_MOBILE_QA_MODEL ;;
     claude:resolver) printf '%s\n' CLAUDE_RESOLVER_MODEL ;;
     claude:designer) printf '%s\n' CLAUDE_DESIGNER_MODEL ;;
     claude:design-qa) printf '%s\n' CLAUDE_DESIGN_QA_MODEL ;;
     claude:developer) printf '%s\n' CLAUDE_DEVELOPER_MODEL ;;
+    claude:web-qa) printf '%s\n' CLAUDE_WEB_QA_MODEL ;;
+    claude:mobile-qa) printf '%s\n' CLAUDE_MOBILE_QA_MODEL ;;
     codex:resolver) printf '%s\n' CODEX_RESOLVER_MODEL ;;
     codex:designer) printf '%s\n' CODEX_DESIGNER_MODEL ;;
     codex:design-qa) printf '%s\n' CODEX_DESIGN_QA_MODEL ;;
     codex:developer) printf '%s\n' CODEX_DEVELOPER_MODEL ;;
+    codex:web-qa) printf '%s\n' CODEX_WEB_QA_MODEL ;;
+    codex:mobile-qa) printf '%s\n' CODEX_MOBILE_QA_MODEL ;;
     cursor:resolver) printf '%s\n' CURSOR_RESOLVER_MODEL ;;
     cursor:designer) printf '%s\n' CURSOR_DESIGNER_MODEL ;;
     cursor:design-qa) printf '%s\n' CURSOR_DESIGN_QA_MODEL ;;
     cursor:developer) printf '%s\n' CURSOR_DEVELOPER_MODEL ;;
+    cursor:web-qa) printf '%s\n' CURSOR_WEB_QA_MODEL ;;
+    cursor:mobile-qa) printf '%s\n' CURSOR_MOBILE_QA_MODEL ;;
     *) return 1 ;;
   esac
 }
@@ -613,14 +704,20 @@ thinking_key_for() {
     opencode:designer) printf '%s\n' OPENCODE_DESIGNER_VARIANT ;;
     opencode:design-qa) printf '%s\n' OPENCODE_DESIGN_QA_VARIANT ;;
     opencode:developer) printf '%s\n' OPENCODE_DEVELOPER_VARIANT ;;
+    opencode:web-qa) printf '%s\n' OPENCODE_WEB_QA_VARIANT ;;
+    opencode:mobile-qa) printf '%s\n' OPENCODE_MOBILE_QA_VARIANT ;;
     claude:resolver) printf '%s\n' CLAUDE_RESOLVER_EFFORT ;;
     claude:designer) printf '%s\n' CLAUDE_DESIGNER_EFFORT ;;
     claude:design-qa) printf '%s\n' CLAUDE_DESIGN_QA_EFFORT ;;
     claude:developer) printf '%s\n' CLAUDE_DEVELOPER_EFFORT ;;
+    claude:web-qa) printf '%s\n' CLAUDE_WEB_QA_EFFORT ;;
+    claude:mobile-qa) printf '%s\n' CLAUDE_MOBILE_QA_EFFORT ;;
     codex:resolver) printf '%s\n' CODEX_RESOLVER_EFFORT ;;
     codex:designer) printf '%s\n' CODEX_DESIGNER_EFFORT ;;
     codex:design-qa) printf '%s\n' CODEX_DESIGN_QA_EFFORT ;;
     codex:developer) printf '%s\n' CODEX_DEVELOPER_EFFORT ;;
+    codex:web-qa) printf '%s\n' CODEX_WEB_QA_EFFORT ;;
+    codex:mobile-qa) printf '%s\n' CODEX_MOBILE_QA_EFFORT ;;
     cursor:*) printf '%s\n' '' ;;
     *) return 1 ;;
   esac
@@ -636,8 +733,14 @@ thinking_default_for() {
   case "$1:$2" in
     opencode:resolver|opencode:designer|opencode:design-qa) printf '%s\n' max ;;
     opencode:developer) printf '%s\n' high ;;
+    opencode:web-qa) printf '%s\n' high ;;
+    opencode:mobile-qa) printf '%s\n' high ;;
     claude:resolver|claude:designer|claude:design-qa|claude:developer) printf '%s\n' high ;;
+    claude:web-qa) printf '%s\n' high ;;
+    claude:mobile-qa) printf '%s\n' high ;;
     codex:resolver|codex:designer|codex:design-qa) printf '%s\n' xhigh ;;
+    codex:web-qa) printf '%s\n' high ;;
+    codex:mobile-qa) printf '%s\n' high ;;
     codex:developer) printf '%s\n' high ;;
     cursor:*) printf '%s\n' '' ;;
     *) return 1 ;;
@@ -887,7 +990,7 @@ configure_models_interactive() {
     [ "$enabled" = 1 ] || continue
 
     printf '\nConfigure models and thinking for %s.\n' "$platform"
-    for role in resolver designer design-qa developer; do
+    for role in resolver designer design-qa developer web-qa mobile-qa; do
       model_key=$(model_key_for "$platform" "$role")
       model_current=$(get_config "$model_key" "$(model_default_for "$platform" "$role")")
       prompt_model_value "$platform" "$role" "$model_current"
@@ -912,6 +1015,9 @@ persist_selection() {
   set_config MCP_LINEAR_URL "$MCP_LINEAR_URL"
   set_config MCP_TRELLO_NAME "$MCP_TRELLO_NAME"
   set_config MCP_TRELLO_URL "$MCP_TRELLO_URL"
+  set_config MCP_MAESTRO_ENABLED "$MCP_MAESTRO_ENABLED"
+  set_config MCP_MAESTRO_NAME "$MCP_MAESTRO_NAME"
+  set_config MCP_MAESTRO_COMMAND "$MCP_MAESTRO_COMMAND"
   set_config SPECS_MODE "$SPECS_MODE"
   set_config SPECS_REPOSITORY "$SPECS_REPOSITORY"
   set_config SPECS_REPOSITORY_BASE_BRANCH "$SPECS_REPOSITORY_BASE_BRANCH"
@@ -930,6 +1036,8 @@ render_opencode() {
     designer) model=$(get_config OPENCODE_DESIGNER_MODEL ''); variant=$(get_config OPENCODE_DESIGNER_VARIANT 'high'); agent_mode='subagent'; color='accent' ;;
     design-qa) model=$(get_config OPENCODE_DESIGN_QA_MODEL ''); variant=$(get_config OPENCODE_DESIGN_QA_VARIANT 'high'); agent_mode='subagent'; color='accent' ;;
     developer) model=$(get_config OPENCODE_DEVELOPER_MODEL ''); variant=$(get_config OPENCODE_DEVELOPER_VARIANT 'high'); agent_mode='subagent'; color='success' ;;
+    web-qa) model=$(get_config OPENCODE_WEB_QA_MODEL 'inherit'); variant=$(get_config OPENCODE_WEB_QA_VARIANT 'high'); agent_mode='subagent'; color='info' ;;
+    mobile-qa) model=$(get_config OPENCODE_MOBILE_QA_MODEL 'inherit'); variant=$(get_config OPENCODE_MOBILE_QA_VARIANT 'high'); agent_mode='subagent'; color='info' ;;
     *) die "unknown role: $role" ;;
   esac
 
@@ -954,6 +1062,12 @@ render_opencode() {
       developer)
         printf '%s\n' '  edit: allow' '  bash: allow' '  skill: allow' '  task: deny'
         ;;
+      web-qa)
+        printf '%s\n' '  edit:' '    "*": deny' '    "reports/qa/**": allow' '  bash: allow' '  skill: allow' '  task: deny'
+        ;;
+      mobile-qa)
+        printf '%s\n' '  edit:' '    "*": deny' '    "reports/qa/**": allow' '  bash: allow' '  skill: allow' '  task: deny'
+        ;;
     esac
     printf '%s\n' '---' ''
   } > "$output"
@@ -971,6 +1085,8 @@ render_claude() {
     designer) model=$(get_config CLAUDE_DESIGNER_MODEL ''); effort=$(get_config CLAUDE_DESIGNER_EFFORT 'high'); tools='Read, Grep, Glob, Write' ;;
     design-qa) model=$(get_config CLAUDE_DESIGN_QA_MODEL ''); effort=$(get_config CLAUDE_DESIGN_QA_EFFORT 'high'); tools='Read, Grep, Glob' ;;
     developer) model=$(get_config CLAUDE_DEVELOPER_MODEL ''); effort=$(get_config CLAUDE_DEVELOPER_EFFORT 'high'); tools='Read, Grep, Glob, Edit, Write, Bash' ;;
+    web-qa) model=$(get_config CLAUDE_WEB_QA_MODEL ''); effort=$(get_config CLAUDE_WEB_QA_EFFORT 'high'); tools='Read, Grep, Glob, Write, Bash' ;;
+    mobile-qa) model=$(get_config CLAUDE_MOBILE_QA_MODEL ''); effort=$(get_config CLAUDE_MOBILE_QA_EFFORT 'high'); tools='Read, Grep, Glob, Write, Bash' ;;
     *) die "unknown role: $role" ;;
   esac
 
@@ -999,6 +1115,8 @@ render_codex() {
     designer) model=$(get_config CODEX_DESIGNER_MODEL ''); effort=$(get_config CODEX_DESIGNER_EFFORT 'xhigh') ;;
     design-qa) model=$(get_config CODEX_DESIGN_QA_MODEL ''); effort=$(get_config CODEX_DESIGN_QA_EFFORT 'xhigh') ;;
     developer) model=$(get_config CODEX_DEVELOPER_MODEL ''); effort=$(get_config CODEX_DEVELOPER_EFFORT 'high') ;;
+    web-qa) model=$(get_config CODEX_WEB_QA_MODEL ''); effort=$(get_config CODEX_WEB_QA_EFFORT 'high') ;;
+    mobile-qa) model=$(get_config CODEX_MOBILE_QA_MODEL ''); effort=$(get_config CODEX_MOBILE_QA_EFFORT 'high') ;;
     *) die "unknown role: $role" ;;
   esac
 
@@ -1024,6 +1142,8 @@ render_cursor() {
     designer) model=$(get_config CURSOR_DESIGNER_MODEL ''); readonly=false ;;
     design-qa) model=$(get_config CURSOR_DESIGN_QA_MODEL ''); readonly=true ;;
     developer) model=$(get_config CURSOR_DEVELOPER_MODEL ''); readonly=false ;;
+    web-qa) model=$(get_config CURSOR_WEB_QA_MODEL ''); readonly=false ;;
+    mobile-qa) model=$(get_config CURSOR_MOBILE_QA_MODEL ''); readonly=false ;;
     *) die "unknown role: $role" ;;
   esac
 
@@ -1056,6 +1176,11 @@ render_config() {
     if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
       printf '%s\n' '' "[mcp_servers.$MCP_TRELLO_NAME]"
       printf '%s\n' "url = \"$MCP_TRELLO_URL\""
+    fi
+    if [ "$MCP_MAESTRO_ENABLED" = 1 ]; then
+      printf '%s\n' '' "[mcp_servers.$MCP_MAESTRO_NAME]"
+      printf '%s\n' "command = \"$MCP_MAESTRO_COMMAND\""
+      printf '%s\n' 'args = ["mcp"]'
     fi
   } > "$output"
 }
@@ -1774,6 +1899,247 @@ For each pending task in `tasks.md`:
 ```
 ROLE_DEVELOPER_EOF
       ;;
+    web-qa) cat > "$target" <<'ROLE_WEB_QA_EOF'
+You are the standalone web QA agent for the current project. You drive the
+running web app through the connected browser MCP, judge what you observe
+with TypeSafe Jev, and return severity-tagged findings. You never edit
+implementation code.
+
+You are standalone: you run on demand (`web-qa`), not inside the
+resolver -> designer -> developer -> design-qa critical path. You may reply
+with your report according to the host tool's policy.
+
+## 1. Project discovery
+
+Before testing, discover — never assume:
+
+1. Read the project root and applicable ancestor `AGENTS.md` / `CLAUDE.md`
+   for safety, financial-control, and repo instructions.
+2. Discover and read the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md`.
+   These define users, language, design system, components, states, and
+   review criteria.
+3. Identify the running app URL, login, and seed data from the request,
+   env files, `package.json` scripts, or `playwright.config.*`. Ask when
+   missing. Never hardcode a port or credential.
+4. Resolve the browser MCP from the connected servers (do not hardcode a
+   server name) and the Jev helper at `scripts/qa/ask-jev.ts` with its
+   question library at `scripts/qa/questions.ts`.
+
+If a guide, URL, or credential is missing, mark affected criteria
+`UNVERIFIED` instead of inventing project behavior.
+
+## 2. Intake
+
+The caller supplies what to test, for example free text, a Linear issue,
+or `url + task`. Clarify in one round when needed:
+
+- target URL and test goal;
+- dimensions to check: `functional`, `view`, `business` (default: all);
+- scope boundaries and test users;
+- where to write the report (`reports/qa/<slug>.md` or stdout).
+
+## 3. Drive (code owns the loop)
+
+You own browser control flow. Jev never picks browser actions.
+
+1. Navigate with the browser MCP, capture the accessibility tree snapshot,
+   visible copy, console errors, and network failures at each checkpoint.
+2. Act deterministically: one action, one observation. Record
+   `{ action, observed }` in the trace.
+3. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
+   never send screenshots. The `inherit` model compresses the page to
+   `{ url, title, visible_copy, aria_truncated, console_errors }`.
+4. Re-check persistence where relevant (reload, re-query) for functional
+   and business claims.
+
+## 4. Judge (Jev supplies verdicts)
+
+Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
+(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
+Ask narrow atomic questions together across all selected dimensions and let
+code decide which answers apply (speculative fan-out):
+
+- functional `Noul`: `task_completed`, `action_had_visible_effect`,
+  `error_blocked_task`, `persisted_after_reload`;
+- view `Noul`: `one_primary_action`, `impact_before_confirm`,
+  `copy_plain_and_actionable`, `status_explains_next_step`;
+- business `Noul`: `payment_classified`, `no_synthetic_cash`,
+  `trace_present`, `register_gate_respected`;
+- `Choice verdict`: `pass | blocking | nit | unverified`;
+- `Choice domain`: `functional | view | business_logic`;
+- `Score severity`: `cosmetic | confusing | blocks_task_or_money_risk`.
+
+Compose in code with confidence gates: a `Noul` in `0.4-0.6` or a `Choice`
+with `confidence < 0.75` becomes `UNVERIFIED` — capture a snapshot and
+escalate to the caller instead of guessing.
+
+## 5. Report format
+
+```md
+## Report: <slug> — web-qa
+
+### Verdict
+- PASS / BLOCKING / NIT / UNVERIFIED
+
+### Checked
+- dimensions, URLs, steps, and how each was observed
+
+### Findings
+- (none) or: [BLOCKING|NIT|UNVERIFIED] dimension, guide section, failing
+  case, Jev probabilities, snapshot/console evidence, fix
+
+### Project guidance
+- UX_AGENTS.md — section / rule
+- UI_AGENTS.md — section / rule
+- AGENTS.md — financial/register rule when applicable
+
+### Deviations
+- (none) or: what could not be checked and why
+```
+
+## Guardrails
+
+- Browser actions only against the supplied test target. Never edit, commit,
+  or migrate code, specs, or data.
+- Reports only: you may write `reports/qa/*.md`. Do not touch anything else.
+- Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+- One pass, one verdict per checkpoint. A re-run is a new invocation.
+- You are not graded on finding a violation. An evidence-backed PASS is valid.
+ROLE_WEB_QA_EOF
+      ;;
+    mobile-qa) cat > "$target" <<'ROLE_MOBILE_QA_EOF'
+You are the standalone mobile QA agent for the current project. You drive
+the mobile app on a connected device or emulator through the Maestro MCP,
+judge what you observe with TypeSafe Jev, and return severity-tagged
+findings. You never edit implementation code.
+
+You are standalone: you run on demand (`mobile-qa`), not inside the
+resolver -> designer -> developer -> design-qa critical path. You may reply
+with your report according to the host tool's policy.
+
+## 0. Prerequisites
+
+The Maestro MCP is a local stdio server (`maestro mcp`) and requires the
+Maestro CLI plus Java on PATH. The device side requires a booted Android
+emulator (Android Studio / `emulator -avd`) or a connected device, with the
+target app installed.
+
+Check before testing: `maestro --version`, then `list_devices` from the
+connected Maestro MCP. If the CLI is missing, no device is connected, or
+the app is not installed, stop and report exactly what is missing and how
+to provide it. Never invent device state.
+
+## 1. Project discovery
+
+Before testing, discover — never assume:
+
+1. Read the project root and applicable ancestor `AGENTS.md` / `CLAUDE.md`
+   for safety, financial-control, and repo instructions.
+2. Discover and read the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md`.
+   These define users, language, design system, components, states, and
+   review criteria.
+3. Identify the app target (package id / build variant / install path),
+   test users, and seed data from the request, env files, or project docs.
+   Ask when missing. Never hardcode a device serial or credential.
+4. Resolve the Maestro MCP from the connected servers (server name
+   `maestro` by convention; do not hardcode it) and the Jev helper at
+   `scripts/qa/ask-jev.ts` with the mobile question library at
+   `scripts/mobile-qa/questions-mobile.ts`.
+5. Call `cheat_sheet` before authoring unfamiliar Maestro flow commands.
+
+If a guide, device, build, or credential is missing, mark affected criteria
+`UNVERIFIED` instead of inventing project behavior.
+
+## 2. Intake
+
+The caller supplies what to test: free text, a Linear issue, or
+`app screen + task`. Clarify in one round when needed:
+
+- test goal and entry point (fresh install vs logged-in state);
+- dimensions to check: `functional`, `view`, `business` (default: all);
+- device / OS / build under test, or "whatever is connected";
+- flows to reuse (`*.yaml` in repo) vs explore freely;
+- where to write the report (`reports/qa/<slug>.md` or stdout).
+
+## 3. Drive (code owns the loop)
+
+You own device control flow. Jev never picks device actions.
+
+1. Start each checkpoint with `inspect_screen` (compact JSON hierarchy)
+   and re-call it after every UI change. Use `take_screenshot` when a
+   visual disambiguates an element or as report evidence.
+2. Explore with inline `{ yaml }` flows (preferred for exploration);
+   run repo `{ files }` for regression. Validate syntax via the `run`
+   call itself.
+3. One action, one observation. Record `{ action, observed }` in the trace,
+   including permission dialogs, offline transitions, back-button behavior,
+   and deep-link entry points where relevant.
+4. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
+   never send screenshots. Compress the hierarchy to
+   `{ screen, visible_copy, focused_element, console_or_flow_errors }`.
+5. Re-check persistence where relevant (relaunch, background/foreground)
+   for functional and business claims.
+
+## 4. Judge (Jev supplies verdicts)
+
+Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
+(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
+with the mobile question library. Ask narrow atomic questions together
+across all selected dimensions and let code decide which answers apply
+(speculative fan-out):
+
+- functional `Noul`: `task_completed`, `action_had_visible_effect`,
+  `error_blocked_task`, `gesture_and_back_behaved`, `persisted_after_relaunch`;
+- view `Noul`: `one_primary_action`, `impact_before_confirm`,
+  `copy_plain_and_actionable`, `touch_targets_and_density_ok`;
+- business `Noul`: `payment_classified`, `no_synthetic_cash`,
+  `trace_present`, `register_gate_respected`;
+- `Choice verdict`: `pass | blocking | nit | unverified`;
+- `Choice domain`: `functional | view | business_logic`;
+- `Score severity`: `cosmetic | confusing | blocks_task_or_money_risk`.
+
+Compose in code with confidence gates: a `Noul` in `0.4-0.6` or a `Choice`
+with `confidence < 0.75` becomes `UNVERIFIED` — capture a screenshot and
+escalate to the caller instead of guessing.
+
+## 5. Report format
+
+```md
+## Report: <slug> — mobile-qa
+
+### Verdict
+- PASS / BLOCKING / NIT / UNVERIFIED
+
+### Checked
+- dimensions, device/OS/build, screens, flows, and how each was observed
+
+### Findings
+- (none) or: [BLOCKING|NIT|UNVERIFIED] dimension, guide section, failing
+  case, Jev probabilities, hierarchy/screenshot evidence, fix
+
+### Project guidance
+- UX_AGENTS.md — section / rule
+- UI_AGENTS.md — section / rule
+- AGENTS.md — financial/register rule when applicable
+
+### Deviations
+- (none) or: what could not be checked and why
+```
+
+## Guardrails
+
+- Device actions only against the supplied test target and build. Never
+  edit, commit, or migrate code, specs, flows, or data.
+- Reports and exploratory flows only: you may write `reports/qa/*.md` and
+  scratch `*.yaml` under the QA scratch path supplied by the caller. Do not
+  touch anything else.
+- Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+- Never run Cloud runs (`run_on_cloud`) without explicit caller approval;
+  local runs are the default.
+- One pass, one verdict per checkpoint. A re-run is a new invocation.
+- You are not graded on finding a violation. An evidence-backed PASS is valid.
+ROLE_MOBILE_QA_EOF
+      ;;
   esac
 }
 
@@ -1890,6 +2256,12 @@ MCP_TRELLO_ENABLED=0
 MCP_TRELLO_NAME=trello
 MCP_TRELLO_URL=https://mcp.trello.com/mcp
 
+# Maestro MCP for the mobile-qa agent. Local stdio server (maestro CLI +
+# Java required on PATH); opt-in because it needs a local toolchain.
+MCP_MAESTRO_ENABLED=0
+MCP_MAESTRO_NAME=maestro
+MCP_MAESTRO_COMMAND=maestro
+
 # Finalized OpenSpec publication. Setup requires a GitHub owner/repo here or
 # through --specs-repository so the resolver can upload completed changes.
 SPECS_REPOSITORY=
@@ -1898,6 +2270,7 @@ TASK_STATE_IN_PROGRESS=In Progress
 TASK_STATE_IN_PR=In PR
 
 # OpenCode model pinning (provider/model + variant).
+# web-qa uses inherit: navigation/reasoning follows the parent session model.
 OPENCODE_RESOLVER_MODEL=
 OPENCODE_RESOLVER_VARIANT=max
 OPENCODE_DESIGNER_MODEL=
@@ -1906,6 +2279,10 @@ OPENCODE_DESIGN_QA_MODEL=
 OPENCODE_DESIGN_QA_VARIANT=max
 OPENCODE_DEVELOPER_MODEL=
 OPENCODE_DEVELOPER_VARIANT=high
+OPENCODE_WEB_QA_MODEL=inherit
+OPENCODE_WEB_QA_VARIANT=high
+OPENCODE_MOBILE_QA_MODEL=inherit
+OPENCODE_MOBILE_QA_VARIANT=high
 
 # Claude Code mirrors (Claude model aliases; OpenCode provider IDs are unsupported).
 CLAUDE_RESOLVER_MODEL=
@@ -1916,6 +2293,10 @@ CLAUDE_DESIGN_QA_MODEL=
 CLAUDE_DESIGN_QA_EFFORT=high
 CLAUDE_DEVELOPER_MODEL=
 CLAUDE_DEVELOPER_EFFORT=high
+CLAUDE_WEB_QA_MODEL=
+CLAUDE_WEB_QA_EFFORT=high
+CLAUDE_MOBILE_QA_MODEL=
+CLAUDE_MOBILE_QA_EFFORT=high
 
 # Codex custom agents (Codex model IDs + reasoning effort: minimal|low|medium|high|xhigh).
 CODEX_RESOLVER_MODEL=
@@ -1926,18 +2307,24 @@ CODEX_DESIGN_QA_MODEL=
 CODEX_DESIGN_QA_EFFORT=xhigh
 CODEX_DEVELOPER_MODEL=
 CODEX_DEVELOPER_EFFORT=high
+CODEX_WEB_QA_MODEL=
+CODEX_WEB_QA_EFFORT=high
+CODEX_MOBILE_QA_MODEL=
+CODEX_MOBILE_QA_EFFORT=high
 
 # Cursor subagents (Cursor model IDs).
 CURSOR_RESOLVER_MODEL=
 CURSOR_DESIGNER_MODEL=
 CURSOR_DESIGN_QA_MODEL=
 CURSOR_DEVELOPER_MODEL=
+CURSOR_WEB_QA_MODEL=
+CURSOR_MOBILE_QA_MODEL=
 DEFAULTS_EOF
 }
 
 ensure_role_sources() {
   ensure_dir "$ROOT/.agent-stack/roles"
-  for role in resolver designer design-qa developer; do
+  for role in resolver designer design-qa developer web-qa mobile-qa; do
     target_role=$ROOT/.agent-stack/roles/$role.md
     source_role=$KIT_ROOT/.agent-stack/roles/$role.md
     if [ -f "$source_role" ]; then
@@ -2440,7 +2827,7 @@ record_sources() {
   # Record kit base hashes for three-way upgrades. Add-missing only;
   # scripts/upgrade-agent-stack.sh owns updates. Never overwrites entries.
   manifest=$ROOT/.agent-stack/sources.manifest
-  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
+  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
     kit_file=$KIT_ROOT/.agent-stack/$relative
     [ -f "$kit_file" ] || continue
     if [ -f "$manifest" ] && awk -F'|' -v wanted="$relative" '$1 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$manifest"; then
@@ -2449,6 +2836,71 @@ record_sources() {
     ensure_dir "$(dirname -- "$manifest")"
     printf '%s\n' "$relative|$(file_hash "$kit_file")" >> "$manifest"
   done
+}
+
+ensure_webqa_resources() {
+  ensure_dir "$ROOT/scripts/qa"
+  for f in ask-jev.ts questions.ts README.md; do
+    source_file=$KIT_ROOT/.agent-stack/resources/web-qa/$f
+    [ -f "$source_file" ] || continue
+    copy_if_missing "$source_file" "$ROOT/scripts/qa/$f"
+  done
+}
+
+ensure_mobileqa_resources() {
+  ensure_dir "$ROOT/scripts/mobile-qa"
+  for f in questions-mobile.ts README.md; do
+    source_file=$KIT_ROOT/.agent-stack/resources/mobile-qa/$f
+    [ -f "$source_file" ] || continue
+    copy_if_missing "$source_file" "$ROOT/scripts/mobile-qa/$f"
+  done
+}
+
+auth_jev() {
+  validate_only=0
+  for a in "$@"; do
+    case "$a" in
+      --validate-only) validate_only=1 ;;
+      *) die "unknown auth option: $a (use --validate-only)" ;;
+    esac
+  done
+
+  key=${TYPESAFE_API_KEY:-}
+  if [ -z "$key" ] && [ "$validate_only" = 0 ]; then
+    if [ ! -t 0 ]; then
+      die 'TYPESAFE_API_KEY is not set; re-run interactively or export it first'
+    fi
+    printf 'TypeSafe API key (input hidden): '
+    stty -echo 2>/dev/null || true
+    IFS= read -r key || true
+    stty echo 2>/dev/null || true
+    printf '\n'
+    [ -n "$key" ] || die 'no key entered'
+  fi
+  [ -n "$key" ] || die 'TYPESAFE_API_KEY is not set'
+
+  if ! command -v curl >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
+    die 'curl or node is required to validate the key'
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    status=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 \
+      -H "Authorization: Bearer $key" https://api.typesafe.ai/v1/models 2>/dev/null || true)
+  else
+    status=$(TYPESAFE_API_KEY="$key" node -e "fetch('https://api.typesafe.ai/v1/models',{headers:{Authorization:'Bearer '+process.env.TYPESAFE_API_KEY}}).then(r=>console.log(r.status)).catch(()=>console.log('000'))" 2>/dev/null || true)
+  fi
+  case "$status" in
+    200) printf 'TypeSafe key is valid\n' ;;
+    *) die "TypeSafe key validation failed (status ${status:-unknown})" ;;
+  esac
+  [ "$validate_only" = 1 ] && return 0
+
+  env_dir=${XDG_CONFIG_HOME:-$HOME/.config}/agent-stack
+  ensure_dir "$env_dir"
+  chmod 700 "$env_dir" 2>/dev/null || true
+  printf 'TYPESAFE_API_KEY=%s\n' "$key" > "$env_dir/env"
+  chmod 600 "$env_dir/env" 2>/dev/null || true
+  printf 'stored in %s (mode 600, user-level only, never in the repo)\n' "$env_dir/env"
+  printf 'activate: export TYPESAFE_API_KEY=$(grep TYPESAFE_API_KEY %s | cut -d= -f2-)\n' "$env_dir/env"
 }
 
 ensure_config() {
@@ -2508,7 +2960,7 @@ render_platform_outputs() {
   mode=$1
 
   if [ "$ENABLE_OPENCODE" -eq 1 ]; then
-    for role in resolver designer design-qa developer; do
+    for role in resolver designer design-qa developer web-qa mobile-qa; do
       temporary=$(mktemp "$ROOT/.agent-stack/.opencode.$role.XXXXXX")
       render_opencode "$role" "$temporary"
       relative=$(relative_path "$ROOT/.opencode/agents/$role.md")
@@ -2521,7 +2973,7 @@ render_platform_outputs() {
   fi
 
   if [ "$ENABLE_CLAUDE" -eq 1 ]; then
-    for role in resolver designer design-qa developer; do
+    for role in resolver designer design-qa developer web-qa mobile-qa; do
       temporary=$(mktemp "$ROOT/.agent-stack/.claude.$role.XXXXXX")
       render_claude "$role" "$temporary"
       relative=$(relative_path "$ROOT/.claude/agents/$role.md")
@@ -2552,7 +3004,7 @@ render_platform_outputs() {
       install_generated "$relative" "$temporary"
     fi
 
-    for role in resolver designer design-qa developer; do
+    for role in resolver designer design-qa developer web-qa mobile-qa; do
       temporary=$(mktemp "$ROOT/.agent-stack/.codex.$role.XXXXXX")
       render_codex "$role" "$temporary"
       relative=$(relative_path "$ROOT/.codex/agents/$role.toml")
@@ -2565,7 +3017,7 @@ render_platform_outputs() {
   fi
 
   if [ "$ENABLE_CURSOR" -eq 1 ]; then
-    for role in resolver designer design-qa developer; do
+    for role in resolver designer design-qa developer web-qa mobile-qa; do
       temporary=$(mktemp "$ROOT/.agent-stack/.cursor.$role.XXXXXX")
       render_cursor "$role" "$temporary"
       relative=$(relative_path "$ROOT/.cursor/agents/$role.md")
@@ -2691,12 +3143,42 @@ ensure_mcp_server() {
   # Codex MCP is rendered into .codex/config.toml by render_config (TOML).
 }
 
+ensure_maestro_mcp() {
+  # Local stdio server: maestro CLI must be on PATH with Java available.
+  name=$MCP_MAESTRO_NAME
+  command=$MCP_MAESTRO_COMMAND
+
+  if [ "$ENABLE_OPENCODE" -eq 1 ]; then
+    merge_mcp_json \
+      "$ROOT/opencode.jsonc" "mcp" "$name" \
+      "{\"type\":\"local\",\"command\":\"$command\",\"args\":[\"mcp\"],\"enabled\":true}" \
+      "{\"\$schema\":\"https://opencode.ai/config.json\"}"
+  fi
+
+  if [ "$ENABLE_CLAUDE" -eq 1 ]; then
+    merge_mcp_json \
+      "$ROOT/.mcp.json" "mcpServers" "$name" \
+      "{\"command\":\"$command\",\"args\":[\"mcp\"]}"
+  fi
+
+  if [ "$ENABLE_CURSOR" -eq 1 ]; then
+    merge_mcp_json \
+      "$ROOT/.cursor/mcp.json" "mcpServers" "$name" \
+      "{\"command\":\"$command\",\"args\":[\"mcp\"]}"
+  fi
+
+  # Codex MCP is rendered into .codex/config.toml by render_config (TOML).
+}
+
 ensure_mcp_config() {
   if [ "$MCP_LINEAR_ENABLED" = 1 ]; then
     ensure_mcp_server linear
   fi
   if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
     ensure_mcp_server trello
+  fi
+  if [ "$MCP_MAESTRO_ENABLED" = 1 ]; then
+    ensure_maestro_mcp
   fi
 }
 
@@ -2736,7 +3218,7 @@ EOF
 
 adopt_roles() {
   ensure_dir "$ROOT/.agent-stack/roles"
-  for role in resolver designer design-qa developer; do
+  for role in resolver designer design-qa developer web-qa mobile-qa; do
     target_role=$ROOT/.agent-stack/roles/$role.md
     source_agent=$ROOT/.opencode/agents/$role.md
     if [ -f "$target_role" ] || [ ! -f "$source_agent" ]; then
@@ -2760,7 +3242,7 @@ prune_generated() {
 
   while IFS='|' read -r relative expected_hash; do
     case "$relative" in
-      .opencode/agents/resolver.md|.opencode/agents/designer.md|.opencode/agents/design-qa.md|.opencode/agents/developer.md|.claude/agents/resolver.md|.claude/agents/designer.md|.claude/agents/design-qa.md|.claude/agents/developer.md|.codex/agents/resolver.toml|.codex/agents/designer.toml|.codex/agents/design-qa.toml|.codex/agents/developer.toml|.codex/config.toml|.codex/README.md|.cursor/agents/resolver.md|.cursor/agents/designer.md|.cursor/agents/design-qa.md|.cursor/agents/developer.md)
+      .opencode/agents/resolver.md|.opencode/agents/designer.md|.opencode/agents/design-qa.md|.opencode/agents/developer.md|.opencode/agents/web-qa.md|.opencode/agents/mobile-qa.md|.claude/agents/resolver.md|.claude/agents/designer.md|.claude/agents/design-qa.md|.claude/agents/developer.md|.claude/agents/web-qa.md|.claude/agents/mobile-qa.md|.codex/agents/resolver.toml|.codex/agents/designer.toml|.codex/agents/design-qa.toml|.codex/agents/developer.toml|.codex/agents/web-qa.toml|.codex/agents/mobile-qa.toml|.codex/config.toml|.codex/README.md|.cursor/agents/resolver.md|.cursor/agents/designer.md|.cursor/agents/design-qa.md|.cursor/agents/developer.md|.cursor/agents/web-qa.md|.cursor/agents/mobile-qa.md)
         printf '%s\n' "$relative|$expected_hash" >> "$temporary"
         ;;
       *)
@@ -2780,8 +3262,18 @@ prune_generated() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    init|sync|check|adopt|prune)
+    init|sync|check|adopt|prune|auth)
       COMMAND=$1
+      ;;
+    jev)
+      if [ "$COMMAND" = auth ]; then
+        AUTH_PROVIDER=jev
+      else
+        die "unknown argument: $1"
+      fi
+      ;;
+    --validate-only)
+      AUTH_ARGS="$AUTH_ARGS --validate-only"
       ;;
     --root)
       [ "$#" -gt 1 ] || die '--root requires a path'
@@ -2800,7 +3292,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --mcp)
-      [ "$#" -gt 1 ] || die '--mcp requires none, linear, trello, or both'
+      [ "$#" -gt 1 ] || die '--mcp requires none, linear, trello, maestro, both, or comma-separated combos'
       MCP_ARG=$2
       EXPLICIT_MCP=1
       shift
@@ -2865,6 +3357,14 @@ KIT_ROOT=$(abspath_dir "$KIT_ROOT") || die "kit root does not exist: $KIT_ROOT"
 CONFIG_FILE=$ROOT/.agent-stack/config.conf
 MANIFEST_FILE=$ROOT/.agent-stack/generated.manifest
 ROLE_DIR=$ROOT/.agent-stack/roles
+AUTH_PROVIDER=${AUTH_PROVIDER:-}
+
+if [ "$COMMAND" = auth ]; then
+  [ "$AUTH_PROVIDER" = jev ] || die 'usage: setup-agent-stack.sh auth jev [--validate-only]'
+  # shellcheck disable=SC2086
+  auth_jev $AUTH_ARGS
+  exit 0
+fi
 
 trap 'trap_code=$?; if [ "$trap_code" -ne 0 ]; then if [ "$CREATED_COUNT" -gt 0 ]; then printf "%s\n" "setup-agent-stack.sh: $COMMAND did not finish (exit $trap_code) after creating $CREATED_COUNT file(s) listed above; re-run the same command to resume (installation is idempotent)" >&2; else printf "%s\n" "setup-agent-stack.sh: $COMMAND did not finish (exit $trap_code) before creating any files" >&2; fi; fi' EXIT
 
@@ -2883,6 +3383,8 @@ case "$COMMAND" in
       install_codex_bridge
     fi
     render_platform_outputs sync
+    ensure_webqa_resources
+    ensure_mobileqa_resources
     ensure_mcp_config
     record_sources
     governance_status
@@ -2893,6 +3395,8 @@ case "$COMMAND" in
     resolve_delivery_config
     ensure_role_sources
     ensure_skills
+    ensure_webqa_resources
+    ensure_mobileqa_resources
     if [ "$INTERACTIVE_WIZARD" = 1 ]; then
       configure_models_interactive
     fi

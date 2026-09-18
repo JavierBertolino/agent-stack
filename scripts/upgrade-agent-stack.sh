@@ -134,7 +134,7 @@ upgrade_one() {
 
 # Managed sources: roles, skills, contracts. Project config.conf is never
 # modified here; missing new defaults are reported by doctor.sh instead.
-for role in resolver designer design-qa developer; do
+for role in resolver designer design-qa developer web-qa mobile-qa; do
   upgrade_one "roles/$role.md"
 done
 for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery; do

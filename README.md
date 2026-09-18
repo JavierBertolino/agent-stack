@@ -140,6 +140,8 @@ The repository checkout workflow is equivalent to:
   `governance-bootstrap`, `openspec-workflow`, `ux-design`,
   `implementation`, `ui-review`, `git-delivery`) mirrored per platform.
 - Versioned handoff/report contracts under `.agent-stack/contracts/`.
+- `web-qa`: standalone browser + Jev QA (functional / view / business logic).
+- `mobile-qa`: standalone Maestro + Jev QA on device/emulator.
 - Project-owned `UX_AGENTS.md` and `UI_AGENTS.md` starter templates.
 - Platform-specific agent files for the selected tools.
 - Selected Linear and/or Trello MCP entries for enabled platforms.
@@ -162,6 +164,8 @@ setup-agent-stack.sh prune    # remove only safe, stale generated files
 scripts/doctor.sh             # dependencies, skills, governance, collisions
 scripts/upgrade-agent-stack.sh --check  # dry-run safe source migration
 scripts/run-state.py --help   # validated run state (init/lock/transition/verify/resume)
+setup-agent-stack.sh auth jev # store TYPESAFE_API_KEY for web-qa (user-level)
+scripts/as ...                # short alias: as sync, as auth jev, ...
 ```
 
 The wrapper `install.sh` is equivalent to `init` with this repository as the

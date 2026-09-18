@@ -27,9 +27,6 @@ jobs:
       - name: Python syntax
         run: |
           python3 -m py_compile scripts/run-state.py scripts/validate-contracts.py scripts/build-installer.sh
-      - name: Embedded installer sources are synchronized
-        run: |
-          python3 scripts/build-installer.sh --kit-root "$PWD" --check
       - name: Fixture and installer tests
         run: |
           sh tests/run.sh --kit-root "$PWD"

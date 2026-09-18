@@ -9,6 +9,19 @@ if [ "$SHARE" = "@SHARE@" ]; then
   SHARE=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 fi
 
+# Load user-level integration credentials. Never read credentials from the project.
+ASTACK_ENV=${XDG_CONFIG_HOME:-$HOME/.config}/astack/env
+LEGACY_ENV=${XDG_CONFIG_HOME:-$HOME/.config}/agent-stack/env
+if [ -f "$ASTACK_ENV" ]; then
+  set -a
+  . "$ASTACK_ENV"
+  set +a
+elif [ -f "$LEGACY_ENV" ]; then
+  set -a
+  . "$LEGACY_ENV"
+  set +a
+fi
+
 usage() {
   cat <<'EOF'
 Agent Stack (astack)

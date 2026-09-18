@@ -72,29 +72,25 @@ export function buildMobileQuestions(dims: MobileDim[] = MOBILE_DIMENSIONS): Rec
   }
 
   if (want("business")) {
-    q.payment_classified = {
+    q.business_rule_respected = {
       type: "noul",
       instructions:
-        "When money moves for `test_goal`, is the payment origin explicit (in-register vs external vs on-account) per `governance.payment_classification`?",
-      criteria: {
-        true: "Classification is explicit in copy or trace.",
-        false: "Money moves with no explicit classification, or no money moves.",
-      },
+        "Does `trace` comply with the explicit business constraints in `governance` and the expected outcome for `test_goal`?",
     };
-    q.no_synthetic_cash = {
+    q.forbidden_side_effects_avoided = {
       type: "noul",
       instructions:
-        "Does `trace` avoid creating register-cash effects for non-cash actions (debt, on-account, adjustments) per `governance.no_synthetic_cash`?",
+        "Does `trace` avoid side effects that are forbidden or outside the scope described by `governance` and `expected`?",
     };
-    q.trace_present = {
+    q.state_transition_valid = {
       type: "noul",
       instructions:
-        "Is the money-affecting action traceable to actor, timestamp, reason, source document, and amounts per `governance.traceability`?",
+        "Does the observed state transition match the allowed workflow and invariants described by `governance`?",
     };
-    q.register_gate_respected = {
+    q.traceability_present = {
       type: "noul",
       instructions:
-        "Are real-cash actions gated on an open register turn while non-cash actions are not blocked by a closed register, per `governance.register_gate`?",
+        "When the action is auditable or sensitive, does `trace` preserve the actor, action, timestamp, reason, and relevant object identifiers required by `governance`?",
     };
   }
 
@@ -114,13 +110,13 @@ export function buildMobileQuestions(dims: MobileDim[] = MOBILE_DIMENSIONS): Rec
     criteria: {
       functional: "Navigation, gestures, permissions, offline, errors.",
       view: "Copy, layout, density, touch targets, guidance.",
-      business_logic: "Money truths, register gates, classification, traceability.",
+      business_logic: "Explicit business rules, valid state transitions, side effects, and traceability.",
     },
   };
   q.severity = {
     type: "score",
     instructions: "How severe is the primary finding for `test_goal`?",
-    criteria: ["Cosmetic polish.", "Confusing but completable.", "Blocks the task or risks money, stock, permission, or audit."],
+    criteria: ["Cosmetic polish.", "Confusing but completable.", "Blocks the task or risks correctness, permissions, data integrity, or required auditability."],
   };
 
   return q;

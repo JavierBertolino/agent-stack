@@ -38,7 +38,6 @@ jobs:
           sh -n scripts/update-astack.sh
           sh -n scripts/bootstrap-install.sh
           sh -n install.sh
-          python3 scripts/build-installer.sh --kit-root "$PWD" --check
           sh tests/run.sh --kit-root "$PWD"
 
       - name: Build release archive

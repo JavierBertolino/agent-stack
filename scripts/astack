@@ -1,8 +1,83 @@
 #!/usr/bin/env sh
-# astack — short alias for the agent-stack setup script.
-#   astack init | sync | check | adopt | prune | auth jev [--validate-only]
-# Forwards all args; resolves the kit root from this file's location.
+# astack - Agent Stack CLI.
 set -eu
+
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-KIT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-exec sh "$SCRIPT_DIR/setup-agent-stack.sh" --kit-root "$KIT_ROOT" "$@"
+SHARE="@SHARE@"
+
+if [ "$SHARE" = "@SHARE@" ]; then
+  SHARE=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+fi
+
+usage() {
+  cat <<'EOF'
+Agent Stack (astack)
+
+Usage:
+  astack init [options]             Configure Agent Stack in the current project.
+  astack sync [options]             Synchronize managed files.
+  astack check [options]            Check generated files for drift.
+  astack doctor [options]           Diagnose dependencies and configuration.
+  astack auth jev                   Configure Jev credentials/provider.
+  astack update [--check]           Update the installed astack CLI/kit.
+  astack upgrade [--check]          Upgrade this project's managed Agent Stack files.
+  astack adopt                      Import existing OpenCode role prompts.
+  astack prune                      Remove safe stale generated files.
+  astack run-state ...              Manage validated run state.
+  astack validate ...               Validate contract JSON.
+  astack --version                  Print the installed version.
+  astack --help                     Show this help.
+
+Examples:
+  astack init
+  astack auth jev
+  astack doctor
+  astack update --check
+  astack update
+  astack upgrade
+EOF
+}
+
+die() {
+  printf '%s\n' "astack: $*" >&2
+  exit 2
+}
+
+[ -d "$SHARE" ] || die "installation is incomplete: $SHARE is missing"
+
+command=${1:-}
+[ "$#" -gt 0 ] && shift
+
+case "$command" in
+  init|sync|check|adopt|prune)
+    exec sh "$SHARE/scripts/setup-agent-stack.sh" "$command" --root "$PWD" --kit-root "$SHARE" "$@"
+    ;;
+  auth)
+    exec sh "$SHARE/scripts/setup-agent-stack.sh" auth --root "$PWD" --kit-root "$SHARE" "$@"
+    ;;
+  doctor)
+    exec sh "$SHARE/scripts/doctor.sh" --root "$PWD" --kit-root "$SHARE" "$@"
+    ;;
+  update)
+    exec sh "$SHARE/scripts/update-astack.sh" --kit-root "$SHARE" "$@"
+    ;;
+  upgrade)
+    exec sh "$SHARE/scripts/upgrade-agent-stack.sh" --root "$PWD" --kit-root "$SHARE" "$@"
+    ;;
+  run-state)
+    exec python3 "$SHARE/scripts/run-state.py" --root "$PWD" "$@"
+    ;;
+  validate)
+    exec python3 "$SHARE/scripts/validate-contracts.py" --kit-root "$SHARE" "$@"
+    ;;
+  --version|-v|version)
+    version=$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$SHARE/.agent-stack/defaults.conf")
+    printf 'astack %s\n' "$version"
+    ;;
+  ""|-h|--help|help)
+    usage
+    ;;
+  *)
+    die "unknown command: $command (run 'astack --help')"
+    ;;
+esac

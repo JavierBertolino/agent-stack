@@ -39,7 +39,7 @@ SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workf
 
 # MCP and model settings are loaded from project config, then optionally
 # changed by the interactive installer wizard.
-MCP_LINEAR_ENABLED=1
+MCP_LINEAR_ENABLED=0
 MCP_LINEAR_NAME=linear
 MCP_LINEAR_URL=https://mcp.linear.app/mcp
 MCP_TRELLO_ENABLED=0
@@ -70,9 +70,9 @@ Commands:
   check      Check files without changing anything.
   adopt      Create neutral role sources from existing OpenCode agents.
   prune      Remove only safe, stale generated files.
-  auth jev   Store TYPESAFE_API_KEY for web-qa (user-level, never in repo).
+  auth jev   Configure the Jev provider and credentials (user-level, never in repo).
 
-  scripts/astack is a short alias: astack sync, astack auth jev, ...
+  astack is the public CLI: astack init, astack sync, astack auth jev, ...
 
 Options:
   --root PATH                 Target project root. Defaults to the current directory.
@@ -393,7 +393,7 @@ select_platforms_interactive() {
   r=$(platform_default_enabled cursor)
 
   while :; do
-    printf '\nSelect platforms to configure (enter number to toggle, Enter to confirm):\n'
+    printf '\nSelect platforms to configure (multi-select; enter number to toggle, Enter to confirm):\n'
     if [ "$o" = 1 ]; then m='[x]'; else m='[ ]'; fi
     printf '  1 %s OpenCode%s\n' "$m" "$(platform_marker opencode)"
     if [ "$c" = 1 ]; then m='[x]'; else m='[ ]'; fi
@@ -482,7 +482,7 @@ select_mcp_interactive() {
   trello=$MCP_TRELLO_ENABLED
   maestro=$MCP_MAESTRO_ENABLED
 
-  wizard_step 'Step 2/5 - Integrations'
+  wizard_step 'Integrations - multi-select'
 
   if has_gum; then
     selected=
@@ -490,7 +490,7 @@ select_mcp_interactive() {
     [ "$trello" = 1 ] && selected=$(csv_add "$selected" 'Trello')
     [ "$maestro" = 1 ] && selected=$(csv_add "$selected" 'Maestro (local: mobile-qa)')
     selected=$(gum choose --no-limit --ordered --height=7 \
-      --header 'Choose MCP integrations (Space selects, Enter confirms)' \
+      --header 'Choose integrations (multi-select: Space selects, Enter confirms)' \
       --selected "$selected" 'Linear' 'Trello' 'Maestro (local: mobile-qa)') || die 'interactive MCP selection aborted'
     linear=0
     trello=0
@@ -512,7 +512,7 @@ EOF
   fi
 
   while :; do
-    printf '\nSelect MCP integrations to configure (enter number to toggle, Enter to confirm):\n'
+    printf '\nSelect integrations to configure (multi-select; enter number to toggle, Enter to confirm):\n'
     if [ "$linear" = 1 ]; then m='[x]'; else m='[ ]'; fi
     printf '  1 %s Linear\n' "$m"
     if [ "$trello" = 1 ]; then m='[x]'; else m='[ ]'; fi
@@ -540,7 +540,7 @@ EOF
 }
 
 resolve_mcp() {
-  MCP_LINEAR_ENABLED=$(get_config MCP_LINEAR_ENABLED 1)
+  MCP_LINEAR_ENABLED=$(get_config MCP_LINEAR_ENABLED 0)
   MCP_LINEAR_NAME=$(get_config MCP_LINEAR_NAME "$(get_config LINEAR_MCP_NAME linear)")
   MCP_LINEAR_URL=$(get_config MCP_LINEAR_URL "$(get_config LINEAR_MCP_URL https://mcp.linear.app/mcp)")
   MCP_TRELLO_ENABLED=$(get_config MCP_TRELLO_ENABLED 0)
@@ -604,14 +604,19 @@ resolve_delivery_config() {
 }
 
 configure_delivery_interactive() {
-  printf '\nSpecification publication (local keeps OpenSpec in the code repo; mirror publishes a spec PR).\n'
-  printf '  current mode: %s\n' "$SPECS_MODE"
-  printf 'Mode: local, or mirror (Enter keeps current): '
+  printf '\nSpecs - Agent Stack uses OpenSpec to create and manage specifications.\n'
+  printf 'Choose one option:\n'
+  printf '  1) Keep specs in this repository\n'
+  printf '     OpenSpec artifacts stay with the project. No external specs repository is required.\n'
+  printf '  2) Mirror specs to another repository\n'
+  printf '     OpenSpec artifacts remain authoritative here and are also published to a GitHub specs repository.\n'
+  printf 'Selection [%s]: ' "$SPECS_MODE"
   IFS= read -r mode_choice || die 'interactive configuration aborted'
   case "$mode_choice" in
-    '') ;;
-    local|mirror) SPECS_MODE=$mode_choice ;;
-    *) printf 'unknown mode "%s", keeping %s\n' "$mode_choice" "$SPECS_MODE" >&2 ;;
+    '' ) ;;
+    1|local) SPECS_MODE=local ;;
+    2|mirror) SPECS_MODE=mirror ;;
+    *) printf 'unknown selection "%s", keeping %s\n' "$mode_choice" "$SPECS_MODE" >&2 ;;
   esac
 
   if [ "$SPECS_MODE" = mirror ]; then
@@ -2858,50 +2863,141 @@ ensure_mobileqa_resources() {
 
 auth_jev() {
   validate_only=0
+  provider=
+  endpoint=
   for a in "$@"; do
     case "$a" in
       --validate-only) validate_only=1 ;;
-      *) die "unknown auth option: $a (use --validate-only)" ;;
+      --provider=*) provider=${a#--provider=} ;;
+      --endpoint=*) endpoint=${a#--endpoint=} ;;
+      *) die "unknown auth option: $a (use --provider=typesafe|vercel|cloudflare|openrouter, --endpoint=URL, or --validate-only)" ;;
     esac
   done
 
-  key=${TYPESAFE_API_KEY:-}
+  env_dir=${XDG_CONFIG_HOME:-$HOME/.config}/astack
+  env_file=$env_dir/env
+  legacy_env=${XDG_CONFIG_HOME:-$HOME/.config}/agent-stack/env
+  [ -f "$env_file" ] || [ ! -f "$legacy_env" ] || env_file=$legacy_env
+
+  if [ -z "$provider" ] && [ -f "$env_file" ]; then
+    provider=$(awk -F= '$1 == "JEV_PROVIDER" { print $2; exit }' "$env_file")
+  fi
+
+  if [ -z "$provider" ] && [ -t 0 ]; then
+    printf '\nJev provider:\n'
+    printf '  1) TypeSafe direct\n'
+    printf '  2) Vercel AI Gateway\n'
+    printf '  3) Cloudflare AI Gateway / custom System One-compatible gateway\n'
+    printf '  4) OpenRouter (preview configuration)\n'
+    printf '> '
+    IFS= read -r provider_choice || die 'Jev provider selection aborted'
+    case "$provider_choice" in
+      1|typesafe|'') provider=typesafe ;;
+      2|vercel) provider=vercel ;;
+      3|cloudflare|gateway) provider=cloudflare ;;
+      4|openrouter) provider=openrouter ;;
+      *) die 'choose 1-4' ;;
+    esac
+  fi
+  [ -n "$provider" ] || provider=typesafe
+
+  case "$provider" in
+    typesafe)
+      key_name=TYPESAFE_API_KEY
+      key=${TYPESAFE_API_KEY:-}
+      model=jev-latest
+      ;;
+    vercel)
+      key_name=AI_GATEWAY_API_KEY
+      key=${AI_GATEWAY_API_KEY:-}
+      model=typesafe-ai/jev-latest
+      ;;
+    cloudflare|gateway)
+      provider=cloudflare
+      key_name=JEV_GATEWAY_API_KEY
+      key=${JEV_GATEWAY_API_KEY:-}
+      model=jev-latest
+      if [ -z "$endpoint" ] && [ -t 0 ]; then
+        printf 'System One-compatible gateway evaluation endpoint: '
+        IFS= read -r endpoint || true
+      fi
+      [ -n "$endpoint" ] || die 'Cloudflare/custom gateway requires --endpoint=URL'
+      ;;
+    openrouter)
+      key_name=OPENROUTER_API_KEY
+      key=${OPENROUTER_API_KEY:-}
+      model=~typesafe/jev-latest
+      ;;
+    *) die "unknown Jev provider: $provider" ;;
+  esac
+
   if [ -z "$key" ] && [ "$validate_only" = 0 ]; then
     if [ ! -t 0 ]; then
-      die 'TYPESAFE_API_KEY is not set; re-run interactively or export it first'
+      die "$key_name is not set; run astack auth jev interactively or export it first"
     fi
-    printf 'TypeSafe API key (input hidden): '
+    printf '%s (input hidden): ' "$key_name"
     stty -echo 2>/dev/null || true
     IFS= read -r key || true
     stty echo 2>/dev/null || true
     printf '\n'
     [ -n "$key" ] || die 'no key entered'
   fi
-  [ -n "$key" ] || die 'TYPESAFE_API_KEY is not set'
+  [ -n "$key" ] || die "$key_name is not set"
 
-  if ! command -v curl >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
-    die 'curl or node is required to validate the key'
+  if [ "$provider" = typesafe ]; then
+    if command -v curl >/dev/null 2>&1; then
+      status=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 -H "Authorization: Bearer $key" https://api.typesafe.ai/v1/models 2>/dev/null || true)
+      [ "$status" = 200 ] || die "TypeSafe key validation failed (status ${status:-unknown})"
+      printf 'TypeSafe Jev credentials validated\n'
+    fi
+  elif [ "$provider" = openrouter ]; then
+    printf 'note: OpenRouter exposes Jev, but astack currently treats this transport as preview until its System One request contract is verified.\n'
   fi
-  if command -v curl >/dev/null 2>&1; then
-    status=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 \
-      -H "Authorization: Bearer $key" https://api.typesafe.ai/v1/models 2>/dev/null || true)
-  else
-    status=$(TYPESAFE_API_KEY="$key" node -e "fetch('https://api.typesafe.ai/v1/models',{headers:{Authorization:'Bearer '+process.env.TYPESAFE_API_KEY}}).then(r=>console.log(r.status)).catch(()=>console.log('000'))" 2>/dev/null || true)
-  fi
-  case "$status" in
-    200) printf 'TypeSafe key is valid\n' ;;
-    *) die "TypeSafe key validation failed (status ${status:-unknown})" ;;
-  esac
+
   [ "$validate_only" = 1 ] && return 0
 
-  env_dir=${XDG_CONFIG_HOME:-$HOME/.config}/agent-stack
   ensure_dir "$env_dir"
   chmod 700 "$env_dir" 2>/dev/null || true
-  printf 'TYPESAFE_API_KEY=%s\n' "$key" > "$env_dir/env"
+  {
+    printf 'JEV_PROVIDER=%s\n' "$provider"
+    printf 'JEV_MODEL=%s\n' "$model"
+    printf '%s=%s\n' "$key_name" "$key"
+    [ -z "$endpoint" ] || printf 'JEV_GATEWAY_URL=%s\n' "$endpoint"
+  } > "$env_dir/env"
   chmod 600 "$env_dir/env" 2>/dev/null || true
-  printf 'stored in %s (mode 600, user-level only, never in the repo)\n' "$env_dir/env"
-  printf 'activate: export TYPESAFE_API_KEY=$(grep TYPESAFE_API_KEY %s | cut -d= -f2-)\n' "$env_dir/env"
+  printf 'Jev configured with provider %s. Credentials stored in %s (mode 600).\n' "$provider" "$env_dir/env"
 }
+
+jev_is_configured() {
+  env_file=${XDG_CONFIG_HOME:-$HOME/.config}/astack/env
+  legacy_env=${XDG_CONFIG_HOME:-$HOME/.config}/agent-stack/env
+  [ -f "$env_file" ] || env_file=$legacy_env
+  [ -f "$env_file" ] || return 1
+  grep -q '^JEV_PROVIDER=' "$env_file" 2>/dev/null || grep -q '^TYPESAFE_API_KEY=' "$env_file" 2>/dev/null
+}
+
+configure_jev_during_init() {
+  JEV_SETUP_SKIPPED=0
+  if jev_is_configured; then
+    printf '\nJev QA: already configured for this user.\n'
+    return 0
+  fi
+  [ -t 0 ] || {
+    JEV_SETUP_SKIPPED=1
+    return 0
+  }
+  printf '\nJev QA is included with Agent Stack. Configure it now? [Y/n]: '
+  IFS= read -r answer || answer=
+  case "$answer" in
+    n|N|no|NO)
+      JEV_SETUP_SKIPPED=1
+      ;;
+    *)
+      auth_jev
+      ;;
+  esac
+}
+
 
 ensure_config() {
   ensure_dir "$ROOT/.agent-stack"
@@ -3275,6 +3371,12 @@ while [ "$#" -gt 0 ]; do
     --validate-only)
       AUTH_ARGS="$AUTH_ARGS --validate-only"
       ;;
+    --provider=*)
+      AUTH_ARGS="$AUTH_ARGS $1"
+      ;;
+    --endpoint=*)
+      AUTH_ARGS="$AUTH_ARGS $1"
+      ;;
     --root)
       [ "$#" -gt 1 ] || die '--root requires a path'
       ROOT=$2
@@ -3386,8 +3488,12 @@ case "$COMMAND" in
     ensure_webqa_resources
     ensure_mobileqa_resources
     ensure_mcp_config
+    configure_jev_during_init
     record_sources
     governance_status
+    if [ "${JEV_SETUP_SKIPPED:-0}" = 1 ]; then
+      printf '\nJev is not configured yet. Run: astack auth jev\n'
+    fi
     ;;
   sync)
     ensure_config

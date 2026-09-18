@@ -1960,7 +1960,7 @@ You own browser control flow. Jev never picks browser actions.
 ## 4. Judge (Jev supplies verdicts)
 
 Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
+(Jev provider credentials come from the user-level astack configuration; the kit never writes them to the project).
 Ask narrow atomic questions together across all selected dimensions and let
 code decide which answers apply (speculative fan-out):
 
@@ -1968,8 +1968,8 @@ code decide which answers apply (speculative fan-out):
   `error_blocked_task`, `persisted_after_reload`;
 - view `Noul`: `one_primary_action`, `impact_before_confirm`,
   `copy_plain_and_actionable`, `status_explains_next_step`;
-- business `Noul`: `payment_classified`, `no_synthetic_cash`,
-  `trace_present`, `register_gate_respected`;
+- business `Noul`: `business_rule_respected`, `forbidden_side_effects_avoided`,
+  `state_transition_valid`, `traceability_present`;
 - `Choice verdict`: `pass | blocking | nit | unverified`;
 - `Choice domain`: `functional | view | business_logic`;
 - `Score severity`: `cosmetic | confusing | blocks_task_or_money_risk`.
@@ -2007,7 +2007,7 @@ escalate to the caller instead of guessing.
 - Browser actions only against the supplied test target. Never edit, commit,
   or migrate code, specs, or data.
 - Reports only: you may write `reports/qa/*.md`. Do not touch anything else.
-- Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+- Never log, print, or persist Jev provider keys or session credentials.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.
 ROLE_WEB_QA_EOF
@@ -2088,7 +2088,7 @@ You own device control flow. Jev never picks device actions.
 ## 4. Judge (Jev supplies verdicts)
 
 Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
+(Jev provider credentials come from the user-level astack configuration; the kit never writes them to the project).
 with the mobile question library. Ask narrow atomic questions together
 across all selected dimensions and let code decide which answers apply
 (speculative fan-out):
@@ -2097,8 +2097,8 @@ across all selected dimensions and let code decide which answers apply
   `error_blocked_task`, `gesture_and_back_behaved`, `persisted_after_relaunch`;
 - view `Noul`: `one_primary_action`, `impact_before_confirm`,
   `copy_plain_and_actionable`, `touch_targets_and_density_ok`;
-- business `Noul`: `payment_classified`, `no_synthetic_cash`,
-  `trace_present`, `register_gate_respected`;
+- business `Noul`: `business_rule_respected`, `forbidden_side_effects_avoided`,
+  `state_transition_valid`, `traceability_present`;
 - `Choice verdict`: `pass | blocking | nit | unverified`;
 - `Choice domain`: `functional | view | business_logic`;
 - `Score severity`: `cosmetic | confusing | blocks_task_or_money_risk`.
@@ -2138,7 +2138,7 @@ escalate to the caller instead of guessing.
 - Reports and exploratory flows only: you may write `reports/qa/*.md` and
   scratch `*.yaml` under the QA scratch path supplied by the caller. Do not
   touch anything else.
-- Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+- Never log, print, or persist Jev provider keys or session credentials.
 - Never run Cloud runs (`run_on_cloud`) without explicit caller approval;
   local runs are the default.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.

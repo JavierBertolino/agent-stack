@@ -40,7 +40,9 @@ python3 scripts/build-installer.sh --kit-root "$PWD" --check
 
 ## Releases
 
-Releases are cut from SemVer tags (`v*.*.*`). Pushing a tag runs the full
-test suite, builds the distribution, smoke-tests a clean install, and
-publishes a GitHub Release with `astack.tar.gz`, checksums, and
-`install.sh`. See [CHANGELOG.md](CHANGELOG.md).
+Pushing a `VERSION` change to `main` automatically creates the matching
+`v*.*.*` tag (tags are markers only). A maintainer then turns a tag into
+a release from the Actions tab (`release` workflow, `tag` input): it runs
+the full test suite, builds the distribution, smoke-tests a clean
+install, and publishes a GitHub Release with `astack.tar.gz`, checksums,
+and `install.sh`. See [CHANGELOG.md](CHANGELOG.md).

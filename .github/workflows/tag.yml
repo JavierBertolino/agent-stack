@@ -1,0 +1,35 @@
+name: tag
+# Automatically tag main when the VERSION file changes. Tags are markers
+# only — creating the GitHub Release stays a manual action (see
+# release.yml, triggered from the Actions tab).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - VERSION
+permissions:
+  contents: write
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create version tag if missing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(awk 'NR == 1 { print $1; exit }' VERSION)
+          [ -n "$VERSION" ] || { echo "VERSION file is empty" >&2; exit 1; }
+          TAG="v$VERSION"
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "VERSION '$VERSION' is not SemVer; refusing to tag" >&2; exit 1 ;;
+          esac
+          if gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists; nothing to do"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "created tag $TAG"
+          fi

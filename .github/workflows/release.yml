@@ -1,17 +1,29 @@
 name: release
+# Manual release creation. Tags are created automatically when VERSION
+# changes on main (see tag.yml); this workflow turns an existing tag into
+# a validated GitHub Release. Run it from the Actions tab with the tag to
+# release (e.g. v0.1.0).
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v0.1.0)"
+        required: true
 permissions:
   contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate tag input
+        run: |
+          case "${{ inputs.tag }}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "tag must look like v0.1.0 (got '${{ inputs.tag }}')" >&2; exit 1 ;;
+          esac
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -20,7 +32,7 @@ jobs:
           node-version: "20"
       - name: Tag matches VERSION
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ inputs.tag }}"
           TAG="${TAG#v}"
           VERSION=$(awk 'NR == 1 { print $1; exit }' VERSION)
           [ "$TAG" = "$VERSION" ] || { echo "tag $TAG does not match VERSION $VERSION" >&2; exit 1; }
@@ -54,7 +66,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ inputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; refusing to overwrite" >&2
+            exit 1
+          fi
           gh release create "$TAG" \
             --title "Agent Stack $TAG" \
             --notes-file CHANGELOG.md \

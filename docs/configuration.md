@@ -45,10 +45,19 @@ JEV_GATEWAY_URL=
 Provider is `none`, `typesafe`, `vercel`, or `gateway`. This only records
 routing — credentials always live user-level (`~/.config/astack/env`).
 
-## Models and tasks
+## Models
 
-Per-role model pins and thinking levels per platform, Codex concurrency
-(`CODEX_MAX_CONCURRENT_THREADS`), publication/merge gates, archive stage,
-and linked-task states (`TASK_STATE_IN_PROGRESS`, `TASK_STATE_IN_PR`).
-If a configured task state does not exist for the team, the resolver stops
-and asks instead of substituting another state.
+Empty model values inherit the active harness model. During `astack init`
+the wizard asks before reviewing models; use `--configure-models` to start
+the review directly or `--skip-models` to keep harness defaults without
+prompting. In the review, Enter keeps the current value, `s` searches a
+harness-discovered catalog only on demand, and `c` accepts an arbitrary
+model ID or alias. Large catalogs are search-first and never listed in full
+by default; only thinking levels are pinned per role.
+
+## Tasks and workflow gates
+
+Codex concurrency (`CODEX_MAX_CONCURRENT_THREADS`), publication/merge gates,
+archive stage, and linked-task states (`TASK_STATE_IN_PROGRESS`,
+`TASK_STATE_IN_PR`). If a configured task state does not exist for the
+team, the resolver stops and asks instead of substituting another state.

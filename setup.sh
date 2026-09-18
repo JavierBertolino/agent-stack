@@ -23,6 +23,8 @@ SPECS_MODE_ARG=
 SPECS_REPOSITORY_ARG=
 SPECS_REPOSITORY_BASE_BRANCH_ARG=
 INTERACTIVE_WIZARD=0
+CONFIGURE_MODELS=0
+SKIP_MODELS=0
 PERSIST_SELECTION=0
 CONFLICTS=0
 CREATED_COUNT=0
@@ -99,6 +101,8 @@ Options:
                                Specs publication mirror (implies mirror mode).
   --specs-base-branch BRANCH    Specs repository base branch.
   --specs-mode MODE             Publication policy: local or mirror.
+  --configure-models          Walk through model and thinking prompts.
+  --skip-models               Keep harness defaults; never prompt for models.
   --claude-only               Only render/check Claude mirrors.
   --skip-opencode             Do not render/check OpenCode agents.
   --skip-claude               Do not render/check Claude agents.
@@ -108,8 +112,12 @@ Options:
   -h, --help                  Show this help.
 
 Platforms: running interactively (init/sync) with no platform flag shows a
-detected-harness multiselect menu for OpenCode, Claude Code, Codex, and Cursor,
-then asks for each selected role's model and supported thinking level.
+detected-harness multiselect menu for OpenCode, Claude Code, Codex, and Cursor.
+Model configuration is optional and opt-in: by default every role inherits the
+active harness model, and the wizard asks before reviewing models. Use
+--configure-models to go straight to the review, or --skip-models to keep
+harness defaults without prompting. Empty model values inherit the harness
+default; only thinking levels are pinned per role.
 Non-interactive runs use the ENABLE_* and model defaults from
 .agent-stack/config.conf.
 
@@ -387,20 +395,360 @@ platform_default_enabled() {
   fi
 }
 
-platform_marker() {
-  if platform_is_configured "$1"; then
-    printf '%s\n' ' (detected)'
-  else
-    printf '%s\n' ''
-  fi
-}
-
 wizard_step() {
   printf '\nAgent Stack\n\n%s\n' "$1"
 }
 
 has_gum() {
   [ "${AGENT_STACK_PLAIN:-0}" != "1" ] && command -v gum >/dev/null 2>&1
+}
+
+selector_available() {
+  [ -t 0 ] && [ -t 1 ]
+}
+
+selector_tmpfile() {
+  selector_tmp_dir=$ROOT/.agent-stack
+  [ -d "$selector_tmp_dir" ] || selector_tmp_dir=${TMPDIR:-/tmp}
+  mktemp "$selector_tmp_dir/.selector.XXXXXX"
+}
+
+selector_toggle_index() {
+  selector_target=$1
+  selector_values=$2
+  if selector_selected "$selector_target" "$selector_values"; then
+    selector_values=$(printf '%s' ",$selector_values," | sed "s/,$selector_target,/,/; s/^,//; s/,$//")
+  elif [ -n "$selector_values" ]; then
+    selector_values=$selector_values,$selector_target
+  else
+    selector_values=$selector_target
+  fi
+  SELECTOR_VALUES=$selector_values
+}
+
+selector_option_at() {
+  selector_wanted=$1
+  shift
+  selector_index=1
+  for selector_option in "$@"; do
+    if [ "$selector_index" = "$selector_wanted" ]; then
+      SELECTOR_VALUE=$selector_option
+      return 0
+    fi
+    selector_index=$((selector_index + 1))
+  done
+  SELECTOR_VALUE=
+  return 1
+}
+
+selector_index_of() {
+  selector_wanted=$1
+  shift
+  selector_index=1
+  for selector_option in "$@"; do
+    if [ "$selector_option" = "$selector_wanted" ]; then
+      SELECTOR_INDEX=$selector_index
+      return 0
+    fi
+    selector_index=$((selector_index + 1))
+  done
+  SELECTOR_INDEX=0
+  return 1
+}
+
+selector_selected() {
+  selector_wanted=$1
+  selector_values=$2
+  case ",$selector_values," in
+    *,"$selector_wanted",*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+selector_read_key() {
+  selector_byte=$(dd bs=1 count=1 2>/dev/null | od -An -t x1 | tr -d ' \n')
+  case "$selector_byte" in
+    20) SELECTOR_KEY=space ;;
+    09) SELECTOR_KEY=tab ;;
+    0a|0d) SELECTOR_KEY=enter ;;
+    03|04) SELECTOR_KEY=cancel ;;
+    1b)
+      stty min 0 time 1 2>/dev/null || true
+      selector_sequence=$(dd bs=1 count=2 2>/dev/null | od -An -t x1 | tr -d ' \n')
+      stty min 1 time 0 2>/dev/null || true
+      case "$selector_sequence" in
+        5b41|4f41) SELECTOR_KEY=up ;;
+        5b42|4f42) SELECTOR_KEY=down ;;
+        5b43|4f43) SELECTOR_KEY=right ;;
+        5b44|4f44) SELECTOR_KEY=left ;;
+        *) SELECTOR_KEY=cancel ;;
+      esac
+      ;;
+    6b) SELECTOR_KEY=up ;;
+    6a) SELECTOR_KEY=down ;;
+    71) SELECTOR_KEY=cancel ;;
+    7f) SELECTOR_KEY=left ;;
+    *) SELECTOR_KEY=none ;;
+  esac
+}
+
+selector_render() {
+  selector_title=$1
+  selector_cursor=$2
+  selector_values=$3
+  selector_mode=$4
+  shift 4
+
+  printf '\033[2J\033[H'
+  printf '%s\n\n' "$selector_title"
+  selector_index=1
+  for selector_option in "$@"; do
+    selector_cursor_mark=' '
+    selector_selected_mark=' '
+    [ "$selector_index" = "$selector_cursor" ] && selector_cursor_mark='>'
+    if [ "$selector_mode" = multi ] && selector_selected "$selector_index" "$selector_values"; then
+      selector_selected_mark='x'
+    elif [ "$selector_mode" = single ] && [ "$selector_index" = "$selector_values" ]; then
+      selector_selected_mark='x'
+    fi
+    printf ' %s [%s] %s\n' "$selector_cursor_mark" "$selector_selected_mark" "$selector_option"
+    selector_index=$((selector_index + 1))
+  done
+  printf '\nSpace selects. Tab or arrow keys move. Enter confirms. q cancels.\n'
+}
+
+selector_cleanup() {
+  if [ -n "${SELECTOR_SAVED_STTY:-}" ]; then
+    stty "$SELECTOR_SAVED_STTY" 2>/dev/null || true
+  fi
+  printf '\033[?25h\033[0m\n'
+}
+
+selector_run() {
+  selector_mode=$1
+  selector_title=$2
+  selector_initial=$3
+  selector_result_file=$4
+  shift 4
+
+  (
+    SELECTOR_SAVED_STTY=$(stty -g) || exit 1
+    trap 'selector_cleanup; exit 130' INT TERM HUP
+    trap 'selector_cleanup' EXIT
+    stty -icanon -echo min 1 time 0
+    printf '\033[?25l'
+
+    selector_count=$#
+    selector_cursor=1
+    selector_selected_values=$selector_initial
+    if [ "$selector_mode" = single ]; then
+      selector_cursor=$selector_initial
+      selector_selected_values=$selector_initial
+      [ "$selector_cursor" -gt 0 ] 2>/dev/null || selector_cursor=1
+      [ "$selector_cursor" -le "$selector_count" ] 2>/dev/null || selector_cursor=1
+    fi
+
+    while :; do
+      selector_render "$selector_title" "$selector_cursor" "$selector_selected_values" "$selector_mode" "$@"
+      selector_read_key
+      case "$SELECTOR_KEY" in
+        up|left)
+          selector_cursor=$((selector_cursor - 1))
+          [ "$selector_cursor" -gt 0 ] || selector_cursor=$selector_count
+          ;;
+        down|right|tab)
+          selector_cursor=$((selector_cursor + 1))
+          [ "$selector_cursor" -le "$selector_count" ] || selector_cursor=1
+          ;;
+        space)
+          if [ "$selector_mode" = single ]; then
+            selector_selected_values=$selector_cursor
+          elif selector_selected "$selector_cursor" "$selector_selected_values"; then
+            selector_selected_values=$(printf '%s' ",$selector_selected_values," | sed "s/,$selector_cursor,/,/; s/^,//; s/,$//")
+          elif [ -n "$selector_selected_values" ]; then
+            selector_selected_values=$selector_selected_values,$selector_cursor
+          else
+            selector_selected_values=$selector_cursor
+          fi
+          ;;
+        enter)
+          printf '%s\n' "$selector_selected_values" > "$selector_result_file"
+          exit 0
+          ;;
+        cancel)
+          exit 130
+          ;;
+      esac
+    done
+  )
+}
+
+selector_single_numbered() {
+  selector_title=$1
+  selector_initial=$2
+  shift 2
+  while :; do
+    printf '\n%s\n' "$selector_title"
+    selector_index=1
+    for selector_option in "$@"; do
+      if [ "$selector_index" = "$selector_initial" ]; then selector_mark='[x]'; else selector_mark='[ ]'; fi
+      printf '  %s) %s %s\n' "$selector_index" "$selector_mark" "$selector_option"
+      selector_index=$((selector_index + 1))
+    done
+    printf 'Select [%s]: ' "$selector_initial"
+    IFS= read -r selector_choice || die 'interactive selection aborted'
+    [ -n "$selector_choice" ] || selector_choice=$selector_initial
+    case "$selector_choice" in
+      *[!0-9]*) printf 'choose a listed number or Enter\n' >&2; continue ;;
+    esac
+    if [ "$selector_choice" -ge 1 ] 2>/dev/null && [ "$selector_choice" -le "$selector_count" ] 2>/dev/null; then
+      SELECTOR_INDEX=$selector_choice
+      selector_option_at "$SELECTOR_INDEX" "$@"
+      return 0
+    fi
+    printf 'choose a listed number or Enter\n' >&2
+  done
+}
+
+selector_multi_numbered() {
+  selector_title=$1
+  selector_initial=$2
+  shift 2
+  selector_values=$selector_initial
+  while :; do
+    printf '\n%s\n' "$selector_title"
+    printf '%s\n' 'Space selects multiple options. Enter confirms.'
+    selector_index=1
+    for selector_option in "$@"; do
+      if selector_selected "$selector_index" "$selector_values"; then selector_mark='[x]'; else selector_mark='[ ]'; fi
+      printf '  %s) %s %s\n' "$selector_index" "$selector_mark" "$selector_option"
+      selector_index=$((selector_index + 1))
+    done
+    printf '  a) select all   n) select none\n'
+    printf '> '
+    IFS= read -r selector_choice || die 'interactive selection aborted'
+    case "$selector_choice" in
+      '') break ;;
+      a|all)
+        selector_values=
+        selector_index=1
+        while [ "$selector_index" -le "$selector_count" ]; do
+          selector_values=$(csv_add "$selector_values" "$selector_index")
+          selector_index=$((selector_index + 1))
+        done
+        ;;
+      n|none) selector_values= ;;
+      *[!0-9]*) printf 'choose a listed number, a, n, or Enter\n' >&2 ;;
+      *)
+        if [ "$selector_choice" -ge 1 ] 2>/dev/null && [ "$selector_choice" -le "$selector_count" ] 2>/dev/null; then
+          selector_toggle_index "$selector_choice" "$selector_values"
+          selector_values=$SELECTOR_VALUES
+        else
+          printf 'choose a listed number, a, n, or Enter\n' >&2
+        fi
+        ;;
+    esac
+  done
+  SELECTOR_MULTI_INDEXES=$selector_values
+}
+
+choose_single() {
+  selector_title=$1
+  selector_initial=$2
+  shift 2
+  selector_count=$#
+  [ "$selector_count" -gt 0 ] || die "no choices available for: $selector_title"
+  [ "$selector_initial" -gt 0 ] 2>/dev/null || selector_initial=1
+  [ "$selector_initial" -le "$selector_count" ] 2>/dev/null || selector_initial=1
+
+  if has_gum; then
+    selector_option_at "$selector_initial" "$@"
+    selector_current_value=$SELECTOR_VALUE
+    if [ -n "$selector_current_value" ]; then
+      SELECTOR_VALUE=$(gum choose --limit=1 --height=10 \
+        --selected "$selector_current_value" \
+        --header "$selector_title (Space selects. Enter confirms.)" "$@") \
+        || die 'interactive selection aborted'
+    else
+      SELECTOR_VALUE=$(gum choose --limit=1 --height=10 \
+        --header "$selector_title (Space selects. Enter confirms.)" "$@") \
+        || die 'interactive selection aborted'
+    fi
+    selector_index_of "$SELECTOR_VALUE" "$@"
+    return 0
+  fi
+
+  if selector_available; then
+    selector_result_file=$(selector_tmpfile)
+    if ! selector_run single "$selector_title" "$selector_initial" "$selector_result_file" "$@"; then
+      rm -f "$selector_result_file"
+      die 'interactive selection aborted'
+    fi
+    SELECTOR_INDEX=$(awk 'NR == 1 { print; exit }' "$selector_result_file")
+    rm -f "$selector_result_file"
+  else
+    selector_single_numbered "$selector_title" "$selector_initial" "$@"
+  fi
+  selector_option_at "$SELECTOR_INDEX" "$@"
+}
+
+choose_multi() {
+  selector_title=$1
+  selector_initial=$2
+  shift 2
+  selector_count=$#
+  [ "$selector_count" -gt 0 ] || die "no choices available for: $selector_title"
+
+  if has_gum; then
+    selector_selected_labels=
+    oldIFS=$IFS
+    IFS=','
+    for selector_index in $selector_initial; do
+      selector_option_at "$selector_index" "$@"
+      if [ -n "$SELECTOR_VALUE" ]; then
+        selector_selected_labels=$(csv_add "$selector_selected_labels" "$SELECTOR_VALUE")
+      fi
+    done
+    IFS=$oldIFS
+    if [ -n "$selector_selected_labels" ]; then
+      SELECTOR_VALUES=$(gum choose --no-limit --ordered --height=10 \
+        --selected "$selector_selected_labels" \
+        --header "$selector_title (Space toggles. Enter confirms.)" "$@") \
+        || die 'interactive selection aborted'
+    else
+      SELECTOR_VALUES=$(gum choose --no-limit --ordered --height=10 \
+        --header "$selector_title (Space toggles. Enter confirms.)" "$@") \
+        || die 'interactive selection aborted'
+    fi
+    return 0
+  fi
+
+  if selector_available; then
+    selector_result_file=$(selector_tmpfile)
+    if ! selector_run multi "$selector_title" "$selector_initial" "$selector_result_file" "$@"; then
+      rm -f "$selector_result_file"
+      die 'interactive selection aborted'
+    fi
+    SELECTOR_MULTI_INDEXES=$(awk 'NR == 1 { print; exit }' "$selector_result_file")
+    rm -f "$selector_result_file"
+  else
+    selector_multi_numbered "$selector_title" "$selector_initial" "$@"
+  fi
+
+  SELECTOR_VALUES=
+  oldIFS=$IFS
+  IFS=','
+  for selector_index in $SELECTOR_MULTI_INDEXES; do
+    [ -n "$selector_index" ] || continue
+    selector_option_at "$selector_index" "$@"
+    [ -n "$SELECTOR_VALUE" ] || continue
+    if [ -z "$SELECTOR_VALUES" ]; then
+      SELECTOR_VALUES=$SELECTOR_VALUE
+    else
+      SELECTOR_VALUES=$(printf '%s\n%s' "$SELECTOR_VALUES" "$SELECTOR_VALUE")
+    fi
+  done
+  IFS=$oldIFS
 }
 
 csv_add() {
@@ -471,61 +819,28 @@ select_platforms_interactive() {
 
   wizard_step 'Configure Agent Stack for this project.'
   printf '\n%s\n' '◆ Coding agents (multi-select)'
+  printf '%s\n' 'Space selects. Enter confirms.'
 
-  if has_gum; then
-    selected=
-    [ "$o" = 1 ] && selected=$(csv_add "$selected" 'OpenCode')
-    [ "$c" = 1 ] && selected=$(csv_add "$selected" 'Claude Code')
-    [ "$x" = 1 ] && selected=$(csv_add "$selected" 'Codex')
-    [ "$r" = 1 ] && selected=$(csv_add "$selected" 'Cursor')
-    selected=$(gum choose --no-limit --ordered --height=7 \
-      --header 'Coding agents (Space selects multiple options. Enter confirms.)' \
-      --selected "$selected" 'Codex' 'Claude Code' 'Cursor' 'OpenCode') || die 'interactive platform selection aborted'
-    o=0; c=0; x=0; r=0
-    while IFS= read -r platform; do
-      case "$platform" in
-        Codex) x=1 ;;
-        'Claude Code') c=1 ;;
-        Cursor) r=1 ;;
-        OpenCode) o=1 ;;
-      esac
-    done <<EOF
-$selected
-EOF
-    ENABLE_OPENCODE=$o
-    ENABLE_CLAUDE=$c
-    ENABLE_CODEX=$x
-    ENABLE_CURSOR=$r
-    INTERACTIVE_WIZARD=1
-    PERSIST_SELECTION=1
-    return 0
-  fi
+  selector_initial=
+  [ "$o" = 1 ] && selector_initial=$(csv_add "$selector_initial" 1)
+  [ "$c" = 1 ] && selector_initial=$(csv_add "$selector_initial" 2)
+  [ "$x" = 1 ] && selector_initial=$(csv_add "$selector_initial" 3)
+  [ "$r" = 1 ] && selector_initial=$(csv_add "$selector_initial" 4)
 
-  printf '\n%s\n' 'Space selects multiple options. Enter confirms.'
-  printf '%s\n' '(toggle: enter a number, a for all, n for none, Enter confirms)'
-  while :; do
-    if [ "$o" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  1 %s OpenCode%s\n' "$m" "$(platform_marker opencode)"
-    if [ "$c" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  2 %s Claude Code%s\n' "$m" "$(platform_marker claude)"
-    if [ "$x" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  3 %s Codex%s\n' "$m" "$(platform_marker codex)"
-    if [ "$r" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  4 %s Cursor%s\n' "$m" "$(platform_marker cursor)"
-    printf '  a) select all   n) select none\n'
-    printf '> '
-    IFS= read -r choice || { printf '\n'; break; }
-    case "$choice" in
-      1) [ "$o" = 1 ] && o=0 || o=1 ;;
-      2) [ "$c" = 1 ] && c=0 || c=1 ;;
-      3) [ "$x" = 1 ] && x=0 || x=1 ;;
-      4) [ "$r" = 1 ] && r=0 || r=1 ;;
-      a|all) o=1; c=1; x=1; r=1 ;;
-      n|none) o=0; c=0; x=0; r=0 ;;
-      ''|d|done) break ;;
-      *) printf 'choose 1-4, a, n, or Enter\n' ;;
+  choose_multi 'Coding agents' "$selector_initial" \
+    'OpenCode' 'Claude Code' 'Codex' 'Cursor'
+
+  o=0; c=0; x=0; r=0
+  while IFS= read -r platform; do
+    case "$platform" in
+      OpenCode) o=1 ;;
+      'Claude Code') c=1 ;;
+      Codex) x=1 ;;
+      Cursor) r=1 ;;
     esac
-  done
+  done <<EOF
+$SELECTOR_VALUES
+EOF
 
   ENABLE_OPENCODE=$o
   ENABLE_CLAUDE=$c
@@ -597,54 +912,26 @@ select_mcp_interactive() {
   printf '\n%s\n' '◆ Integrations (multi-select)'
   printf '\n%s\n' 'Space selects multiple options. Enter confirms.'
 
-  if has_gum; then
-    selected=
-    [ "$linear" = 1 ] && selected=$(csv_add "$selected" 'Linear')
-    [ "$trello" = 1 ] && selected=$(csv_add "$selected" 'Trello')
-    [ "$maestro" = 1 ] && selected=$(csv_add "$selected" 'Maestro (local: mobile-qa)')
-    selected=$(gum choose --no-limit --ordered --height=7 \
-      --header 'Choose MCP integrations (Space selects, Enter confirms)' \
-      --selected "$selected" 'Linear' 'Trello' 'Maestro (local: mobile-qa)') || die 'interactive MCP selection aborted'
-    linear=0
-    trello=0
-    maestro=0
-    while IFS= read -r integration; do
-      case "$integration" in
-        Linear) linear=1 ;;
-        Trello) trello=1 ;;
-        'Maestro (local: mobile-qa)') maestro=1 ;;
-      esac
-    done <<EOF
-$selected
-EOF
-    MCP_LINEAR_ENABLED=$linear
-    MCP_TRELLO_ENABLED=$trello
-    MCP_MAESTRO_ENABLED=$maestro
-    PERSIST_SELECTION=1
-    return 0
-  fi
+  selector_initial=
+  [ "$linear" = 1 ] && selector_initial=$(csv_add "$selector_initial" 1)
+  [ "$trello" = 1 ] && selector_initial=$(csv_add "$selector_initial" 2)
+  [ "$maestro" = 1 ] && selector_initial=$(csv_add "$selector_initial" 3)
 
-  while :; do
-    printf '\nSelect MCP integrations to configure (multi-select: enter number to toggle, Enter to confirm):\n'
-    if [ "$linear" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  1 %s Linear\n' "$m"
-    if [ "$trello" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  2 %s Trello\n' "$m"
-    if [ "$maestro" = 1 ]; then m='[x]'; else m='[ ]'; fi
-    printf '  3 %s Maestro (local stdio, needs maestro CLI + Java)\n' "$m"
-    printf '  a) select all (Linear+Trello)   n) select none\n'
-    printf '> '
-    IFS= read -r choice || die 'interactive MCP selection aborted'
-    case "$choice" in
-      1) [ "$linear" = 1 ] && linear=0 || linear=1 ;;
-      2) [ "$trello" = 1 ] && trello=0 || trello=1 ;;
-      3) [ "$maestro" = 1 ] && maestro=0 || maestro=1 ;;
-      a|all) linear=1; trello=1 ;;
-      n|none) linear=0; trello=0; maestro=0 ;;
-      ''|d|done) break ;;
-      *) printf 'choose 1-3, a, n, or Enter\n' ;;
+  choose_multi 'Choose MCP integrations' "$selector_initial" \
+    'Linear' 'Trello' 'Maestro (local: mobile-qa)'
+
+  linear=0
+  trello=0
+  maestro=0
+  while IFS= read -r integration; do
+    case "$integration" in
+      Linear) linear=1 ;;
+      Trello) trello=1 ;;
+      'Maestro (local: mobile-qa)') maestro=1 ;;
     esac
-  done
+  done <<EOF
+$SELECTOR_VALUES
+EOF
 
   MCP_LINEAR_ENABLED=$linear
   MCP_TRELLO_ENABLED=$trello
@@ -728,55 +1015,33 @@ resolve_jev() {
 
 select_jev_provider() {
   current=${1:-1}
-  if has_gum; then
-    choice=$(gum choose --height=8 --header 'How should Agent Stack access Jev?' \
-      'TypeSafe direct' 'Vercel AI Gateway' 'Cloudflare AI Gateway / compatible gateway' 'OpenRouter (preview)') \
-      || die 'interactive Jev provider selection aborted'
-    case "$choice" in
-      'TypeSafe direct') JEV_MENU_CHOICE=1 ;;
-      'Vercel AI Gateway') JEV_MENU_CHOICE=2 ;;
-      'Cloudflare AI Gateway / compatible gateway') JEV_MENU_CHOICE=3 ;;
-      *) JEV_MENU_CHOICE=4 ;;
-    esac
-    return 0
-  fi
-
-  while :; do
-    printf '\n%s\n' '◆ How should Agent Stack access Jev?'
-    printf '\n'
-    printf '  1) TypeSafe direct\n'
-    printf '  2) Vercel AI Gateway\n'
-    printf '  3) Cloudflare AI Gateway / compatible gateway\n'
-    printf '  4) OpenRouter (preview)\n'
-    printf '\nSelect provider [%s]: ' "$current"
-    IFS= read -r choice || die 'interactive Jev provider selection aborted'
-    [ -z "$choice" ] && choice=$current
-    case "$choice" in
-      1|2|3|4) JEV_MENU_CHOICE=$choice; return 0 ;;
-      *) printf 'choose 1-4\n' >&2 ;;
-    esac
-  done
+  case "$current" in
+    1|2|3|4) ;;
+    *) current=1 ;;
+  esac
+  choose_single 'How should Agent Stack access Jev?' "$current" \
+    'TypeSafe direct' \
+    'Vercel AI Gateway' \
+    'Cloudflare AI Gateway / compatible gateway' \
+    'OpenRouter (preview)'
+  JEV_MENU_CHOICE=$SELECTOR_INDEX
 }
 
 configure_delivery_interactive() {
   # Single-choice specs screen.
   printf '\n%s\n' '◆ Specs'
   printf '\n%s\n' 'Agent Stack uses OpenSpec to create and manage implementation specifications.'
-  printf '\n'
   if [ "$SPECS_MODE" = mirror ]; then
     current_choice=2
   else
     current_choice=1
   fi
-  printf '  1) Keep specs in this repository\n'
-  printf '  2) Mirror OpenSpec specs to another repository\n'
-  printf '\nSelect [%s]: ' "$current_choice"
-  IFS= read -r mode_choice || die 'interactive configuration aborted'
-  [ -z "$mode_choice" ] && mode_choice=$current_choice
-  case "$mode_choice" in
+  choose_single 'Specs' "$current_choice" \
+    'Keep specs in this repository' \
+    'Mirror OpenSpec specs to another repository'
+  case "$SELECTOR_INDEX" in
     1) SPECS_MODE=local ;;
     2) SPECS_MODE=mirror ;;
-    *) printf 'unknown choice "%s", keeping %s\n' "$mode_choice" "$SPECS_MODE" >&2 ;;
   esac
 
   if [ "$SPECS_MODE" = local ]; then
@@ -817,15 +1082,13 @@ configure_jev_interactive() {
       *) return 0 ;;
     esac
   else
-    printf '  1) Configure Jev now\n'
-    printf '  2) Configure later\n'
-    printf '\nSelect [1]: '
-    IFS= read -r qa_choice || die 'interactive configuration aborted'
-    case "${qa_choice:-1}" in
-      1) ;;
-      2) JEV_CONFIGURED_LATER=1; return 0 ;;
-      *) printf 'unknown choice "%s", skipping Jev setup\n' "$qa_choice" >&2; JEV_CONFIGURED_LATER=1; return 0 ;;
-    esac
+    choose_single 'Set up Jev QA now?' 1 \
+      'Configure Jev now' \
+      'Configure later'
+    if [ "$SELECTOR_INDEX" = 2 ]; then
+      JEV_CONFIGURED_LATER=1
+      return 0
+    fi
   fi
 
   select_jev_provider 1
@@ -970,52 +1233,35 @@ prompt_option() {
   current=$2
   shift 2
 
-  while :; do
-    printf '\n%s\n' "$label"
-    printf '  current: %s\n' "$current"
-    index=1
-    for option in "$@"; do
-      printf '  %s) %s\n' "$index" "$option"
-      index=$((index + 1))
-    done
-    printf '  c) custom value\n'
-    printf '  Enter keeps the current value\n> '
-    IFS= read -r choice || die 'interactive configuration aborted'
-
-    if [ -z "$choice" ]; then
-      PROMPT_VALUE=$current
-      return 0
-    fi
-
-    case "$choice" in
-      c|custom)
-        printf 'Custom value: '
-        IFS= read -r custom || die 'interactive configuration aborted'
-        [ -n "$custom" ] || { printf 'value cannot be empty\n' >&2; continue; }
-        PROMPT_VALUE=$custom
-        return 0
-        ;;
-      *[!0-9]*)
-        printf 'choose a listed number, c, or Enter\n' >&2
-        continue
-        ;;
-    esac
-
-    index=1
-    selected=
-    for option in "$@"; do
-      if [ "$choice" = "$index" ]; then
-        selected=$option
-        break
-      fi
-      index=$((index + 1))
-    done
-    if [ -n "$selected" ]; then
-      PROMPT_VALUE=$selected
-      return 0
-    fi
-    printf 'choose a listed number, c, or Enter\n' >&2
+  selector_initial=1
+  selector_index=1
+  for selector_option in "$@"; do
+    [ "$selector_option" = "$current" ] && selector_initial=$selector_index
+    selector_index=$((selector_index + 1))
   done
+
+  choose_single "$label (current: ${current:-unset})" "$selector_initial" "$@" 'custom value'
+
+  if [ "$SELECTOR_VALUE" = 'custom value' ]; then
+    while :; do
+      printf 'Custom value (current: %s): ' "$current"
+      IFS= read -r custom || die 'interactive configuration aborted'
+      [ -n "$custom" ] || { printf 'value cannot be empty\n' >&2; continue; }
+      PROMPT_VALUE=$custom
+      return 0
+    done
+  fi
+  PROMPT_VALUE=$SELECTOR_VALUE
+}
+
+run_with_timeout() {
+  # Local model CLIs should return immediately, but never let an optional
+  # discovery call stall the wizard when `timeout(1)` is available.
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 15 "$@"
+  else
+    "$@"
+  fi
 }
 
 discover_configured_models() {
@@ -1041,11 +1287,11 @@ discover_models_for() {
   case "$platform" in
     opencode)
       if command -v opencode >/dev/null 2>&1; then
-        opencode models </dev/null 2>/dev/null | awk '$1 == $0 && index($1, "/") > 0 { print }' || true
+        run_with_timeout opencode models </dev/null 2>/dev/null | awk '$1 == $0 && index($1, "/") > 0 { print }' || true
       elif command -v pi >/dev/null 2>&1; then
         # Pi exposes the same provider/model-shaped catalog when OpenCode is
         # not installed. It is a discovery source, not a required runtime.
-        pi --list-models </dev/null 2>/dev/null | awk 'NR > 1 && $1 != "provider" && NF >= 2 { print $1 "/" $2 }' || true
+        run_with_timeout pi --list-models </dev/null 2>/dev/null | awk 'NR > 1 && $1 != "provider" && NF >= 2 { print $1 "/" $2 }' || true
       fi
       ;;
     claude|codex|cursor)
@@ -1082,22 +1328,30 @@ prompt_discovered_model() {
   fi
 
   active=$catalog
+  force_list=0
   while :; do
     count=$(awk 'END { print NR + 0 }' "$active")
     printf '\n%s\n' "$label"
     printf '  current: %s\n' "${current:-harness default}"
-    if [ "$count" -gt 40 ]; then
-      printf '  Showing the first 40 of %s available models.\n' "$count"
+
+    if [ "$count" -le 25 ] || [ "$force_list" = 1 ]; then
+      index=1
+      while IFS= read -r option; do
+        printf '  %s) %s\n' "$index" "$option"
+        index=$((index + 1))
+        [ "$index" -gt 25 ] && break
+      done < "$active"
+      [ "$count" -gt 25 ] && printf '  ... %s more\n' "$((count - 25))"
+      printf '  s) search the available model catalog\n'
+      printf '  c) enter a custom model ID or alias\n'
+      printf '  Enter keeps the current value\n> '
+    else
+      printf '  %s models discovered; search instead of listing them all.\n' "$count"
+      printf '  s) search %s models\n' "$count"
+      printf '  l) list the first 25\n'
+      printf '  c) enter a custom model ID or alias\n'
+      printf '  Enter keeps the current value\n> '
     fi
-    index=1
-    while IFS= read -r option; do
-      printf '  %s) %s\n' "$index" "$option"
-      index=$((index + 1))
-      [ "$index" -gt 40 ] && break
-    done < "$active"
-    printf '  s) search the available model catalog\n'
-    printf '  c) enter a custom model ID or alias\n'
-    printf '  Enter keeps the current value\n> '
     IFS= read -r choice || die 'interactive configuration aborted'
 
     if [ -z "$choice" ]; then
@@ -1127,18 +1381,26 @@ prompt_discovered_model() {
           rm -f "$active"
         fi
         active=$searched
+        force_list=1
+        ;;
+      l|list)
+        force_list=1
         ;;
       *[!0-9]*)
-        printf 'choose a listed number, s, c, or Enter\n' >&2
+        printf 'choose a listed number, s, l, c, or Enter\n' >&2
         ;;
       *)
+        if [ "$force_list" = 0 ] && [ "$count" -gt 25 ]; then
+          printf 'choose s to search, l to list, c, or Enter\n' >&2
+          continue
+        fi
         selected=$(awk -v wanted="$choice" 'NR == wanted { print; exit }' "$active")
         if [ -n "$selected" ]; then
           PROMPT_VALUE=$selected
           [ "$active" = "$catalog" ] || rm -f "$active"
           return 0
         fi
-        printf 'choose a listed number, s, c, or Enter\n' >&2
+        printf 'choose a listed number, s, l, c, or Enter\n' >&2
         ;;
     esac
   done
@@ -1148,25 +1410,53 @@ prompt_model_value() {
   platform=$1
   role=$2
   current=$3
-  shared_catalog=${4:-}
-  if [ -n "$shared_catalog" ]; then
-    catalog=$(mktemp "$ROOT/.agent-stack/.models.XXXXXX")
-    cat "$shared_catalog" > "$catalog"
-  else
-    catalog=$(mktemp "$ROOT/.agent-stack/.models.XXXXXX")
-    {
-      discover_models_for "$platform"
-    } | awk 'NF && !seen[$0]++' > "$catalog"
-  fi
-  if [ -n "$current" ] && ! awk -v wanted="$current" '$0 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$catalog"; then
-    temporary=$(mktemp "$ROOT/.agent-stack/.models.current.XXXXXX")
-    printf '%s\n' "$current" > "$temporary"
-    awk '{ print }' "$catalog" >> "$temporary"
-    mv "$temporary" "$catalog"
-  fi
-  prompt_discovered_model "$platform $role model" "$current" "$catalog"
-  PROMPT_MODEL_VALUE=$PROMPT_VALUE
-  rm -f "$catalog"
+
+  while :; do
+    printf '\n%s %s model\n' "$platform" "$role"
+    printf '  current: %s\n' "${current:-harness default}"
+    printf '  Enter keeps the current value\n'
+    printf '  s) search models discovered from the active harness\n'
+    printf '  c) enter a custom model ID or alias\n> '
+    IFS= read -r model_choice || die 'interactive configuration aborted'
+    case "$model_choice" in
+      '')
+        PROMPT_MODEL_VALUE=$current
+        break
+        ;;
+      c|custom)
+        prompt_custom_model "$platform $role model" "$current"
+        PROMPT_MODEL_VALUE=$PROMPT_VALUE
+        break
+        ;;
+      s|search)
+        if [ -z "${MODEL_PLATFORM_CATALOG:-}" ]; then
+          MODEL_PLATFORM_CATALOG=$(mktemp "$ROOT/.agent-stack/.models.shared.XXXXXX")
+          discover_models_for "$platform" | awk 'NF && !seen[$0]++' > "$MODEL_PLATFORM_CATALOG" || true
+        fi
+        if [ ! -s "$MODEL_PLATFORM_CATALOG" ]; then
+          rm -f "$MODEL_PLATFORM_CATALOG"
+          MODEL_PLATFORM_CATALOG=
+          printf 'No local model catalog is available for %s.\n' "$platform" >&2
+          continue
+        fi
+        catalog=$(mktemp "$ROOT/.agent-stack/.models.XXXXXX")
+        cat "$MODEL_PLATFORM_CATALOG" > "$catalog"
+        if [ -n "$current" ] && ! awk -v wanted="$current" '$0 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$catalog"; then
+          temporary=$(mktemp "$ROOT/.agent-stack/.models.current.XXXXXX")
+          printf '%s\n' "$current" > "$temporary"
+          awk '{ print }' "$catalog" >> "$temporary"
+          mv "$temporary" "$catalog"
+        fi
+        prompt_discovered_model "$platform $role model" "$current" "$catalog"
+        PROMPT_MODEL_VALUE=$PROMPT_VALUE
+        rm -f "$catalog"
+        break
+        ;;
+      *)
+        printf 'choose Enter, s, or c\n' >&2
+        ;;
+    esac
+  done
 
   thinking_key=$(thinking_key_for "$platform" "$role")
   if [ -n "$thinking_key" ]; then
@@ -1216,23 +1506,41 @@ configure_models_interactive() {
     [ "$enabled" = 1 ] || continue
 
     printf '\nConfigure models and thinking for %s.\n' "$platform"
-    # Discover the catalog once per platform; every role reuses the copy.
-    shared_catalog=$(mktemp "$ROOT/.agent-stack/.models.shared.XXXXXX")
-    {
-      discover_models_for "$platform"
-    } | awk 'NF && !seen[$0]++' > "$shared_catalog"
+    # The harness catalog is discovered lazily, only when a role prompt asks
+    # to search it. Plain Enter therefore keeps harness defaults quickly.
+    MODEL_PLATFORM_CATALOG=
     for role in resolver designer design-qa developer web-qa mobile-qa; do
       model_key=$(model_key_for "$platform" "$role")
       model_current=$(get_config "$model_key" "$(model_default_for "$platform" "$role")")
-      prompt_model_value "$platform" "$role" "$model_current" "$shared_catalog"
+      prompt_model_value "$platform" "$role" "$model_current"
       set_config "$model_key" "$PROMPT_MODEL_VALUE"
       thinking_key=$(thinking_key_for "$platform" "$role")
       if [ -n "$thinking_key" ]; then
         set_config "$thinking_key" "$PROMPT_THINKING_VALUE"
       fi
     done
-    rm -f "$shared_catalog"
+    rm -f "$MODEL_PLATFORM_CATALOG"
+    MODEL_PLATFORM_CATALOG=
   done
+}
+
+configure_models() {
+  [ "$SKIP_MODELS" = 1 ] && return 0
+
+  if [ "$CONFIGURE_MODELS" = 1 ]; then
+    configure_models_interactive
+    return 0
+  fi
+
+  [ "$INTERACTIVE_WIZARD" = 1 ] || return 0
+
+  choose_single 'Model configuration' 1 \
+    'Keep harness defaults for every role (recommended)' \
+    'Review models and thinking'
+  if [ "$SELECTOR_INDEX" = 2 ]; then
+    configure_models_interactive
+  fi
+  return 0
 }
 
 persist_selection() {
@@ -3747,6 +4055,12 @@ while [ "$#" -gt 0 ]; do
     --select)
       INTERACTIVE_SELECT=1
       ;;
+    --configure-models)
+      CONFIGURE_MODELS=1
+      ;;
+    --skip-models)
+      SKIP_MODELS=1
+      ;;
     --claude-only)
       CLAUDE_ONLY=1
       EXPLICIT_PLATFORM=1
@@ -3791,6 +4105,10 @@ MANIFEST_FILE=$ROOT/.agent-stack/generated.manifest
 ROLE_DIR=$ROOT/.agent-stack/roles
 AUTH_PROVIDER=${AUTH_PROVIDER:-}
 
+if [ "$CONFIGURE_MODELS" = 1 ] && [ "$SKIP_MODELS" = 1 ]; then
+  die '--configure-models and --skip-models are mutually exclusive'
+fi
+
 if [ "$COMMAND" = auth ]; then
   [ "$AUTH_PROVIDER" = jev ] || die 'usage: setup-agent-stack.sh auth jev [--validate-only] [--provider=typesafe|vercel|gateway]'
   # shellcheck disable=SC2086
@@ -3808,9 +4126,7 @@ case "$COMMAND" in
     resolve_mcp
     resolve_delivery_config
     resolve_jev
-    if [ "$INTERACTIVE_WIZARD" = 1 ]; then
-      configure_models_interactive
-    fi
+    configure_models
     persist_selection
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then
       install_codex_bridge
@@ -3833,9 +4149,7 @@ case "$COMMAND" in
     ensure_skills
     ensure_webqa_resources
     ensure_mobileqa_resources
-    if [ "$INTERACTIVE_WIZARD" = 1 ]; then
-      configure_models_interactive
-    fi
+    configure_models
     persist_selection
     render_platform_outputs sync
     if [ "$INSTALL_CODEX_BRIDGE" -eq 1 ]; then

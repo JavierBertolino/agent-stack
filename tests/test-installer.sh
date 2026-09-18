@@ -33,6 +33,13 @@ fi
 [ -f "$T/.claude/skills/ui-review/SKILL.md" ] && { printf 'FAIL check must not reinstall\n' >&2; FAIL=1; }
 grep -q 'missing .*ui-review' "$T/drift.log" || { printf 'FAIL check must name the missing file\n' >&2; FAIL=1; }
 
+# Model flow flags are mutually exclusive and must fail before changing a project.
+B=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-models.XXXXXX")
+if sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$B" --kit-root "$KIT_ROOT" --platforms opencode --mcp none --configure-models --skip-models >"$B/flags.log" 2>&1; then
+  printf 'FAIL --configure-models and --skip-models must be mutually exclusive\n' >&2; FAIL=1
+fi
+rm -rf "$B"
+
 # Run-state helper: invalid transitions rejected, stale detected.
 R=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-runstate.XXXXXX")
 python3 "$KIT_ROOT/scripts/run-state.py" --root "$R" init --run t-1 --issue LIN-9 --change t-change --worktree-root "$R/wt" --repo r --base-ref main --base-sha 000 --scope s >/dev/null \

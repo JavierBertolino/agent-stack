@@ -12,7 +12,7 @@ jobs:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - name: Shell syntax
         run: |
           sh -n scripts/setup-agent-stack.sh
@@ -30,6 +30,8 @@ jobs:
       - name: Fixture and installer tests
         run: |
           sh tests/run.sh --kit-root "$PWD"
+      - name: Install OpenSpec
+        run: npm install -g @fission-ai/openspec@latest
       - name: Doctor on a fixture install
         run: |
           T=$(mktemp -d)

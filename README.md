@@ -98,12 +98,14 @@ To call `agent-stack` directly from any project directory, install it once:
 
 This copies the kit to `<prefix>/share/agent-stack` and writes an
 `agent-stack` dispatcher to `<prefix>/bin` (an export line is printed when
-that directory is not on `PATH`). Afterwards, from any project:
+that directory is not on `PATH`), plus an `astack` short alias for the same
+dispatcher. Afterwards, from any project:
 
 ```sh
 cd /path/to/your-project
 agent-stack init --platforms opencode
-agent-stack check
+astack check
+astack auth jev
 agent-stack doctor
 agent-stack upgrade --check
 ```
@@ -165,7 +167,7 @@ scripts/doctor.sh             # dependencies, skills, governance, collisions
 scripts/upgrade-agent-stack.sh --check  # dry-run safe source migration
 scripts/run-state.py --help   # validated run state (init/lock/transition/verify/resume)
 setup-agent-stack.sh auth jev # store TYPESAFE_API_KEY for web-qa (user-level)
-scripts/as ...                # short alias: as sync, as auth jev, ...
+scripts/astack ...            # short alias: astack sync, astack auth jev, ...
 ```
 
 The wrapper `install.sh` is equivalent to `init` with this repository as the

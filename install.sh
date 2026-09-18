@@ -69,9 +69,11 @@ case "${1:-}" in
     sed "s|^SHARE=\"@SHARE@\"$|SHARE=\"$SHARE\"|" \
       "$SCRIPT_DIR/scripts/agent-stack" > "$PREFIX/bin/agent-stack"
     chmod +x "$PREFIX/bin/agent-stack"
+    ln -sf agent-stack "$PREFIX/bin/astack"
     printf 'installed agent-stack %s to %s\n' \
       "$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$SHARE/.agent-stack/defaults.conf")" \
       "$PREFIX/bin/agent-stack"
+    printf 'short alias available as %s\n' "$PREFIX/bin/astack"
     case ":$PATH:" in
       *":$PREFIX/bin:"*) ;;
       *)

@@ -63,8 +63,8 @@ Useful commands:
 - `scripts/setup-agent-stack.sh prune` removes only stale files recorded in the
   manifest and leaves changed files in place.
 - `scripts/setup-agent-stack.sh auth jev` stores `TYPESAFE_API_KEY` for the
-  web-qa Jev helper in user-level config (never in the repo). `scripts/as`
-  wraps every command (`as sync`, `as auth jev`, ...).
+  web-qa Jev helper in user-level config (never in the repo). `scripts/astack`
+  wraps every command (`astack sync`, `astack auth jev`, ...).
 - When OpenCode runs inside Herdr, the resolver opens sibling panes on demand
   for delegated roles and keeps the main resolver pane visible.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Short alias for the agent-stack setup script.
-#   as init | sync | check | adopt | prune | auth jev [--validate-only]
+# astack — short alias for the agent-stack setup script.
+#   astack init | sync | check | adopt | prune | auth jev [--validate-only]
 # Forwards all args; resolves the kit root from this file's location.
 set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

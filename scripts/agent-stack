@@ -15,6 +15,8 @@ Usage:
   agent-stack check [options]      Fail when generated files drift.
   agent-stack adopt                Import existing OpenCode role prompts.
   agent-stack prune                Remove only safe, stale generated files.
+  agent-stack auth jev [--validate-only]  Store TYPESAFE_API_KEY for web-qa
+                                   (user-level, never in the repo).
   agent-stack doctor [options]     Dependencies, skills, governance, policy.
   agent-stack upgrade [--check]    Safe three-way migration to a newer kit.
   agent-stack run-state ...        Validated run state (see run-state --help).
@@ -40,6 +42,10 @@ command=${1:-}
 
 case "$command" in
   init|sync|check|adopt|prune)
+    exec sh "$SHARE/scripts/setup-agent-stack.sh" "$command" \
+      --root "$PWD" --kit-root "$SHARE" "$@"
+    ;;
+  auth)
     exec sh "$SHARE/scripts/setup-agent-stack.sh" "$command" \
       --root "$PWD" --kit-root "$SHARE" "$@"
     ;;

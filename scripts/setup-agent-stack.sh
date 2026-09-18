@@ -72,7 +72,7 @@ Commands:
   prune      Remove only safe, stale generated files.
   auth jev   Store TYPESAFE_API_KEY for web-qa (user-level, never in repo).
 
-  scripts/as is a short alias: as sync, as auth jev, ...
+  scripts/astack is a short alias: astack sync, astack auth jev, ...
 
 Options:
   --root PATH                 Target project root. Defaults to the current directory.

@@ -26,21 +26,22 @@ jobs:
           sh -n scripts/sync-agent-mirrors.sh
           for t in tests/test-*.sh tests/run.sh; do sh -n "$t"; done
       - name: ShellCheck
-        uses: koalaman/shellcheck-py@v0.1.0
-        with:
-          files: >-
-            scripts/setup-agent-stack.sh
-            setup.sh
-            scripts/doctor.sh
-            scripts/upgrade-agent-stack.sh
-            scripts/update-agent-stack.sh
-            scripts/astack
-            scripts/agent-stack
-            install.sh
-            scripts/sync-agent-mirrors.sh
-            tests/run.sh
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=error \
+            scripts/setup-agent-stack.sh \
+            setup.sh \
+            scripts/doctor.sh \
+            scripts/upgrade-agent-stack.sh \
+            scripts/update-agent-stack.sh \
+            scripts/astack \
+            scripts/agent-stack \
+            scripts/check-public-safety.sh \
+            install.sh \
+            scripts/sync-agent-mirrors.sh \
+            tests/run.sh \
             tests/test-*.sh
-          severity: error
       - name: Python syntax
         run: |
           python3 -m py_compile scripts/run-state.py scripts/validate-contracts.py scripts/build-installer.sh scripts/build-release.sh

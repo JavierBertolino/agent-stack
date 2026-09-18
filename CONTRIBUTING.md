@@ -10,18 +10,12 @@ Run the full test suite before opening a pull request:
 
 ```sh
 sh tests/run.sh
-python3 scripts/build-installer.sh --kit-root "$PWD" --check
 ```
 
 ## Source of truth
 
 Author canonical roles, skills, contracts, defaults, and resources under `.agent-stack/`.
-
-`setup.sh` is generated. Do not edit it manually:
-
-```sh
-python3 scripts/build-installer.sh --kit-root "$PWD"
-```
+Public installation and updates are built from tagged GitHub Release artifacts.
 
 ## Pull requests
 

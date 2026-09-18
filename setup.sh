@@ -2720,6 +2720,8 @@ write_embedded_ux_agents() {
   cat > "$1" <<'TEMPLATE_UX_AGENTS_EOF'
 # UX Agent Guidance
 
+> This is a scaffold. Run the `governance-bootstrap` skill to populate it from your project instructions and implementation evidence; human review stays required.
+
 <!-- Fill this file with project-specific UX guidance. Do not leave it empty. -->
 
 ## Project and users
@@ -2747,6 +2749,8 @@ TEMPLATE_UX_AGENTS_EOF
 write_embedded_ui_agents() {
   cat > "$1" <<'TEMPLATE_UI_AGENTS_EOF'
 # UI Agent Guidance
+
+> This is a scaffold. Run the `governance-bootstrap` skill to populate it from your project instructions and implementation evidence; human review stays required.
 
 <!-- Fill this file with project-specific UI guidance. Do not leave it empty. -->
 

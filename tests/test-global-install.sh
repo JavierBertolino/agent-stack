@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Global-install tests: install.sh --global puts a working `agent-stack`
-# dispatcher on <prefix>/bin that operates on the current directory.
+# Global-install tests: install.sh --global puts a working `astack`
+# CLI on <prefix>/bin that operates on the current directory.
 set -eu
 KIT_ROOT=${KIT_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}
 FAIL=0
@@ -10,18 +10,14 @@ trap 'rm -rf "$P" "$T"' EXIT INT TERM
 
 sh "$KIT_ROOT/install.sh" --global --prefix="$P" >/dev/null 2>&1 \
   || { printf 'FAIL global install\n' >&2; FAIL=1; }
-[ -x "$P/bin/agent-stack" ] || { printf 'FAIL dispatcher missing\n' >&2; FAIL=1; }
-[ -x "$P/bin/astack" ] || { printf 'FAIL astack alias missing\n' >&2; FAIL=1; }
-[ "$("$P/bin/astack" --version)" = "$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$KIT_ROOT/.agent-stack/defaults.conf")" ] \
+[ -x "$P/bin/astack" ] || { printf 'FAIL astack CLI missing\n' >&2; FAIL=1; }
+[ "$("$P/bin/astack" --version)" = "astack $(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$KIT_ROOT/.agent-stack/defaults.conf")" ] \
   || { printf 'FAIL astack version mismatch\n' >&2; FAIL=1; }
-[ "$("$P/bin/agent-stack" --version)" = "$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$KIT_ROOT/.agent-stack/defaults.conf")" ] \
-  || { printf 'FAIL version mismatch\n' >&2; FAIL=1; }
-
-(cd "$T" && PATH="$P/bin:$PATH" agent-stack init --platforms opencode --mcp none >/dev/null 2>&1) \
-  || { printf 'FAIL dispatcher init\n' >&2; FAIL=1; }
+(cd "$T" && PATH="$P/bin:$PATH" astack init --platforms opencode --mcp none >/dev/null 2>&1) \
+  || { printf 'FAIL astack init\n' >&2; FAIL=1; }
 [ -f "$T/.opencode/agents/resolver.md" ] || { printf 'FAIL init output missing\n' >&2; FAIL=1; }
-(cd "$T" && PATH="$P/bin:$PATH" agent-stack check >/dev/null 2>&1) \
-  || { printf 'FAIL dispatcher check\n' >&2; FAIL=1; }
+(cd "$T" && PATH="$P/bin:$PATH" astack check >/dev/null 2>&1) \
+  || { printf 'FAIL astack check\n' >&2; FAIL=1; }
 (cd "$T" && PATH="$P/bin:$PATH" astack auth jev --validate-only 2>&1 | grep -q 'TYPESAFE_API_KEY is not set') \
   || { printf 'FAIL astack auth dispatch\n' >&2; FAIL=1; }
 

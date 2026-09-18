@@ -2883,10 +2883,6 @@ auth_jev() {
   legacy_env=${XDG_CONFIG_HOME:-$HOME/.config}/agent-stack/env
   [ -f "$env_file" ] || [ ! -f "$legacy_env" ] || env_file=$legacy_env
 
-  if [ -z "$provider" ] && [ -f "$env_file" ]; then
-    provider=$(awk -F= '$1 == "JEV_PROVIDER" { print $2; exit }' "$env_file")
-  fi
-
   if [ -z "$provider" ] && [ -t 0 ]; then
     printf '\nJev provider:\n'
     printf '  1) TypeSafe direct\n'

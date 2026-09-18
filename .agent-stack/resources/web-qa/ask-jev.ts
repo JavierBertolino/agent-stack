@@ -195,6 +195,19 @@ function providerConfig(provider: JevProvider, model: string): {
   );
 }
 
+function normalizeQuestionsForProvider(
+  provider: JevProvider,
+  questions: Record<string, Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+  if (provider !== "vercel") return questions;
+  return Object.fromEntries(
+    Object.entries(questions).map(([name, question]) => [
+      name,
+      question.type === "noul" ? [name, { ...question, type: "boolean" }] : [name, question],
+    ]).map(([name, value]) => [name as string, value as Record<string, unknown>]),
+  );
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const provider = providerFromEnv();
@@ -204,9 +217,10 @@ async function main(): Promise<void> {
     process.exit(2);
   }
   const state = JSON.parse(readFileSync(args.state, "utf8"));
-  const questions = args.questions
+  const rawQuestions = args.questions
     ? JSON.parse(readFileSync(args.questions, "utf8"))
     : buildDefaultQuestions(args.dims);
+  const questions = normalizeQuestionsForProvider(provider, rawQuestions);
 
   const body: Record<string, unknown> = { state, questions };
   if (config.includeModelInBody) body.model = config.model;

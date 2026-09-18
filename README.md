@@ -185,11 +185,8 @@ Clone the repository and run:
 
 ```sh
 sh tests/run.sh
-python3 scripts/build-installer.sh --kit-root "$PWD" --check
 sh scripts/doctor.sh --root "$PWD" --kit-root "$PWD"
 ```
-
-The standalone `setup.sh` is generated from canonical sources. Do not edit it manually.
 
 See:
 

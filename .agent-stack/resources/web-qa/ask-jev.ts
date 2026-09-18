@@ -203,8 +203,8 @@ function normalizeQuestionsForProvider(
   return Object.fromEntries(
     Object.entries(questions).map(([name, question]) => [
       name,
-      question.type === "noul" ? [name, { ...question, type: "boolean" }] : [name, question],
-    ]).map(([name, value]) => [name as string, value as Record<string, unknown>]),
+      question.type === "noul" ? { ...question, type: "boolean" } : question,
+    ]),
   );
 }
 

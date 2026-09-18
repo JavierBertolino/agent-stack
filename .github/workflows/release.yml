@@ -2,10 +2,11 @@ name: release
 # Triggered automatically by version tags (created by tag.yml when VERSION
 # changes on main), or manually from the Actions tab with an existing tag.
 # Validation runs read-only; only the publish job can write the release.
+#
+# NOTE: the tag trigger is temporarily disabled during the email-cleanup
+# history rewrite (moving tags must not auto-publish). Restore the push
+# block below once v0.1.0/v0.1.2 point at the clean history.
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
       tag:

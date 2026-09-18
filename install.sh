@@ -15,9 +15,9 @@ agent-stack setup script, including --platforms, --mcp, --select, and
 --specs-repository (sets SPECS_REPOSITORY and mirror publication mode;
 local mode needs no specs repository).
 
---global installs the kit to <prefix>/share/agent-stack (default
-$HOME/.local) and puts an `agent-stack` dispatcher on <prefix>/bin, so
-any project directory can run `agent-stack init` directly.
+--global installs the kit to <prefix>/share/astack (default
+$HOME/.local) and puts an `astack` CLI on <prefix>/bin, so
+any project directory can run `astack init` directly.
 EOF
 }
 
@@ -62,18 +62,16 @@ case "${1:-}" in
       /*) ;;
       *) path_error "--prefix must be absolute: $PREFIX" ;;
     esac
-    SHARE=$PREFIX/share/agent-stack
+    SHARE=$PREFIX/share/astack
     mkdir -p "$SHARE" "$PREFIX/bin"
     cp -r "$SCRIPT_DIR/scripts" "$SCRIPT_DIR/.agent-stack" "$SHARE/"
     # shellcheck disable=SC2086
     sed "s|^SHARE=\"@SHARE@\"$|SHARE=\"$SHARE\"|" \
-      "$SCRIPT_DIR/scripts/agent-stack" > "$PREFIX/bin/agent-stack"
-    chmod +x "$PREFIX/bin/agent-stack"
-    ln -sf agent-stack "$PREFIX/bin/astack"
-    printf 'installed agent-stack %s to %s\n' \
+      "$SCRIPT_DIR/scripts/astack" > "$PREFIX/bin/astack"
+    chmod +x "$PREFIX/bin/astack"
+    printf 'installed astack %s to %s\n' \
       "$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' "$SHARE/.agent-stack/defaults.conf")" \
-      "$PREFIX/bin/agent-stack"
-    printf 'short alias available as %s\n' "$PREFIX/bin/astack"
+      "$PREFIX/bin/astack"
     case ":$PATH:" in
       *":$PREFIX/bin:"*) ;;
       *)
@@ -81,7 +79,7 @@ case "${1:-}" in
         printf '  export PATH="%s:$PATH"\n' "$PREFIX/bin" >&2
         ;;
     esac
-    printf 'from a project directory run: agent-stack init --platforms opencode\n'
+    printf 'from a project directory run: astack init\n'
     exit 0
     ;;
   --path=*)

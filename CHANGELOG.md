@@ -4,6 +4,21 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] — 2026-09-18
+
+### Fixed
+
+- Install OpenSpec in CI so `astack doctor` and the global-install tests
+  pass on runners.
+
+### Changed
+
+- Release pipeline split into read-only validation and write-only
+  publishing jobs with verified-artifact handoff.
+- Third-party GitHub Actions pinned to commit SHAs.
+- Version tags trigger the release workflow automatically; manual dispatch
+  kept for re-runs.
+
 ## [0.1.0] — 2026-09-18
 
 First public release.

@@ -55,7 +55,7 @@ scan 'C:\\Users|C:/Users' 'windows-home-path'
 scan '/home/[a-zA-Z0-9_.-]+/' 'linux-home-path'
 
 # Internal / project-specific names (case-insensitive).
-scan -i 'opsia|stockmanager|binagora|hornero' 'private-name'
+scan -i 'opsia|stock[- ]?manager|binagora|hornero|lcvista' 'private-name'
 
 # Credential literals assigned in source (placeholders stay allowed).
 scan '(API_KEY|SECRET|PASSWORD|TOKEN)[=:][ ]*["'"'"']?[A-Za-z0-9_.$/-]{16,}["'"'"']?' 'possible-secret'

@@ -62,9 +62,8 @@ Useful commands:
   the first `init` when no neutral role sources exist.
 - `scripts/setup-agent-stack.sh prune` removes only stale files recorded in the
   manifest and leaves changed files in place.
-- `scripts/setup-agent-stack.sh auth jev` stores `TYPESAFE_API_KEY` for the
-  web-qa Jev helper in user-level config (never in the repo). `scripts/astack`
-  wraps every command (`astack sync`, `astack auth jev`, ...).
+- `astack auth jev` configures the Jev provider and credentials in user-level
+  config (never in the repository). The same flow is offered during `astack init`.
 - When OpenCode runs inside Herdr, the resolver opens sibling panes on demand
   for delegated roles and keeps the main resolver pane visible.
 

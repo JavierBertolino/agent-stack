@@ -2861,6 +2861,10 @@ ensure_mobileqa_resources() {
   done
 }
 
+shell_quote_value() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 auth_jev() {
   validate_only=0
   provider=
@@ -2959,10 +2963,10 @@ auth_jev() {
   ensure_dir "$env_dir"
   chmod 700 "$env_dir" 2>/dev/null || true
   {
-    printf 'JEV_PROVIDER=%s\n' "$provider"
-    printf 'JEV_MODEL=%s\n' "$model"
-    printf '%s=%s\n' "$key_name" "$key"
-    [ -z "$endpoint" ] || printf 'JEV_GATEWAY_URL=%s\n' "$endpoint"
+    printf 'JEV_PROVIDER=%s\n' "$(shell_quote_value "$provider")"
+    printf 'JEV_MODEL=%s\n' "$(shell_quote_value "$model")"
+    printf '%s=%s\n' "$key_name" "$(shell_quote_value "$key")"
+    [ -z "$endpoint" ] || printf 'JEV_GATEWAY_URL=%s\n' "$(shell_quote_value "$endpoint")"
   } > "$env_dir/env"
   chmod 600 "$env_dir/env" 2>/dev/null || true
   printf 'Jev configured with provider %s. Credentials stored in %s (mode 600).\n' "$provider" "$env_dir/env"

@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
-"""build-installer.sh — build the standalone distribution reproducibly.
+"""build-installer.sh — synchronize embedded installer fallback data.
 
-Author neutral sources once (.agent-stack/roles, .agent-stack/skills,
-.agent-stack/defaults.conf); this script regenerates the embedded fallback
-data inside scripts/setup-agent-stack.sh from those sources and derives the
-standalone setup.sh through a one-line transform (KIT_ROOT points at the
-distribution directory itself instead of the parent).
+Author neutral sources once under .agent-stack. This script refreshes the
+embedded fallback roles, skills, and defaults inside scripts/setup-agent-stack.sh.
 
 Usage:
   scripts/build-installer.sh [--kit-root PATH] [--check]
 
-  --check exits 1 when the generated output would differ from what is
-  committed (used by CI to enforce reproducibility).
-
-Installer logic lives only in scripts/setup-agent-stack.sh. setup.sh is
-pure generated output plus the KIT_ROOT transform; never edit it by hand.
+--check exits 1 when the embedded fallback data is stale.
 """
 
 import argparse
@@ -22,9 +15,6 @@ import difflib
 import subprocess
 import sys
 from pathlib import Path
-
-KIT_LINE_FROM = 'KIT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)'
-KIT_LINE_TO = 'KIT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)'
 
 SKILLS = ["project-context", "linear-workflow", "governance-bootstrap",
           "openspec-workflow", "ux-design", "implementation",
@@ -118,44 +108,27 @@ def main():
 
     kit = Path(args.kit_root)
     main_script = kit / "scripts" / "setup-agent-stack.sh"
-    standalone = kit / "setup.sh"
 
-    text = main_script.read_text()
-    text = sync_roles(text, kit)
+    original = main_script.read_text()
+    text = sync_roles(original, kit)
     text = sync_skills(text, kit)
     text = sync_defaults(text, kit)
 
-    if KIT_LINE_FROM not in text:
-        raise SystemExit("build error: KIT_ROOT source line not found")
-    standalone_text = text.replace(KIT_LINE_FROM, KIT_LINE_TO, 1)
-
-    changed = []
-    if main_script.read_text() != text:
-        changed.append(str(main_script))
-        if not args.check:
-            main_script.write_text(text)
-    if standalone.read_text() != standalone_text:
-        changed.append(str(standalone))
-        if not args.check:
-            standalone.write_text(standalone_text)
-
-    if not args.check:
-        check_syntax(main_script)
-        check_syntax(standalone)
-
-    if changed:
-        print("build-installer: updated %s" % ", ".join(changed))
+    if original != text:
         if args.check:
-            for path in changed:
-                old = (main_script.read_text() if "setup-agent-stack" in path
-                       else standalone.read_text()).splitlines()
-                new = (text if "setup-agent-stack" in path
-                       else standalone_text).splitlines()
-                sys.stdout.write("".join(difflib.unified_diff(
-                    old, new, path, path, lineterm="")))
+            sys.stdout.write("".join(difflib.unified_diff(
+                original.splitlines(),
+                text.splitlines(),
+                str(main_script),
+                str(main_script),
+                lineterm="",
+            )))
             sys.exit(1)
+        main_script.write_text(text)
+        check_syntax(main_script)
+        print("build-installer: synchronized embedded fallback data")
     else:
-        print("build-installer: outputs are reproducible (no changes)")
+        print("build-installer: embedded fallback data is synchronized")
 
 
 if __name__ == "__main__":

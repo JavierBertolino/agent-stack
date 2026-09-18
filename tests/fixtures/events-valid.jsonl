@@ -1,0 +1,2 @@
+{"detail": "run created for change demo-change (issue LIN-1)", "phase": "intake", "runId": "demo-1", "ts": "2026-09-08T00:00:00+00:00", "type": "init"}
+{"detail": "intake -> preflight", "phase": "preflight", "runId": "demo-1", "ts": "2026-09-08T00:01:00+00:00", "type": "transition"}

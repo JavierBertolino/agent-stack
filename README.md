@@ -1,144 +1,171 @@
 # Agent Stack
 
-Portable installer for a bounded resolver, UX designer, design QA, and
-developer agent workflow.
+A portable multi-agent software delivery workflow for Codex,
+Claude Code, Cursor, and OpenCode.
 
-The kit supports OpenCode, Claude Code, Codex, and Cursor. Role prompts are
-platform-neutral; the installer renders the platform-specific frontmatter or
-configuration and keeps generated files safe to synchronize.
+Agent Stack turns an issue or request into a governed workflow:
+
+```text
+Request
+   ↓
+Resolver
+   ├─→ Designer
+   ↓
+OpenSpec
+   ↓
+Developer
+   ↓
+Design QA
+   ↓
+PR
+```
+
+Agent Stack also includes browser and mobile QA powered by TypeSafe Jev.
+
+## Install
+
+```sh
+curl -fsSL https://github.com/JavierBertolino/agent-stack/releases/latest/download/install.sh | sh
+```
+
+## Initialize a project
+
+```sh
+cd my-project
+astack init
+```
+
+## Verify
+
+```sh
+astack doctor
+```
 
 ## Quick Start
 
-Users who have been granted access can clone this private repository and run
-the wrapper from the project they want to configure:
+After installing, move into any project and run the interactive wizard:
 
 ```sh
-gh auth login
-gh repo clone JavierBertolino/agent-stack "$HOME/.local/share/agent-stack"
-cd /path/to/your-project
-"$HOME/.local/share/agent-stack/install.sh" --root "$PWD"
+cd my-project
+astack init
 ```
 
-SSH users can use the equivalent clone command:
+The wizard walks through four steps:
+
+1. **Coding agents** (multi-select) — Codex, Claude Code, Cursor, OpenCode.
+2. **Integrations** (multi-select) — Linear, Trello, Maestro, or none.
+3. **Specs** (single choice) — Agent Stack uses OpenSpec to create and
+   manage implementation specifications. Keep specs in the repository
+   (default), or mirror finalized specs to another GitHub repository.
+4. **QA** — configure TypeSafe Jev now, or later with `astack auth jev`.
+
+Then verify everything:
 
 ```sh
-git clone git@github.com:JavierBertolino/agent-stack.git \
-  "$HOME/.local/share/agent-stack"
+astack doctor
 ```
 
-Private repository access is the distribution gate. Anyone with repository
-read access can install and run the kit; unauthenticated GitHub `curl` or raw
-URL installs are intentionally not advertised because private raw URLs require
-credentials too.
-
-## Install Without Cloning
-
-The main setup script is self-contained. An authenticated GitHub CLI session
-can stream it directly into the target project:
-
-```sh
-gh auth login
-cd /path/to/your-project
-gh api \
-  --header 'Accept: application/vnd.github.raw+json' \
-  '/repos/JavierBertolino/agent-stack/contents/scripts/setup-agent-stack.sh?ref=main' \
-  | sh -s -- init --root "$PWD" \
-      --platforms opencode,claude,codex,cursor
-```
-
-For automation, use a GitHub token with read access to this private repository:
-
-```sh
-curl -fsSL \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H 'Accept: application/vnd.github.raw+json' \
-  'https://api.github.com/repos/JavierBertolino/agent-stack/contents/scripts/setup-agent-stack.sh?ref=main' \
-  | sh -s -- init --root "$PWD" \
-      --platforms opencode,claude,codex,cursor
-```
-
-This mode uses the script's embedded role prompts, templates, and defaults. It
-does not require a local kit checkout, but the caller must still authenticate
-to GitHub because the repository is private.
-
-For a non-interactive install, choose platforms explicitly:
-
-```sh
-/path/to/agent-stack/install.sh --root "$PWD" \
-  --platforms opencode,claude,codex,cursor
-```
-
-The default install creates missing files only. Existing human-owned files are
-preserved. Use `--kit-root` with the main script when the kit is stored at a
-different path:
-
-```sh
-sh /path/to/agent-stack/scripts/setup-agent-stack.sh init \
-  --root "$PWD" \
-  --kit-root /path/to/agent-stack
-```
-
-## What It Installs
+## How Agent Stack Works
 
 - `resolver`: primary delivery manager and sole user-facing coordinator.
 - `designer`: UX proposal writer for user-facing changes.
 - `design-qa`: read-only, adversarial UI/UX review gate.
 - `developer`: OpenSpec implementer with task-level verification evidence.
-- Project-owned `UX_AGENTS.md` and `UI_AGENTS.md` starter templates.
-- Platform-specific agent files for the selected tools.
-- Configured Linear MCP entries for enabled platforms.
+- `web-qa` / `mobile-qa`: standalone browser / Maestro QA judged by Jev.
 
-The generated project files are intentionally not stored in this repository.
-They belong to the project being configured.
+The resolver owns preflight, clarification, OpenSpec artifacts, delegation,
+evidence, specification publication, and closeout. The target project's
+`AGENTS.md`, `UX_AGENTS.md`, and `UI_AGENTS.md` stay authoritative for
+project-specific rules.
 
-## Commands
+## Agents
 
-Run these from the consuming project, with the kit supplied through
-`--kit-root`:
+Role prompts are platform-neutral; the installer renders platform-specific
+frontmatter and keeps generated files safe to synchronize. Supported
+platforms: OpenCode, Claude Code, Codex, and Cursor.
+
+## Skills
+
+Canonical skills (`project-context`, `linear-workflow`,
+`governance-bootstrap`, `openspec-workflow`, `ux-design`, `implementation`,
+`ui-review`, `git-delivery`) are mirrored per platform and verified by
+`astack check` and `astack doctor`.
+
+## OpenSpec
+
+Agent Stack uses OpenSpec to create and manage implementation
+specifications. `SPECS_MODE=local` (default) keeps specs in the code
+repository with no external repository required. `SPECS_MODE=mirror`
+publishes the ready spec to another GitHub repository before
+implementation. See [docs/openspec.md](docs/openspec.md).
+
+## Jev QA
+
+`web-qa` and `mobile-qa` evaluate checkpoints with TypeSafe Jev across
+functional, view, and project-agnostic business dimensions (business
+rules, side effects, state transitions, traceability).
+
+Configure Jev during `astack init`, or later with:
 
 ```sh
-setup-agent-stack.sh init     # scaffold and render missing files
-setup-agent-stack.sh sync     # render missing or managed files
-setup-agent-stack.sh check    # fail when generated files drift
-setup-agent-stack.sh adopt    # import existing OpenCode role prompts
-setup-agent-stack.sh prune    # remove only safe, stale generated files
+astack auth jev
 ```
 
-The wrapper `install.sh` is equivalent to `init` with this repository as the
-kit root.
+Supported routes: TypeSafe direct, Vercel AI Gateway, and
+Cloudflare-compatible gateways. Credentials are stored user-level
+(`~/.config/astack/env`) and never in a repository.
+See [docs/jev.md](docs/jev.md).
+
+## Integrations
+
+Linear, Trello, and Maestro are all opt-in and can be combined freely
+(or skipped entirely). OAuth and credentials remain managed by the target
+tool and are never written by this kit. See [docs/integrations.md](docs/integrations.md).
 
 ## Configuration
 
-The installer copies `.agent-stack/defaults.conf` to the consuming project's
-`.agent-stack/config.conf` on first initialization. Edit that project-local
-file to configure:
+The installer copies `.agent-stack/defaults.conf` to the project's
+`.agent-stack/config.conf` on first initialization. See
+[docs/configuration.md](docs/configuration.md) for every setting,
+including platforms, integrations, spec publication, models, and Jev
+provider routing.
 
-- enabled platforms;
-- Linear MCP name and URL;
-- model and reasoning settings per role and platform;
-- Codex concurrency.
+## Updating
 
-The default Linear MCP name is `linear`; OAuth and credentials remain managed
-by the target tool and are never written by this kit.
+`astack update` updates the installed CLI and kit (use
+`astack update --check` to preview). `astack upgrade` migrates the
+current project to the installed kit while preserving customizations.
+See [docs/updating.md](docs/updating.md).
 
-## Workflow
+## Commands
 
-The intended flow is:
-
-```text
-resolver -> designer (UI changes only) -> developer -> design-qa (UI changes)
+```sh
+astack init          # scaffold and render missing files
+astack sync          # render missing or managed files
+astack check         # fail when generated files drift
+astack doctor        # dependencies, skills, governance, updates
+astack auth jev      # configure the Jev QA provider (user-level)
+astack update        # update the installed CLI and kit
+astack upgrade       # upgrade the current project to the installed kit
+astack prune         # remove only safe, stale generated files
+astack --version
+astack --help
 ```
 
-The resolver owns clarification, OpenSpec artifacts, delegation, evidence,
-corrective-round limits, and closeout. See
-[`docs/AGENT_PIPELINE.md`](docs/AGENT_PIPELINE.md) for the portable workflow
-contract. The target project's `AGENTS.md`, `CLAUDE.md`, `UX_AGENTS.md`, and
-`UI_AGENTS.md` remain authoritative for project-specific rules.
+## Architecture
 
-## Safety
+See [docs/architecture.md](docs/architecture.md) for the kit layout,
+adapter rendering, run state, and the three-way upgrade mechanism.
 
-- The renderer never silently overwrites an untracked human-owned file.
-- Generated hashes are recorded in `.agent-stack/generated.manifest`.
-- Drift is reported by `check` instead of being silently repaired.
-- `prune` removes only unchanged files tracked in the generated manifest.
-- The kit contains no credentials or project data.
+## Security
+
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities. The kit
+contains no credentials; Jev keys live user-level and are never logged,
+printed, or committed.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Author neutral sources once under
+`.agent-stack/`; regenerate the standalone distribution with
+`scripts/build-installer.sh`; verify with `sh tests/run.sh` and
+`scripts/doctor.sh`.

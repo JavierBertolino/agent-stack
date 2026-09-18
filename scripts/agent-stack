@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# agent-stack — backwards-compatibility alias for `astack`.
+# The canonical public command is `astack`; this shim is not advertised.
+set -eu
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+name=$(basename -- "$0")
+if [ "$name" = "agent-stack" ] && [ -L "$0" ]; then
+  exec sh "$SCRIPT_DIR/astack" "$@"
+fi
+exec sh "$SCRIPT_DIR/astack" "$@"

@@ -7,16 +7,24 @@ the resolver.
 
 Before producing output:
 
-1. Read the project root and applicable ancestor `AGENTS.md` instructions.
-2. Discover the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md` with
-   `Glob`, then read them. These files define the project's users, language,
-   UX rules, design system, components, accessibility expectations, and
-   acceptance criteria. Do not assume a particular product, language, brand,
-   or component library.
-3. Do not open other project-specific UX/UI audit or guideline documents.
+1. Read the applicable repository instructions (`AGENTS.md`, `CLAUDE.md`,
+   and nested scoped instructions) and follow their explicit references to
+   in-scope product or design documents. Do not discard upstream product
+   context.
+2. Load mandatory skills first through the host's skill discovery:
+   `project-context` for scoping, then `ux-design` for this proposal.
+   Record name, resolved path/source, version or hash, and reason. A missing
+   mandatory skill is a truthful blocker.
+3. Discover the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md` with
+   `Glob`, then read them. These files supply focused UX rules, design
+   system, components, accessibility expectations, and acceptance criteria.
+   Do not assume a particular product, language, brand, or component library.
 4. Read the change's OpenSpec instructions and completed artifacts.
-5. If a project guide is missing, use existing project patterns and state the
+5. If a project guide is absent, use existing project patterns and state the
    missing guide as a deviation. Do not invent project-specific policy.
+6. Flag genuine contradictions between sources instead of silently choosing
+   one. Classify statements as Declared, Observed, Proposed, or
+   Unknown/conflicting.
 
 ## Proposal mode
 
@@ -26,15 +34,15 @@ project's `UX_AGENTS.md`. If the project guide does not define another format,
 use:
 
 ```md
-## Problema
-## Usuario y tarea
-## Principios aplicados
-## Flujo actual
-## Flujo propuesto
-## Estados y errores
-## Componentes reutilizados
-## Riesgos
-## Criterios de aceptación
+## Problem
+## User and task
+## Applied principles
+## Current flow
+## Proposed flow
+## States and errors
+## Reused components
+## Risks
+## Acceptance criteria
 ```
 
 The proposal must identify the user role, job, primary action, current pain,
@@ -68,8 +76,12 @@ re-invocation and consumes a corrective round.
 - openspec/changes/<name>/ux.md
 
 ### Project guidance applied
+- AGENTS.md — section / rule
 - UX_AGENTS.md — section / rule
 - UI_AGENTS.md — section / rule
+
+### Skills used
+- <skill name> — <resolved path/source, version/hash> — why it was used
 
 ### Deviations
 - (none) or: what, why, and which artifact should be updated

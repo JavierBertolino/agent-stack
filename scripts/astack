@@ -1,0 +1,141 @@
+#!/usr/bin/env sh
+# astack — canonical Agent Stack command.
+#
+# When installed globally, <prefix>/bin/astack is the real executable with
+# <prefix>/share/astack baked in as SHARE (versioned layout:
+# share/astack/current -> versions/<ver>). From a checkout, the kit root is
+# this file's parent directory.
+#
+# Usage: astack init|sync|check|doctor|auth jev|update|upgrade|prune|... 
+set -eu
+
+SHARE="@SHARE@"
+
+resolve_kit_root() {
+  case "$SHARE" in
+    @SHARE@)
+      CDPATH= cd -- "$(dirname -- "$0")/.." && pwd
+      ;;
+    *)
+      if [ -L "$SHARE/current" ]; then
+        link=$(readlink "$SHARE/current" 2>/dev/null || true)
+        case "$link" in
+          /*) printf '%s\n' "$link" ;;
+          *) printf '%s\n' "$SHARE/$link" ;;
+        esac
+      else
+        printf '%s\n' "$SHARE"
+      fi
+      ;;
+  esac
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  astack init [options]       Scaffold and render missing files.
+  astack sync [options]       Render missing or managed files.
+  astack check [options]      Fail when generated files drift.
+  astack doctor [options]     Dependencies, skills, governance, updates.
+  astack auth jev [--validate-only] [--provider=typesafe|vercel|gateway]
+                              Configure the Jev QA provider
+                              (user-level, never in the repo).
+  astack update [--check]     Update the installed Agent Stack CLI and kit.
+  astack upgrade [--check]    Upgrade the current project to the installed kit.
+  astack prune                Remove only safe, stale generated files.
+  astack run-state ...        Validated run state (see run-state --help).
+  astack validate ...         Validate contract JSON (see validate --help).
+  astack --version            Print the installed kit version.
+  astack --help               Show this help.
+
+Project commands run with the current directory as the project root;
+override with --root PATH. Examples:
+
+  cd my-project
+  astack init
+  astack doctor
+  astack auth jev
+EOF
+}
+
+die() {
+  printf '%s\n' "astack: $*" >&2
+  exit 2
+}
+
+kit_version() {
+  if [ -f "$KIT_ROOT/VERSION" ]; then
+    awk 'NR == 1 { print $1; exit }' "$KIT_ROOT/VERSION"
+  else
+    awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' \
+      "$KIT_ROOT/.agent-stack/defaults.conf" 2>/dev/null || true
+  fi
+}
+
+KIT_ROOT=$(resolve_kit_root)
+[ -d "$KIT_ROOT" ] || die "kit directory missing: $KIT_ROOT (re-run the installer: curl -fsSL https://github.com/JavierBertolino/agent-stack/releases/latest/download/install.sh | sh)"
+
+command=${1:-}
+[ "$#" -gt 0 ] && shift
+
+case "$command" in
+  init|sync|check|adopt|prune)
+    exec sh "$KIT_ROOT/scripts/setup-agent-stack.sh" "$command" \
+      --root "$PWD" --kit-root "$KIT_ROOT" "$@"
+    ;;
+  auth)
+    exec sh "$KIT_ROOT/scripts/setup-agent-stack.sh" "$command" \
+      --root "$PWD" --kit-root "$KIT_ROOT" "$@"
+    ;;
+  doctor)
+    exec sh "$KIT_ROOT/scripts/doctor.sh" \
+      --root "$PWD" --kit-root "$KIT_ROOT" "$@"
+    ;;
+  upgrade)
+    if [ ! -d "$PWD/.agent-stack" ]; then
+      die "not an Agent Stack project: $PWD/.agent-stack missing (run 'astack init' first)"
+    fi
+    set +e
+    sh "$KIT_ROOT/scripts/upgrade-agent-stack.sh" \
+      --root "$PWD" --kit-root "$KIT_ROOT" "$@"
+    upgrade_status=$?
+    set -e
+    if [ "$upgrade_status" -eq 2 ]; then
+      exit 2
+    fi
+    check_only=0
+    for a in "$@"; do
+      [ "$a" = "--check" ] && check_only=1
+    done
+    if [ "$check_only" = 0 ] && [ -x "$KIT_ROOT/scripts/setup-agent-stack.sh" ]; then
+      set +e
+      sh "$KIT_ROOT/scripts/setup-agent-stack.sh" sync \
+        --root "$PWD" --kit-root "$KIT_ROOT" >/dev/null 2>&1
+      sync_status=$?
+      set -e
+      if [ "$sync_status" -ne 0 ]; then
+        printf '%s\n' 'astack: re-render after upgrade reported drift; run `astack check` for details' >&2
+      fi
+    fi
+    exit "$upgrade_status"
+    ;;
+  update)
+    exec sh "$KIT_ROOT/scripts/update-agent-stack.sh" \
+      --kit-root "$KIT_ROOT" "$@"
+    ;;
+  run-state)
+    exec python3 "$KIT_ROOT/scripts/run-state.py" --root "$PWD" "$@"
+    ;;
+  validate)
+    exec python3 "$KIT_ROOT/scripts/validate-contracts.py" --kit-root "$KIT_ROOT" "$@"
+    ;;
+  --version|-v)
+    kit_version
+    ;;
+  ''|-h|--help)
+    usage
+    ;;
+  *)
+    die "unknown subcommand: $command (see 'astack --help')"
+    ;;
+esac

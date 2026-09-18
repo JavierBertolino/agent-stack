@@ -1,0 +1,43 @@
+name: Agent Stack
+about: Report a problem with installing, configuring, or running Agent Stack.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Agent Stack version
+      description: Output of `astack --version`.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and steps to reproduce
+      description: The exact `astack` command and what happened.
+      placeholder: |
+        astack init
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: `astack doctor` output
+      description: Paste the full output. Redact any credentials first.
+    validations:
+      required: false
+  - type: input
+    id: platform
+    attributes:
+      label: OS and shell
+      placeholder: Ubuntu 24.04 / bash
+    validations:
+      required: false

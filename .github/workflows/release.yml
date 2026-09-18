@@ -1,0 +1,64 @@
+name: release
+on:
+  push:
+    tags:
+      - "v*.*.*"
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Tag matches VERSION
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${TAG#v}"
+          VERSION=$(awk 'NR == 1 { print $1; exit }' VERSION)
+          [ "$TAG" = "$VERSION" ] || { echo "tag $TAG does not match VERSION $VERSION" >&2; exit 1; }
+      - name: Full test suite
+        run: |
+          sh tests/run.sh --kit-root "$PWD"
+      - name: Reproducible standalone build
+        run: |
+          python3 scripts/build-installer.sh --kit-root "$PWD" --check
+      - name: Secret scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Public-safety scan
+        run: |
+          sh scripts/check-public-safety.sh --kit-root "$PWD"
+      - name: Build release artifacts
+        run: |
+          python3 scripts/build-release.sh --kit-root "$PWD" --dist dist
+      - name: Validate a clean install from the built archive
+        run: |
+          T=$(mktemp -d)
+          P=$(mktemp -d)
+          trap 'rm -rf "$T" "$P"' EXIT
+          (cd dist && sha256sum -c astack.tar.gz.sha256)
+          ASTACK_RELEASE_BASE="$PWD/dist" sh dist/install.sh --prefix="$P" < /dev/null
+          (cd "$T" && PATH="$P/bin:$PATH" astack init --platforms opencode --mcp none)
+          (cd "$T" && PATH="$P/bin:$PATH" astack check)
+          (cd "$T" && PATH="$P/bin:$PATH" astack doctor)
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" \
+            --title "Agent Stack $TAG" \
+            --notes-file CHANGELOG.md \
+            dist/astack.tar.gz \
+            dist/astack.tar.gz.sha256 \
+            dist/checksums.txt \
+            "dist/install.sh#install.sh"

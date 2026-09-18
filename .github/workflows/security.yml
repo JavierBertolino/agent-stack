@@ -1,0 +1,20 @@
+name: security
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scanning (history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Public-safety scan
+        run: |
+          sh scripts/check-public-safety.sh --kit-root "$PWD"

@@ -1,10 +1,14 @@
 .DS_Store
 *.swp
 *.swo
+__pycache__/
+.worktrees/
+dist/
 
 # Local files created when this repository is used as a target project.
 .agent-stack/config.conf
 .agent-stack/generated.manifest
+.agent-stack/runs/
 .claude/
 .codex/
 .cursor/

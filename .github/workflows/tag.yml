@@ -10,6 +10,7 @@ on:
       - VERSION
 permissions:
   contents: write
+  actions: write
 jobs:
   tag:
     runs-on: ubuntu-latest
@@ -32,4 +33,9 @@ jobs:
             git tag "$TAG"
             git push origin "$TAG"
             echo "created tag $TAG"
+            # Tag pushes made with GITHUB_TOKEN do not trigger other
+            # workflows, so dispatch the release explicitly (human tag
+            # pushes trigger it automatically via the tag filter).
+            gh workflow run release --ref "$TAG" -f tag="$TAG"
+            echo "dispatched release workflow for $TAG"
           fi

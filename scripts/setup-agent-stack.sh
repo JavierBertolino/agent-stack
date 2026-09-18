@@ -2482,7 +2482,7 @@ TEMPLATE_CODEX_README_EOF
 write_embedded_defaults() {
   cat > "$1" <<'DEFAULTS_EOF'
 # Agent stack defaults. Values are read as KEY=VALUE by setup-agent-stack.sh.
-AGENT_STACK_VERSION=0.1.1
+AGENT_STACK_VERSION=0.1.2
 MAX_CORRECTIVE_ROUNDS=3
 TIMEBOX_MINUTES=25
 

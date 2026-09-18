@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT_FILES = ["LICENSE", "README.md", "CHANGELOG.md"]
 KIT_DIRS = ["scripts", ".agent-stack"]
-KIT_FILES = ["VERSION"]
+KIT_FILES = ["VERSION", "install.sh"]
 
 
 def sha256(path):

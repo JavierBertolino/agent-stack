@@ -4,6 +4,18 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] — 2026-09-18
+
+### Fixed
+
+- Release archive is self-contained again (`install.sh` included), fixing
+  the release smoke test.
+- Auto-created tags explicitly dispatch the release workflow (tag pushes
+  made with `GITHUB_TOKEN` do not trigger workflows on their own).
+
+Note: the `v0.1.1` tag was created by automation but removed before any
+release was published from it; `v0.1.0` remains untouched as tag-only.
+
 ## [0.1.1] — 2026-09-18
 
 ### Fixed

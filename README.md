@@ -50,7 +50,7 @@ cd my-project
 astack init
 ```
 
-The wizard walks through four steps:
+The wizard walks through five prompts:
 
 1. **Coding agents** (multi-select) — Codex, Claude Code, Cursor, OpenCode.
 2. **Integrations** (multi-select) — Linear, Trello, Maestro, or none.
@@ -58,6 +58,9 @@ The wizard walks through four steps:
    manage implementation specifications. Keep specs in the repository
    (default), or mirror finalized specs to another GitHub repository.
 4. **QA** — configure TypeSafe Jev now, or later with `astack auth jev`.
+5. **Models** (optional) — every role inherits the active harness model by
+   default. Review models and thinking only when asked; large discovered
+   catalogs are search-first.
 
 Then verify everything:
 

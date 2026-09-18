@@ -24,9 +24,11 @@ Run `install.sh --path=/absolute/path/to/project` from the kit repository, or ru
 `scripts/setup-agent-stack.sh init --kit-root /path/to/agent-stack` from a
 project root. The setup is idempotent and does not overwrite existing
 human-owned files. Interactively it walks through platforms, MCP integrations,
-the specs repository, model strategy, and a final review. `gum`/`fzf` are used
-when available, with a POSIX shell fallback; set `AGENT_STACK_PLAIN=1` to force
-the fallback. For non-interactive runs use `--platforms opencode,claude,codex,cursor`
+the specs repository, QA, and optionally model review. Selections use Space
+to choose/toggle and Enter to confirm: `gum` when available, otherwise a
+built-in POSIX selector on a terminal, with a numbered fallback when no TTY
+is available; set `AGENT_STACK_PLAIN=1` to force the built-in path. For
+non-interactive runs use `--platforms opencode,claude,codex,cursor`
 or the `--skip-*` flags. Model selection is optional and defaults to current or
 harness-default values. It also requires the GitHub `owner/repo` that will
 receive finalized OpenSpec changes and its base branch.

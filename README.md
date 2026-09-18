@@ -28,6 +28,16 @@ Agent Stack also includes browser and mobile QA powered by TypeSafe Jev.
 curl -fsSL https://github.com/JavierBertolino/agent-stack/releases/latest/download/install.sh | sh
 ```
 
+## Coding agent installation guides
+
+Agent Stack installs the project integration, but you install the coding-agent
+host separately. Use the official guide for the host you plan to use:
+
+- [Claude Code installation and quickstart](https://code.claude.com/docs/en/quickstart)
+- [Codex CLI installation and quickstart](https://developers.openai.com/codex/cli/)
+- [OpenCode installation and quickstart](https://opencode.ai/docs/)
+- [Cursor installation and quickstart](https://cursor.com/docs/get-started/quickstart)
+
 ## Initialize a project
 
 ```sh
@@ -101,6 +111,7 @@ specifications. `SPECS_MODE=local` (default) keeps specs in the code
 repository with no external repository required. `SPECS_MODE=mirror`
 publishes the ready spec to another GitHub repository before
 implementation. See [docs/openspec.md](docs/openspec.md).
+For OpenSpec installation and usage, see its [official installation guide](https://github.com/Fission-AI/OpenSpec/blob/main/docs/installation.md).
 
 ## Jev QA
 
@@ -117,13 +128,18 @@ astack auth jev
 Supported routes: TypeSafe direct, Vercel AI Gateway, and
 Cloudflare-compatible gateways. Credentials are stored user-level
 (`~/.config/astack/env`) and never in a repository.
-See [docs/jev.md](docs/jev.md).
+
+New to Jev? Read [TypeSafe's Jev introduction](https://docs.typesafe.ai/introduction)
+and [quick start](https://docs.typesafe.ai/introduction/quickstart). For
+Agent Stack-specific configuration, see [docs/jev.md](docs/jev.md).
 
 ## Integrations
 
 Linear, Trello, and Maestro are all opt-in and can be combined freely
 (or skipped entirely). OAuth and credentials remain managed by the target
-tool and are never written by this kit. See [docs/integrations.md](docs/integrations.md).
+tool and are never written by this kit. Start with the [Linear start guide](https://linear.app/docs/start-guide)
+or [Trello getting-started guide](https://www.trello.com/guide), then see
+[docs/integrations.md](docs/integrations.md) for Agent Stack configuration.
 
 ## Configuration
 

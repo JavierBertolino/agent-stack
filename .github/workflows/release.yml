@@ -1,0 +1,59 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify tag matches Agent Stack version
+        shell: sh
+        run: |
+          VERSION=$(awk -F= '$1 == "AGENT_STACK_VERSION" { print $2; exit }' .agent-stack/defaults.conf)
+          test "v$VERSION" = "$GITHUB_REF_NAME" || {
+            echo "tag $GITHUB_REF_NAME does not match AGENT_STACK_VERSION=$VERSION" >&2
+            exit 1
+          }
+
+      - name: Test release source
+        run: |
+          sh -n scripts/setup-agent-stack.sh
+          sh -n scripts/astack
+          sh -n scripts/update-astack.sh
+          sh -n scripts/bootstrap-install.sh
+          sh -n install.sh
+          python3 scripts/build-installer.sh --kit-root "$PWD" --check
+          sh tests/run.sh --kit-root "$PWD"
+
+      - name: Build release archive
+        shell: sh
+        run: |
+          mkdir -p dist/package
+          cp -R .agent-stack scripts adapters docs dist/package/
+          cp README.md AGENTS.md install.sh dist/package/
+          if [ -f LICENSE ]; then cp LICENSE dist/package/; fi
+          tar -C dist/package -czf dist/astack.tar.gz .
+          sha256sum dist/astack.tar.gz > dist/astack.tar.gz.sha256
+          cp scripts/bootstrap-install.sh dist/install.sh
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME"             dist/astack.tar.gz             dist/astack.tar.gz.sha256             dist/install.sh             --verify-tag             --generate-notes             --title "Agent Stack $GITHUB_REF_NAME"

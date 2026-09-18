@@ -53,7 +53,7 @@ You own browser control flow. Jev never picks browser actions.
 ## 4. Judge (Jev supplies verdicts)
 
 Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
+(Jev provider credentials come from the user-level astack configuration; the kit never writes them to the project).
 Ask narrow atomic questions together across all selected dimensions and let
 code decide which answers apply (speculative fan-out):
 
@@ -61,8 +61,8 @@ code decide which answers apply (speculative fan-out):
   `error_blocked_task`, `persisted_after_reload`;
 - view `Noul`: `one_primary_action`, `impact_before_confirm`,
   `copy_plain_and_actionable`, `status_explains_next_step`;
-- business `Noul`: `payment_classified`, `no_synthetic_cash`,
-  `trace_present`, `register_gate_respected`;
+- business `Noul`: `business_rule_respected`, `forbidden_side_effects_avoided`,
+  `state_transition_valid`, `traceability_present`;
 - `Choice verdict`: `pass | blocking | nit | unverified`;
 - `Choice domain`: `functional | view | business_logic`;
 - `Score severity`: `cosmetic | confusing | blocks_task_or_money_risk`.
@@ -100,6 +100,6 @@ escalate to the caller instead of guessing.
 - Browser actions only against the supplied test target. Never edit, commit,
   or migrate code, specs, or data.
 - Reports only: you may write `reports/qa/*.md`. Do not touch anything else.
-- Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+- Never log, print, or persist Jev provider keys or session credentials.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.

@@ -4,6 +4,23 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] — 2026-09-23
+
+### Added
+
+- Optional model review with `--configure-models` and `--skip-models`.
+- Harness-default model inheritance with lazy, search-first model discovery.
+
+### Changed
+
+- Unified wizard selectors around Space to choose or toggle and Enter to
+  confirm, with `gum`, POSIX TTY, and numbered fallbacks.
+- Expanded host, integration, and governance guidance.
+
+### Fixed
+
+- CI secret scanning now checks full git history on pull requests.
+
 ## [0.1.2] — 2026-09-18
 
 ### Fixed

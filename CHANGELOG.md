@@ -29,6 +29,13 @@ follow [Semantic Versioning](https://semver.org/).
   reported without echoing response bodies.
 - `ask-jev.ts` requires Node.js 22.6+ for native TypeScript stripping.
 
+### Fixed
+
+- Kit version fallbacks no longer drift: `AGENT_STACK_VERSION` in
+  `.agent-stack/defaults.conf` and in the installer's embedded defaults now
+  match `VERSION` (it had been stuck at 0.1.2 since 0.1.3). Enforced by
+  `tests/test-version-consistency.sh`.
+
 ## [0.1.3] — 2026-09-23
 
 ### Added

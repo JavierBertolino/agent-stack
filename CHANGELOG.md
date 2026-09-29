@@ -4,6 +4,31 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] — 2026-09-29
+
+### Added
+
+- `astack jev ask --request FILE|-` for ad hoc System One evaluation of
+  typed `noul`, `choice`, and `score` questions, sharing the zero-dependency
+  `ask-jev.ts` caller with the QA agents.
+- Request validation for typed Jev calls: question type checks, `criteria`
+  shape per type, and 10 MiB request/response limits.
+- Offline test coverage for the typed-request transport
+  (`tests/test-jev.sh`, `tests/test-jev.mjs`).
+
+### Changed
+
+- `ask-jev.ts` now loads credentials and provider routing from the
+  user-level env file (`~/.config/astack/env`, legacy
+  `~/.config/agent-stack/env`) and `.agent-stack/config.conf` when they are
+  not exported; exported environment variables keep precedence.
+- Model precedence is now `--model`, then the request model, then
+  `JEV_MODEL`, then `jev-latest`; an explicit `--model` overrides the
+  environment.
+- Jev requests use a 30-second per-attempt timeout, and HTTP errors are
+  reported without echoing response bodies.
+- `ask-jev.ts` requires Node.js 22.6+ for native TypeScript stripping.
+
 ## [0.1.3] — 2026-09-23
 
 ### Added

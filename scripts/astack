@@ -38,8 +38,10 @@ Usage:
   astack check [options]      Fail when generated files drift.
   astack doctor [options]     Dependencies, skills, governance, updates.
   astack auth jev [--validate-only] [--provider=typesafe|vercel|gateway]
-                              Configure the Jev QA provider
-                              (user-level, never in the repo).
+                               Configure the Jev QA provider
+                               (user-level, never in the repo).
+  astack jev ask [--request FILE|-] [--model MODEL]
+                               Evaluate typed Jev questions from JSON.
   astack update [--check]     Update the installed Agent Stack CLI and kit.
   astack upgrade [--check]    Upgrade the current project to the installed kit.
   astack prune                Remove only safe, stale generated files.
@@ -55,6 +57,7 @@ override with --root PATH. Examples:
   astack init
   astack doctor
   astack auth jev
+  printf '%s\n' '{"state":"...","questions":{"ok":{"type":"noul","instructions":"Is this valid?"}}}' | astack jev ask --request -
 EOF
 }
 
@@ -79,6 +82,24 @@ command=${1:-}
 [ "$#" -gt 0 ] && shift
 
 case "$command" in
+  jev)
+    action=${1:-}
+    [ "$#" -gt 0 ] && shift
+    case "$action" in
+      ask)
+        [ -f "$KIT_ROOT/.agent-stack/resources/web-qa/ask-jev.ts" ] || die 'Jev helper is missing from this Agent Stack installation'
+        command -v node >/dev/null 2>&1 || die 'Node.js 22.6 or newer is required for `astack jev ask`'
+        node -e 'const [major,minor]=process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 6) ? 0 : 1)' \
+          || die 'Node.js 22.6 or newer is required for `astack jev ask`'
+        node --experimental-strip-types "$KIT_ROOT/.agent-stack/resources/web-qa/ask-jev.ts" "$@"
+        ;;
+      ''|-h|--help)
+        printf '%s\n' 'Usage: astack jev ask --request FILE|- [--model MODEL]' \
+          'Request JSON: {"state": ..., "questions": {"id": {"type": "noul|choice|score", "instructions": ..., "criteria": ...}}}'
+        ;;
+      *) die "unknown Jev command: $action (use 'astack jev ask')" ;;
+    esac
+    ;;
   init|sync|check|adopt|prune)
     exec sh "$KIT_ROOT/scripts/setup-agent-stack.sh" "$command" \
       --root "$PWD" --kit-root "$KIT_ROOT" "$@"

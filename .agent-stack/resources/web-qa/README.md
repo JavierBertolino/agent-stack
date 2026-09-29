@@ -4,8 +4,9 @@ Companion scripts for the standalone `web-qa` agent. Copied to the consuming
 project as `scripts/qa/` by `setup-agent-stack.sh` (`init`/`sync` create
 missing files only; existing project files are preserved).
 
-- `ask-jev.ts` — zero-dependency Jev caller (Node 20+). Credentials come
-  from the environment, never from args or files. Supports every Jev
+- `ask-jev.ts` — zero-dependency Jev caller (Node.js 22.6+). Credentials come
+  from exported environment variables or the user-level Agent Stack env
+  file, never from command-line arguments. Supports every Jev
   provider configured with `astack auth jev`:
   - `typesafe` (default): `TYPESAFE_API_KEY`
   - `vercel`: `AI_GATEWAY_API_KEY` (Jev model `typesafe-ai/jev-latest`;
@@ -29,6 +30,12 @@ export TYPESAFE_API_KEY=...   # or: astack auth jev
 node --experimental-strip-types scripts/qa/ask-jev.ts \
   --state /tmp/webqa-state.json [--dims functional,view,business]
 ```
+
+For a generic `noul`, `choice`, or `score` batch, use
+`astack jev ask --request request.json` or pipe JSON through
+`astack jev ask --request -`. The request has `state` and a `questions`
+object; each question's `type`, `instructions`, and `criteria` are sent to
+System One without replacing question types.
 
 When Jev is not configured, the helper exits with:
 

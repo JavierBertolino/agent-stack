@@ -11,7 +11,12 @@ by `setup-agent-stack.sh` (`init`/`sync` create missing files only).
   with a JSON file rendered from `buildMobileQuestions()`, or inline the
   state below.
 
-Jev credentials come from the environment — configure them once with:
+The shared Jev caller also powers `astack jev ask`; its generic JSON request
+supports `noul`, `choice`, and `score` questions for either browser or mobile
+evidence. Mobile QA continues to use its own question library below.
+
+Jev credentials come from exported environment variables or the user-level
+Agent Stack env file — configure them once with:
 
 ```sh
 astack auth jev

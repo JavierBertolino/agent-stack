@@ -1,6 +1,7 @@
-// Minimal Jev caller for the web-qa and mobile-qa agents.
-// Zero dependencies (Node 20+). Credentials come from the environment —
-// never from args or files. Configure them with: astack auth jev
+// Minimal Jev caller for the web-qa and mobile-qa agents and `astack jev ask`.
+// Zero dependencies (Node 22.6+). Credentials come from the environment or
+// the user-level Agent Stack env file — never from command-line arguments.
+// Configure them with: astack auth jev
 //
 // Providers (JEV_PROVIDER):
 //   typesafe (default) — TypeSafe direct, TYPESAFE_API_KEY,
@@ -24,32 +25,107 @@
 // State shape: { test_goal, expected, governance, page, trace }.
 // Prints the raw evaluation response JSON to stdout.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 interface Args {
-  state: string;
+  state?: string;
   questions?: string;
+  request?: string;
   dims: string;
   model: string;
+  modelExplicit?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const out: Args = { state: "", dims: "functional,view,business", model: process.env.JEV_MODEL ?? "jev-latest" };
+  const out: Args = { dims: "functional,view,business", model: process.env.JEV_MODEL ?? "jev-latest" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--state") out.state = argv[++i] ?? "";
     else if (a === "--questions") out.questions = argv[++i];
+    else if (a === "--request") out.request = argv[++i] ?? "";
     else if (a === "--dims") out.dims = argv[++i] ?? out.dims;
-    else if (a === "--model") out.model = argv[++i] ?? out.model;
-    else if (a === "-h" || a === "--help") {
-      console.log("usage: ask-jev.ts --state state.json [--questions q.json] [--dims functional,view,business] [--model jev-latest]");
+    else if (a === "--model") {
+      out.model = argv[++i] ?? out.model;
+      out.modelExplicit = true;
+    } else if (a === "-h" || a === "--help") {
+      console.log("usage: ask-jev.ts --state state.json [--questions q.json] [--dims functional,view,business] [--model jev-latest]\n       ask-jev.ts --request request.json [--model jev-latest]");
       process.exit(0);
     } else {
       throw new Error(`unknown argument: ${a}`);
     }
   }
-  if (!out.state) throw new Error("--state state.json is required");
+  if (Boolean(out.request) === Boolean(out.state)) throw new Error("provide exactly one of --request or --state");
+  if (out.request && out.questions) throw new Error("--questions cannot be used with --request");
   return out;
+}
+
+interface JevQuestion {
+  type: "noul" | "choice" | "score";
+  instructions: unknown;
+  criteria?: unknown;
+}
+
+interface JevRequest {
+  state: unknown;
+  model?: string;
+  questions: Record<string, JevQuestion>;
+}
+
+function validateRequest(value: unknown): JevRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("request must be a JSON object");
+  const request = value as Record<string, unknown>;
+  if (!("state" in request)) throw new Error("request.state is required");
+  if (request.state === null || !(typeof request.state === "string" || typeof request.state === "object")) {
+    throw new Error("request.state must be a string, object, or array");
+  }
+  if (!request.questions || typeof request.questions !== "object" || Array.isArray(request.questions)) {
+    throw new Error("request.questions must be an object");
+  }
+  const questions = request.questions as Record<string, unknown>;
+  if (Object.keys(questions).length === 0) throw new Error("request.questions must contain at least one question");
+  for (const [name, raw] of Object.entries(questions)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`question ${name} must be an object`);
+    const question = raw as Record<string, unknown>;
+    if (!["noul", "choice", "score"].includes(String(question.type))) {
+      throw new Error(`question ${name} has unsupported type (use noul, choice, or score)`);
+    }
+    if (!("instructions" in question) || question.instructions === null ||
+        !(typeof question.instructions === "string" || typeof question.instructions === "object")) {
+      throw new Error(`question ${name}.instructions must be a string, object, or array`);
+    }
+    if (question.type === "choice" && (!question.criteria || typeof question.criteria !== "object" || Array.isArray(question.criteria) || Object.keys(question.criteria).length === 0)) {
+      throw new Error(`question ${name}.criteria must be an option map for choice questions`);
+    }
+    if (question.type === "score" && (!Array.isArray(question.criteria) || question.criteria.length < 2)) {
+      throw new Error(`question ${name}.criteria must contain at least two levels for score questions`);
+    }
+  }
+  if (request.model !== undefined && (typeof request.model !== "string" || !request.model)) throw new Error("request.model must be a non-empty string");
+  return value as JevRequest;
+}
+
+function readJson(path: string): unknown {
+  const text = path === "-" ? readFileSync(0, "utf8") : readFileSync(path, "utf8");
+  if (Buffer.byteLength(text, "utf8") > 10 * 1024 * 1024) throw new Error("Jev request exceeds 10 MiB limit");
+  return JSON.parse(text);
+}
+
+function loadConfiguration(): void {
+  const home = process.env.XDG_CONFIG_HOME || `${process.env.HOME}/.config`;
+  for (const path of [`${home}/astack/env`, `${home}/agent-stack/env`]) {
+    if (!existsSync(path)) continue;
+    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/);
+      if (!match || process.env[match[1]]) continue;
+      process.env[match[1]] = match[2];
+    }
+  }
+  const config = `${process.cwd()}/.agent-stack/config.conf`;
+  if (!existsSync(config)) return;
+  for (const line of readFileSync(config, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^(JEV_PROVIDER|JEV_MODEL|JEV_GATEWAY_URL)=(.*)$/);
+    if (match && !process.env[match[1]]) process.env[match[1]] = match[2];
+  }
 }
 
 const BUSINESS_QUESTIONS = [
@@ -151,7 +227,7 @@ function resolveProvider(model: string): ResolvedProvider {
     return {
       endpoint: process.env.JEV_GATEWAY_URL || "https://ai-gateway.vercel.sh/v1/systemone",
       apiKey,
-      model: process.env.JEV_MODEL || (model === "jev-latest" ? "typesafe-ai/jev-latest" : model),
+      model: model === "jev-latest" ? "typesafe-ai/jev-latest" : model,
       normalizeForVercel: true,
     };
   }
@@ -162,7 +238,7 @@ function resolveProvider(model: string): ResolvedProvider {
       console.error("JEV_GATEWAY_URL and JEV_GATEWAY_API_KEY must both be set. Run:\n\n  astack auth jev");
       process.exit(2);
     }
-    return { endpoint, apiKey, model: process.env.JEV_MODEL || model, normalizeForVercel: false };
+    return { endpoint, apiKey, model, normalizeForVercel: false };
   }
   const apiKey = process.env.TYPESAFE_API_KEY ?? "";
   if (!apiKey) {
@@ -172,7 +248,7 @@ function resolveProvider(model: string): ResolvedProvider {
   return {
     endpoint: process.env.JEV_GATEWAY_URL || "https://api.typesafe.ai/v1/systemone",
     apiKey,
-    model: process.env.JEV_MODEL || model,
+    model,
     normalizeForVercel: false,
   };
 }
@@ -197,7 +273,7 @@ async function postWithRetry(url: string, init: RequestInit, attempts = 4): Prom
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(url, init);
+      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
       if (res.status === 429 || res.status === 529 || res.status >= 500) {
         lastErr = new Error(`retryable status ${res.status}`);
       } else {
@@ -213,12 +289,22 @@ async function postWithRetry(url: string, init: RequestInit, attempts = 4): Prom
 }
 
 async function main(): Promise<void> {
+  loadConfiguration();
   const args = parseArgs(process.argv.slice(2));
-  const provider = resolveProvider(args.model);
-  const state = JSON.parse(readFileSync(args.state, "utf8"));
-  let questions: Record<string, object> = args.questions
-    ? JSON.parse(readFileSync(args.questions, "utf8"))
-    : buildDefaultQuestions(args.dims);
+  let state: unknown;
+  let model = args.model;
+  let questions: Record<string, object>;
+  if (args.request) {
+    const request = validateRequest(readJson(args.request));
+    state = request.state;
+    model = request.model ?? model;
+    if (args.modelExplicit) model = args.model;
+    questions = request.questions;
+  } else {
+    state = readJson(args.state!);
+    questions = args.questions ? readJson(args.questions) as Record<string, object> : buildDefaultQuestions(args.dims);
+  }
+  const provider = resolveProvider(model);
   if (provider.normalizeForVercel) {
     questions = normalizeQuestionsForVercel(questions);
   }
@@ -228,11 +314,14 @@ async function main(): Promise<void> {
     headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ state, model: provider.model, questions }),
   });
-  const text = await res.text();
   if (!res.ok) {
-    console.error(`jev error ${res.status}: ${text}`);
+    await res.body?.cancel();
+    console.error(`jev error ${res.status}${res.status >= 500 || res.status === 429 || res.status === 529 ? " (service unavailable or rate limited; retry later)" : " (check request and provider configuration)"}`);
     process.exit(1);
   }
+  const text = await res.text();
+  if (Buffer.byteLength(text, "utf8") > 10 * 1024 * 1024) throw new Error("Jev response exceeds 10 MiB limit");
+  JSON.parse(text);
   console.log(text);
 }
 

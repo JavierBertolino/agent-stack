@@ -33,6 +33,10 @@ sh "$KIT_ROOT/install.sh" --global --prefix="$P" >/dev/null 2>&1 \
   || { printf 'FAIL dispatcher doctor\n' >&2; FAIL=1; }
 (cd "$T" && PATH="$P/bin:$PATH" astack auth jev --validate-only 2>&1 | grep -q 'TYPESAFE_API_KEY is not set') \
   || { printf 'FAIL astack auth dispatch\n' >&2; FAIL=1; }
+if command -v node >/dev/null 2>&1 && node -e 'const [major,minor]=process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 6) ? 0 : 1)'; then
+  (cd "$T" && PATH="$P/bin:$PATH" astack jev ask --help 2>&1 | grep -q -- '--request request.json') \
+    || { printf 'FAIL astack jev ask dispatch\n' >&2; FAIL=1; }
+fi
 (cd "$T" && PATH="$P/bin:$PATH" astack upgrade --check >/dev/null 2>&1) \
   || { printf 'FAIL dispatcher upgrade --check on clean project\n' >&2; FAIL=1; }
 

@@ -51,3 +51,42 @@ Run:
 
   astack auth jev
 ```
+
+## On-demand typed questions
+
+Use `astack jev ask` to send an ad hoc System One request. The JSON request
+accepts every TypeSafe question type (`noul`, `choice`, and `score`) in one
+batch. Question criteria are passed through unchanged, and the structured
+response is written to stdout. Choice criteria are an option map; score
+criteria are an ordered list of at least two levels.
+
+```sh
+cat <<'JSON' | astack jev ask --request -
+{
+  "state": {"change": "...", "evidence": "..."},
+  "questions": {
+    "safe": {
+      "type": "noul",
+      "instructions": "Does the change preserve the stated invariant?"
+    },
+    "category": {
+      "type": "choice",
+      "instructions": "Which area is primarily affected?",
+      "criteria": {"data": "Data behavior", "interface": "User interface"}
+    },
+    "risk": {
+      "type": "score",
+      "instructions": "How serious is the risk?",
+      "criteria": ["Low", "Moderate", "High"]
+    }
+  }
+}
+JSON
+```
+
+The request can also be read from a file with `astack jev ask --request
+request.json`. The model can be selected with `--model`; otherwise the
+request model, `JEV_MODEL`, or `jev-latest` is used. The CLI uses provider
+routing from `.agent-stack/config.conf` and user credentials from
+`~/.config/astack/env` (or the legacy `~/.config/agent-stack/env`); exported
+environment variables take precedence. Node.js 22.6+ is required.

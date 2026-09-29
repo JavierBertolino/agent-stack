@@ -164,6 +164,7 @@ astack sync          # render missing or managed files
 astack check         # fail when generated files drift
 astack doctor        # dependencies, skills, governance, updates
 astack auth jev      # configure the Jev QA provider (user-level)
+astack jev ask      # evaluate typed Jev questions from a JSON request
 astack update        # update the installed CLI and kit
 astack upgrade       # upgrade the current project to the installed kit
 astack prune         # remove only safe, stale generated files

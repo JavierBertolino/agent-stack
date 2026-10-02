@@ -9,6 +9,25 @@ NK=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-newkit.XXXXXX")
 trap 'rm -rf "$T" "$NK"' EXIT INT TERM
 
 sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$T" --kit-root "$KIT_ROOT" --platforms opencode --mcp none >/dev/null 2>&1
+
+# A stale project version is pending work even if every managed source already
+# matches the installed kit. This is the state after updating only the CLI.
+CURRENT_VERSION=$(awk 'NR == 1 { print $1; exit }' "$KIT_ROOT/VERSION")
+printf '0.1.3\n' > "$T/.agent-stack/.kit-version"
+set +e
+version_check=$(sh "$KIT_ROOT/scripts/upgrade-agent-stack.sh" --root "$T" --kit-root "$KIT_ROOT" --check 2>&1)
+version_status=$?
+set -e
+[ "$version_status" -eq 1 ] \
+  || { printf 'FAIL upgrade --check must exit 1 for stale project version\n' >&2; FAIL=1; }
+printf '%s\n' "$version_check" | grep -q "would update project kit version (0.1.3 → $CURRENT_VERSION)" \
+  || { printf 'FAIL upgrade --check must report project version transition\n' >&2; FAIL=1; }
+printf '%s\n' "$version_check" | grep -q 'upgrade check: 1 pending update(s), 0 conflict(s)' \
+  || { printf 'FAIL stale project version must count as one pending update\n' >&2; FAIL=1; }
+[ "$(cat "$T/.agent-stack/.kit-version")" = '0.1.3' ] \
+  || { printf 'FAIL version check must not modify .kit-version\n' >&2; FAIL=1; }
+printf '%s\n' "$CURRENT_VERSION" > "$T/.agent-stack/.kit-version"
+
 # User customization that must survive.
 printf '\n# project customization\n' >> "$T/.agent-stack/roles/resolver.md"
 # Fake newer kit: changed managed file + brand-new skill.

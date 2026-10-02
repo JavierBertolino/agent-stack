@@ -4,6 +4,13 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `astack upgrade --check` now reports project kit-version drift as a pending
+  update even when all managed source files already match the installed kit.
+
 ## [0.1.4] — 2026-09-29
 
 ### Added

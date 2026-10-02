@@ -149,6 +149,14 @@ if [ "$CHECK" = 0 ]; then
   printf '\n'
 fi
 
+# A project version change is itself pending work even when the managed file
+# contents are identical between releases. A real upgrade records NEW_VERSION,
+# so --check must report the same transition and return a non-zero status.
+if [ "$CHECK" = 1 ] && [ -n "$NEW_VERSION" ] && [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+  printf 'would update project kit version (%s → %s)\n' "$OLD_VERSION" "$NEW_VERSION"
+  UPDATED=$((UPDATED + 1))
+fi
+
 # Managed sources: roles, skills, contracts. Project config.conf is never
 # modified here; missing new defaults are reported by doctor.sh instead.
 for role in resolver designer design-qa developer web-qa mobile-qa; do

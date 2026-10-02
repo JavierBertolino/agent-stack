@@ -64,6 +64,9 @@ Useful commands:
   the first `init` when no neutral role sources exist.
 - `scripts/setup-agent-stack.sh prune` removes only stale files recorded in the
   manifest and leaves changed files in place.
+- `astack worktree audit` reports merged worktrees eligible for guarded
+  cleanup; `astack worktree cleanup --branch <branch>` removes one verified
+  worktree and its local branch after the active session relocates.
 - `scripts/setup-agent-stack.sh auth jev` stores `TYPESAFE_API_KEY` for the
   web-qa Jev helper in user-level config (never in the repo). `scripts/astack`
   wraps every command (`astack sync`, `astack auth jev`, ...).

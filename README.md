@@ -165,12 +165,20 @@ astack check         # fail when generated files drift
 astack doctor        # dependencies, skills, governance, updates
 astack auth jev      # configure the Jev QA provider (user-level)
 astack jev ask      # evaluate typed Jev questions from a JSON request
+astack worktree audit                         # dry-run safe merged-worktree cleanup
+astack worktree cleanup --branch <branch>     # remove one verified merged worktree
 astack update        # update the installed CLI and kit
 astack upgrade       # upgrade the current project to the installed kit
 astack prune         # remove only safe, stale generated files
 astack --version
 astack --help
 ```
+
+`astack worktree cleanup` is intentionally post-merge: PR approval is not
+enough. It removes only clean worktrees managed below `.worktrees/` whose local
+HEAD (and remote branch, when it still exists) exactly matches a merged GitHub
+PR. It also deletes the local branch, never the remote branch. See
+[`docs/worktrees.md`](docs/worktrees.md).
 
 ## Architecture
 

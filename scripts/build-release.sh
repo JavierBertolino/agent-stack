@@ -82,7 +82,7 @@ def smoke(kit, dist, version):
         extracted = tmp / "kit"
         for script in ["setup-agent-stack.sh", "doctor.sh",
                        "upgrade-agent-stack.sh", "update-agent-stack.sh",
-                       "astack"]:
+                       "worktree-cleanup.sh", "astack"]:
             subprocess.run(["sh", "-n", str(extracted / "scripts" / script)],
                            check=True)
 

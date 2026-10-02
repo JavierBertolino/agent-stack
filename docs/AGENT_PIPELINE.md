@@ -67,6 +67,11 @@ demand outside the delivery critical path.
     implementation PRs are open. Leave it there until the PRs are merged.
 12. **Close**: archive the completed change, record `awaiting_merge`, and
     stop. Merge observation and archiving are a separate process.
+13. **Post-merge cleanup**: on a later invocation, re-read each PR as
+    `MERGED`, relocate the active session to the primary checkout, and run
+    targeted `astack worktree cleanup`. Exact SHA, clean-tree, managed-path,
+    and current-worktree checks fail closed; record `CLEANED` before marking
+    tracked work complete.
 
 Delegation uses the host-native subagent path, or the Herdr adapter when
 that project selects it (see `adapters/herdr/adapter.md`); neutral roles

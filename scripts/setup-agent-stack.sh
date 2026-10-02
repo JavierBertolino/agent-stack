@@ -2119,11 +2119,19 @@ unconditional extra agents for every ticket.
    (`ARCHIVE_STAGE=after-merge`): transition the run to `awaiting_merge`
    with `record-external` PR references recorded, then stop. Merge
    observation and archive/completion are a separate invocation, hook, or
-   existing project process — do not imply the resolver keeps observing
-   after its session ends.
-7. Remaining work becomes a new issue or explicitly approved follow-up, not a
+    existing project process — do not imply the resolver keeps observing
+    after its session ends.
+7. On a later invocation after every affected PR is re-read as `MERGED`, clean
+   up each implementation/specification worktree through the `git-delivery`
+   skill. Move this session to the repository's primary checkout first, then
+   run `astack worktree cleanup --root <repo-root> --branch <branch>`. Record
+   the `CLEANED` output in run state before completing the linked issue. Never
+   clean on approval alone, while a PR is merely open/closed, or by forcing a
+   dirty/current/SHA-mismatched worktree. If relocation or cleanup cannot run,
+   leave the worktree intact and report the blocker and exact follow-up command.
+8. Remaining work becomes a new issue or explicitly approved follow-up, not a
    silent `*-followup` change.
-8. Validate the run (`validate --run <run-id>`), append the closing event,
+9. Validate the run (`validate --run <run-id>`), append the closing event,
    unlock the run, and summarize scope, evidence,
    branches, files, and corrective rounds used.
 
@@ -3246,7 +3254,7 @@ SKILL_UI_REVIEW_EOF
 name: git-delivery
 description: Manage worktrees, specification publication, implementation PRs, and cross-links. Use for branch setup, mirror-mode spec PRs, and delivery closeout.
 metadata:
-  version: "1.0"
+  version: "1.1"
   consumer: resolver
   stage: deliver
 ---
@@ -3279,15 +3287,31 @@ Record external side effects immediately.
    Cross-link issue, spec PR, and implementation PRs. Reuse branches/PRs on
    retry; resume discovers existing PRs instead of duplicating them.
 4. Base branches other than main (stacked work) retain the recorded base.
+5. Post-merge cleanup: only after re-reading the remote PR and observing state
+   `MERGED`, move the active session out of the feature worktree and into the
+   repository's primary checkout. Run
+   `astack worktree cleanup --root <repo-root> --branch <branch>` and record its
+   `CLEANED` evidence. The command is the safety boundary: it only removes a
+   clean worktree below `.worktrees/` when the local and extant remote branch
+   heads exactly match the merged PR head. It removes the local branch but
+   never the remote branch. Never substitute `rm -rf`, `git worktree remove
+   --force`, or `git branch -D` by hand when the command skips a worktree.
+6. If cleanup reports the branch as current, dirty, detached, unpublished,
+   unmerged, or SHA-mismatched, stop cleanup and report the exact reason. A
+   merged PR does not authorize discarding later or uncommitted work. When
+   session relocation is unavailable, provide the exact cleanup command for a
+   later invocation instead of deleting the active worktree.
 
 ## Output
 
-Branch/PR references with hashes, cross-links, and next action.
+Branch/PR references with hashes, cross-links, cleanup evidence, and next
+action.
 
 ## Evidence
 
-PR IDs, branch names, SHAs, and observed remote state. Later source
-revisions invalidate or refresh publication evidence.
+PR IDs, branch names, SHAs, observed remote state, and the `SAFE`/`CLEANED`
+result from `astack worktree`. Later source revisions invalidate or refresh
+publication and cleanup evidence.
 
 ## Failure behavior
 
@@ -3302,7 +3326,7 @@ SKILL_GIT_DELIVERY_EOF
 
 write_skills_manifest() {
   cat > "$1" <<'SKILLS_MANIFEST_EOF'
-{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, cross-links.", "mandatory_stages": ["branch", "publish", "deliver"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.0"}], "version": 1}
+{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, post-merge cleanup, and cross-links.", "mandatory_stages": ["branch", "publish", "deliver", "closeout"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.1"}], "version": 1}
 SKILLS_MANIFEST_EOF
 }
 

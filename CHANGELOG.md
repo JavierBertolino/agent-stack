@@ -4,6 +4,16 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `astack worktree audit` and `astack worktree cleanup` for guarded cleanup of
+  Agent Stack-managed worktrees after GitHub confirms the exact PR head was
+  merged.
+- Resolver closeout now relocates to the primary checkout and records cleanup
+  evidence before completing merged work.
+
 ## [0.1.4] — 2026-09-29
 
 ### Added

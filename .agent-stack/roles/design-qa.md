@@ -85,3 +85,16 @@ You are not graded on finding a violation. An evidence-based PASS is valid.
 - One pass, one verdict. A re-review is a new resolver delegation and consumes
   one global corrective round.
 - Never modify domain, financial, stock, security, role, or permission logic.
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`. This role is read-only, so telemetry
+is limited to presence and cost signals — never file contents beyond what the
+report already contains:
+
+- On entry: `--type agent-start --detail '{"agent":"design-qa","model":"<harness model or pinned id>"}'`
+- On exit: `--type agent-end --detail '{"agent":"design-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"design-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- Never include API keys, session credentials, or unrelated runs in any detail.

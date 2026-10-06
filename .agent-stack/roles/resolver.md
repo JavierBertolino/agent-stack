@@ -390,3 +390,16 @@ while active so concurrent sessions cannot deliver it twice. Project
 instructions identified in §0 remain authoritative;
 project-specific UX/UI guidance is read from `UX_AGENTS.md` and
 `UI_AGENTS.md`, never hardcoded into this agent.
+
+## 13. Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Emit telemetry so observers can follow delegation in realtime:
+
+- At your own start: `astack run-state event --run <run-id> --type agent-start --detail '{"agent":"resolver","model":"<harness model or pinned id>"}'`
+- Before each delegation: `astack run-state event --run <run-id> --type handoff --detail '<handoff.schema.json#1 JSON>'`
+- When a subagent report arrives, record it verbatim: `astack run-state event --run <run-id> --type report --detail '<report.schema.json#1 JSON>'`
+- At your own end: `--type agent-end --detail '{"agent":"resolver","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"resolver","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- You remain the sole writer of `transition` and `record-*`; telemetry types never change phase or budget.
+- Never include API keys, session credentials, or unrelated runs in any detail.

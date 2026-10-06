@@ -37,6 +37,8 @@ if command -v node >/dev/null 2>&1 && node -e 'const [major,minor]=process.versi
   (cd "$T" && PATH="$P/bin:$PATH" astack jev ask --help 2>&1 | grep -q -- '--request request.json') \
     || { printf 'FAIL astack jev ask dispatch\n' >&2; FAIL=1; }
 fi
+(cd "$T" && PATH="$P/bin:$PATH" astack watch --help 2>&1 | grep -q 'Read-only') \
+  || { printf 'FAIL astack watch dispatch\n' >&2; FAIL=1; }
 (cd "$T" && PATH="$P/bin:$PATH" astack upgrade --check >/dev/null 2>&1) \
   || { printf 'FAIL dispatcher upgrade --check on clean project\n' >&2; FAIL=1; }
 

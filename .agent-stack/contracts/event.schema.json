@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-stack/contract/event.schema.json",
   "title": "Agent Stack run event",
-  "description": "One line of .agent-stack/runs/<run-id>/events.jsonl. Append-only; never edited or reordered. The resolver appends an event for every transition, evidence item, verification result, and external side effect.",
+  "description": "One line of .agent-stack/runs/<run-id>/events.jsonl. Append-only; never edited or reordered. The resolver appends an event for every transition, evidence item, verification result, and external side effect. Watch telemetry types (agent-start, agent-end, handoff, report, jev-request, jev-response, usage) are a read-only teaching overlay consumed by `astack watch`; only the resolver may use transition/record-* writers. See docs/watch.md for detail payload shapes (detail is a string; structured payloads are JSON-encoded).",
   "type": "object",
   "required": ["ts", "runId", "type", "phase", "detail"],
   "properties": {
@@ -20,7 +20,14 @@
         "lock",
         "note",
         "budget",
-        "close"
+        "close",
+        "agent-start",
+        "agent-end",
+        "handoff",
+        "report",
+        "jev-request",
+        "jev-response",
+        "usage"
       ]
     },
     "phase": { "type": "string", "minLength": 1 },

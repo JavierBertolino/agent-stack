@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>astack watch — __ASTACK_RUN__</title>
+<style>
+  :root { color-scheme: light; --bg:#f7f7f5; --card:#fff; --ink:#1a1a1a;
+    --muted:#6b7280; --line:#e5e7eb; --accent:#1d4ed8; --ok:#047857;
+    --warn:#b45309; --bad:#b91c1c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; z-index:10; background:var(--card);
+    border-bottom:1px solid var(--line); padding:10px 16px;
+    display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header .run { font-weight:700; font-family:ui-monospace,monospace; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:999px;
+    font-size:12px; border:1px solid var(--line); background:#f3f4f6; }
+  .badge.phase { background:#dbeafe; border-color:#bfdbfe; font-weight:600; }
+  .badge.live { background:#dcfce7; border-color:#bbf7d0; color:var(--ok); font-weight:700; }
+  .spacer { flex:1; }
+  button { cursor:pointer; border:1px solid var(--line); background:#fff;
+    border-radius:6px; padding:4px 10px; font-size:13px; }
+  main { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px;
+    padding:16px; max-width:1400px; margin:0 auto; }
+  @media (max-width:1000px){ main{ grid-template-columns:1fr; } }
+  section.card { background:var(--card); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; margin-bottom:16px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); margin:0 0 8px; }
+  #pipeline { display:flex; gap:4px; flex-wrap:wrap; }
+  #pipeline span { padding:2px 8px; border-radius:6px; font-size:12px;
+    border:1px solid var(--line); background:#f9fafb; }
+  #pipeline span.done { background:#ecfdf5; border-color:#a7f3d0; }
+  #pipeline span.current { background:var(--accent); color:#fff;
+    border-color:var(--accent); font-weight:700; }
+  #feed article { border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; margin-bottom:8px; background:#fff; }
+  #feed .meta { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;
+    font-size:12px; color:var(--muted); }
+  #feed .type { font-weight:700; color:var(--ink); font-family:ui-monospace,monospace; }
+  #feed .summary { margin:4px 0 0; }
+  details { margin-top:6px; }
+  details summary { cursor:pointer; font-size:12px; color:var(--accent); }
+  pre { background:#0f172a; color:#e2e8f0; padding:10px; border-radius:6px;
+    overflow:auto; max-height:420px; font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,monospace; }
+  #bar { display:flex; height:14px; border-radius:7px; overflow:hidden;
+    background:#eef2f7; margin:8px 0; }
+  #bar div { height:100%; }
+  .note { font-size:12px; color:var(--muted); }
+  #banner { display:none; background:#fef3c7; border:1px solid #fcd34d;
+    border-radius:8px; padding:8px 12px; margin:0 16px; }
+  footer { padding:16px; max-width:1400px; margin:0 auto; }
+</style>
+</head>
+<body>
+<header>
+  <span class="badge live">● LIVE · read-only</span>
+  <span class="run" id="run">run __ASTACK_RUN__</span>
+  <span class="badge phase" id="phase">…</span>
+  <span class="note" id="change"></span>
+  <span class="spacer"></span>
+  <span class="note" id="tokens-total">tokens total —</span>
+  <span class="note" id="jev-model"></span>
+  <button id="pause" type="button">Pause</button>
+</header>
+<div id="banner" role="status"></div>
+<main>
+  <div>
+    <section class="card">
+      <h2>Pipeline</h2>
+      <div id="pipeline"></div>
+    </section>
+    <section class="card">
+      <h2>Agent-to-agent feed</h2>
+      <div id="feed"><p class="note">Waiting for events…</p></div>
+    </section>
+  </div>
+  <div>
+    <section class="card">
+      <h2>Active agent</h2>
+      <div id="active"><p class="note">—</p></div>
+    </section>
+    <section class="card">
+      <h2>Models (OpenCode-first)</h2>
+      <table id="models"><thead><tr><th>Role</th><th>Model</th><th>Thinking</th></tr></thead><tbody></tbody></table>
+      <p class="note">Empty model = harness default. web-qa / mobile-qa use <code>inherit</code>: navigation follows the parent session model.</p>
+    </section>
+    <section class="card">
+      <h2>Token usage — estimated</h2>
+      <div id="bar"></div>
+      <table id="tokens"><thead><tr><th>Agent</th><th class="num">In</th><th class="num">Out</th><th class="num">Total</th></tr></thead><tbody></tbody></table>
+      <p class="note">Self-reported by each agent at <code>agent-end</code> (source: harness session stats). Estimated, not for billing. Missing rows show as n/a until the agent reports.</p>
+    </section>
+  </div>
+</main>
+<footer>
+  <p class="note">Secrets are never emitted. If you see an API key or credential in this view, stop the run and rotate it. Full Jev request/response bodies render collapsed — expand to teach the evaluation protocol. Watch is read-only: pausing only freezes this page.</p>
+</footer>
+<script>
+(function () {
+  "use strict";
+  var PHASES = ["intake","preflight","clarify","branch","specify","publish-spec",
+    "implement","review","qa","close","awaiting_merge"];
+  var COLORS = ["#1d4ed8","#047857","#7c3aed","#b45309","#0e7490","#be123c","#4d7c0f"];
+  var nextOffset = 0, paused = false, allEvents = [];
+  var runId = "__ASTACK_RUN__";
+
+  function el(tag, text, cls) {
+    var n = document.createElement(tag);
+    if (text !== undefined && text !== null) n.textContent = text;
+    if (cls) n.className = cls;
+    return n;
+  }
+  function fmt(n) {
+    if (n === undefined || n === null || n === "") return "n/a";
+    return Number(n).toLocaleString("en-US");
+  }
+  function tryParse(s) {
+    try { return { ok: true, value: JSON.parse(s) }; }
+    catch (e) { return { ok: false }; }
+  }
+  function pretty(detail) {
+    var p = tryParse(detail);
+    if (p.ok) return JSON.stringify(p.value, null, 2);
+    return String(detail);
+  }
+  function banner(msg) {
+    var b = document.getElementById("banner");
+    if (!msg) { b.style.display = "none"; b.textContent = ""; return; }
+    b.style.display = "block"; b.textContent = msg;
+  }
+
+  function summarize(ev) {
+    var p = tryParse(ev.detail || "");
+    var d = p.ok ? p.value : null;
+    switch (ev.type) {
+      case "init": return "run created";
+      case "transition": return ev.detail || "";
+      case "agent-start":
+        return (d && d.agent ? d.agent : "agent") + " started" +
+          (d && d.model ? " · " + d.model : "");
+      case "agent-end":
+        return (d && d.agent ? d.agent : "agent") + " ended" +
+          (d && d.status ? ": " + d.status : "");
+      case "handoff": {
+        var phase = d && d.phase ? " · phase " + d.phase : "";
+        var change = d && d.changeId ? " · " + d.changeId : "";
+        return "handoff" + change + phase + " (expand for full contract)";
+      }
+      case "report":
+        return "report " + (d && d.role ? d.role + ": " + (d.status || "") : "(expand)") +
+          (d && d.verdict ? " · verdict " + d.verdict : "");
+      case "jev-request": {
+        var n = d && d.questions ? Object.keys(d.questions).length : "?";
+        return "Jev request · model " + ((d && d.model) || "?") + " · " + n + " questions (expand for full body)";
+      }
+      case "jev-response": return "Jev response (expand for full verdicts)";
+      case "usage": {
+        var a = (d && d.agent) || "agent";
+        var t = d && (d.total !== undefined ? d.total : (Number(d.input || 0) + Number(d.output || 0)));
+        return "usage " + a + ": " + fmt(t) + " total" +
+          " (in " + fmt(d && d.input) + " / out " + fmt(d && d.output) + ")";
+      }
+      case "verify": case "code": case "evidence": case "external":
+      case "lock": case "budget": case "close": case "note":
+        return (ev.detail || "").slice(0, 160);
+      default: return (ev.detail || "").slice(0, 160);
+    }
+  }
+
+  function renderPipeline(phase) {
+    var box = document.getElementById("pipeline");
+    box.textContent = "";
+    var idx = PHASES.indexOf(phase);
+    PHASES.forEach(function (p, i) {
+      var s = el("span", p);
+      if (p === phase) s.className = "current";
+      else if (idx >= 0 && i < idx) s.className = "done";
+      box.appendChild(s);
+    });
+    if (phase === "blocked" || phase === "dropped") {
+      var b = el("span", phase); b.className = "current"; box.appendChild(b);
+    }
+  }
+
+  function renderActive() {
+    var box = document.getElementById("active");
+    box.textContent = "";
+    var lastStart = null;
+    allEvents.forEach(function (ev) {
+      if (ev.type === "agent-start") {
+        var d = tryParse(ev.detail || "");
+        lastStart = { agent: (d.ok && d.value.agent) || "agent",
+          model: (d.ok && d.value.model) || "", ts: ev.ts };
+      } else if (ev.type === "agent-end" && lastStart) {
+        var e = tryParse(ev.detail || "");
+        var endAgent = (e.ok && e.value.agent) || null;
+        if (!endAgent || endAgent === lastStart.agent) lastStart = null;
+      }
+    });
+    if (!lastStart) { box.appendChild(el("p", "idle — no agent currently emitting", "note")); return; }
+    box.appendChild(el("div", lastStart.agent + (lastStart.model ? " · " + lastStart.model : "")));
+    box.appendChild(el("div", "since " + (lastStart.ts || "?"), "note"));
+  }
+
+  function renderModels(models) {
+    var tb = document.querySelector("#models tbody");
+    tb.textContent = "";
+    Object.keys(models || {}).forEach(function (role) {
+      var m = models[role] || {};
+      var tr = document.createElement("tr");
+      tr.appendChild(el("td", role));
+      tr.appendChild(el("td", m.model || "harness default"));
+      tr.appendChild(el("td", m.variant || "—"));
+      tb.appendChild(tr);
+    });
+  }
+
+  function renderTokens() {
+    var byAgent = {};
+    allEvents.forEach(function (ev) {
+      if (ev.type !== "usage") return;
+      var p = tryParse(ev.detail || "");
+      if (!p.ok || !p.value.agent) return;
+      var u = p.value;
+      var total = u.total !== undefined ? Number(u.total) :
+        (Number(u.input || 0) + Number(u.output || 0));
+      byAgent[u.agent] = { input: Number(u.input || 0), output: Number(u.output || 0),
+        total: total, model: u.model || "" };
+    });
+    var names = Object.keys(byAgent);
+    var grand = names.reduce(function (s, n) { return s + (byAgent[n].total || 0); }, 0);
+    document.getElementById("tokens-total").textContent =
+      names.length ? "tokens total ~" + grand.toLocaleString("en-US") + " (estimated)" : "tokens total —";
+    var bar = document.getElementById("bar");
+    bar.textContent = "";
+    names.forEach(function (n, i) {
+      var seg = document.createElement("div");
+      seg.title = n + ": " + byAgent[n].total;
+      seg.style.width = grand ? (100 * byAgent[n].total / grand) + "%" : "0%";
+      seg.style.background = COLORS[i % COLORS.length];
+      bar.appendChild(seg);
+    });
+    var tb = document.querySelector("#tokens tbody");
+    tb.textContent = "";
+    if (!names.length) {
+      var tr = document.createElement("tr");
+      var td = el("td", "n/a — no agent has reported usage yet");
+      td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return;
+    }
+    names.forEach(function (n) {
+      var u = byAgent[n];
+      var r = document.createElement("tr");
+      r.appendChild(el("td", n + (u.model ? " · " + u.model : "")));
+      r.appendChild(el("td", fmt(u.input), "num"));
+      r.appendChild(el("td", fmt(u.output), "num"));
+      r.appendChild(el("td", fmt(u.total), "num"));
+      tb.appendChild(r);
+    });
+  }
+
+  function renderFeed() {
+    var feed = document.getElementById("feed");
+    feed.textContent = "";
+    if (!allEvents.length) {
+      feed.appendChild(el("p", "Waiting for events…", "note")); return;
+    }
+    var collapsible = { "handoff": 1, "report": 1, "jev-request": 1, "jev-response": 1 };
+    allEvents.forEach(function (ev) {
+      var a = el("article");
+      var meta = el("div", null, "meta");
+      meta.appendChild(el("span", ev.type || "?", "type"));
+      meta.appendChild(el("span", ev.phase || ""));
+      meta.appendChild(el("span", ev.ts || ""));
+      a.appendChild(meta);
+      a.appendChild(el("p", summarize(ev), "summary"));
+      if (collapsible[ev.type] || (ev.detail && ev.detail.length > 220)) {
+        var det = document.createElement("details");
+        var sum = el("summary", "full " + ev.type + " body");
+        det.appendChild(sum);
+        var pre = el("pre", pretty(ev.detail || ""));
+        det.appendChild(pre);
+        var btn = el("button", "Copy JSON");
+        btn.type = "button";
+        btn.onclick = function () {
+          var t = pretty(ev.detail || "");
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(t);
+          }
+        };
+        det.appendChild(btn);
+        a.appendChild(det);
+      }
+      feed.appendChild(a);
+    });
+    if (!paused) feed.lastChild.scrollIntoView({ block: "nearest" });
+  }
+
+  function poll() {
+    if (paused) return;
+    Promise.all([
+      fetch("api/state", { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error("state " + r.status); return r.json();
+      }),
+      fetch("api/events?since=" + nextOffset, { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error("events " + r.status); return r.json();
+      }),
+      fetch("api/meta", { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error("meta " + r.status); return r.json();
+      })
+    ]).then(function (parts) {
+      var state = parts[0], ev = parts[1], meta = parts[2];
+      banner(null);
+      document.getElementById("phase").textContent = state.phase || "?";
+      document.getElementById("change").textContent =
+        (state.changeId ? "change " + state.changeId : "") +
+        (state.issueId ? " · issue " + state.issueId : "");
+      document.getElementById("run").textContent = "run " + (state.runId || runId);
+      document.getElementById("jev-model").textContent =
+        "jev " + ((meta && meta.jev && meta.jev.model) || "?");
+      renderPipeline(state.phase);
+      if (meta && meta.models) renderModels(meta.models);
+      (ev.events || []).forEach(function (e) { allEvents.push(e); });
+      nextOffset = ev.nextOffset !== undefined ? ev.nextOffset : nextOffset;
+      renderActive(); renderTokens(); renderFeed();
+    }).catch(function (err) {
+      banner("waiting for run — " + err.message + " (is `astack watch --run " + runId + "` serving this run?)");
+    });
+  }
+
+  document.getElementById("pause").onclick = function () {
+    paused = !paused;
+    this.textContent = paused ? "Resume" : "Pause";
+  };
+  poll();
+  setInterval(poll, 1000);
+})();
+</script>
+</body>
+</html>

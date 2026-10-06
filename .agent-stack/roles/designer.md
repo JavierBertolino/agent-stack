@@ -89,3 +89,14 @@ re-invocation and consumes a corrective round.
 ### Blockers / questions
 - (none) or: one batched list
 ```
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"designer","model":"<harness model or pinned id>"}'`
+- On exit: `--type agent-end --detail '{"agent":"designer","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"designer","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- Never include API keys, session credentials, or unrelated runs in any detail.

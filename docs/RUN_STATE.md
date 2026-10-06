@@ -43,3 +43,13 @@ scripts/run-state.py --root <project> unlock --run <id>
 - On resume, re-read external state (issue, PRs) and compare artifact and
   code hashes with the recorded values. Do not trust an old PASS after the
   implementation changed.
+
+## Watch telemetry
+
+`astack watch` (see `docs/watch.md`) renders a read-only live view from
+`state.json` plus append-only `events.jsonl`. Telemetry types
+(`agent-start`, `agent-end`, `handoff`, `report`, `jev-request`,
+`jev-response`, `usage`) are append-only teaching signals: any agent may
+append them via `event`, with structured payloads JSON-encoded into
+`detail`. Only the resolver may use `transition` and `record-*`; telemetry
+never changes phase, budget, or verification state.

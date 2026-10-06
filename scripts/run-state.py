@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """run-state.py — validated run state for Agent Stack delivery runs.
 
-The resolver is the sole writer. State lives at
+The resolver is the sole writer of state transitions. State lives at
 .agent-stack/runs/<run-id>/state.json with append-only events.jsonl beside
 it. All transitions are validated; external side effects (issue updates,
 PR IDs) are recorded immediately so retries resume instead of duplicating.
+
+Watch telemetry event types (agent-start, agent-end, handoff, report,
+jev-request, jev-response, usage) are append-only teaching overlay entries
+consumed by `astack watch` (see docs/watch.md). Any agent may append those
+telemetry types via the `event` command; only the resolver may use
+transition/record-* writers.
 
 Usage:
   run-state.py --root PATH <command> [options]
 
 Commands:
   init             Create a run (fails if it already exists)
-  event            Append an event (transition/evidence/external/verify/...)
+  event            Append an event (transition/evidence/external/verify/...
+                   plus watch telemetry: agent-start/agent-end/handoff/
+                   report/jev-request/jev-response/usage)
   transition       Move to a new phase (validated against the allowed graph)
   record-external  Record an external side effect (specPr, implPr, issueState, ...)
   record-artifact  Record an artifact path + hash
@@ -393,7 +401,9 @@ def build_parser():
     p.add_argument("--run", required=True)
     p.add_argument("--type", required=True,
                    choices=["init", "transition", "evidence", "external", "verify",
-                            "code", "lock", "note", "budget", "close"])
+                            "code", "lock", "note", "budget", "close",
+                            "agent-start", "agent-end", "handoff", "report",
+                            "jev-request", "jev-response", "usage"])
     p.add_argument("--detail", required=True)
     p.set_defaults(func=cmd_event)
 

@@ -114,3 +114,14 @@ For each pending task in `tasks.md`:
 ### Blockers / questions
 - (none) or: all remaining blockers/questions in one batch
 ```
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"developer","model":"<harness model or pinned id>"}'`
+- On exit: `--type agent-end --detail '{"agent":"developer","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"developer","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- Never include API keys, session credentials, or unrelated runs in any detail.

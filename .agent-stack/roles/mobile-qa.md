@@ -143,3 +143,14 @@ escalate to the caller instead of guessing.
   local runs are the default.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"mobile-qa","model":"<harness model or inherit>"}'`
+- Around each Jev call: `--type jev-request --detail '<full {model,state,questions} JSON>'` before the call, `--type jev-response --detail '<full verdict JSON>'` after. Full bodies render collapsed in watch; never include API keys or credentials.
+- On exit: `--type agent-end --detail '{"agent":"mobile-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"mobile-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.

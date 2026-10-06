@@ -2137,6 +2137,19 @@ while active so concurrent sessions cannot deliver it twice. Project
 instructions identified in §0 remain authoritative;
 project-specific UX/UI guidance is read from `UX_AGENTS.md` and
 `UI_AGENTS.md`, never hardcoded into this agent.
+
+## 13. Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Emit telemetry so observers can follow delegation in realtime:
+
+- At your own start: `astack run-state event --run <run-id> --type agent-start --detail '{"agent":"resolver","model":"<harness model or pinned id>"}'`
+- Before each delegation: `astack run-state event --run <run-id> --type handoff --detail '<handoff.schema.json#1 JSON>'`
+- When a subagent report arrives, record it verbatim: `astack run-state event --run <run-id> --type report --detail '<report.schema.json#1 JSON>'`
+- At your own end: `--type agent-end --detail '{"agent":"resolver","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"resolver","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- You remain the sole writer of `transition` and `record-*`; telemetry types never change phase or budget.
+- Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_RESOLVER_EOF
       ;;
     designer) cat > "$target" <<'ROLE_DESIGNER_EOF'
@@ -2231,6 +2244,17 @@ re-invocation and consumes a corrective round.
 ### Blockers / questions
 - (none) or: one batched list
 ```
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"designer","model":"<harness model or pinned id>"}'`
+- On exit: `--type agent-end --detail '{"agent":"designer","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"designer","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_DESIGNER_EOF
       ;;
     design-qa) cat > "$target" <<'ROLE_DESIGN_QA_EOF'
@@ -2321,6 +2345,19 @@ You are not graded on finding a violation. An evidence-based PASS is valid.
 - One pass, one verdict. A re-review is a new resolver delegation and consumes
   one global corrective round.
 - Never modify domain, financial, stock, security, role, or permission logic.
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`. This role is read-only, so telemetry
+is limited to presence and cost signals — never file contents beyond what the
+report already contains:
+
+- On entry: `--type agent-start --detail '{"agent":"design-qa","model":"<harness model or pinned id>"}'`
+- On exit: `--type agent-end --detail '{"agent":"design-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"design-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_DESIGN_QA_EOF
       ;;
     developer) cat > "$target" <<'ROLE_DEVELOPER_EOF'
@@ -2440,6 +2477,17 @@ For each pending task in `tasks.md`:
 ### Blockers / questions
 - (none) or: all remaining blockers/questions in one batch
 ```
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"developer","model":"<harness model or pinned id>"}'`
+- On exit: `--type agent-end --detail '{"agent":"developer","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"developer","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_DEVELOPER_EOF
       ;;
     web-qa) cat > "$target" <<'ROLE_WEB_QA_EOF'
@@ -2563,6 +2611,17 @@ escalate to the caller instead of guessing.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"web-qa","model":"<harness model or inherit>"}'`
+- Around each Jev call: `--type jev-request --detail '<full {model,state,questions} JSON>'` before the call, `--type jev-response --detail '<full verdict JSON>'` after. Full bodies render collapsed in watch; never include API keys or credentials.
+- On exit: `--type agent-end --detail '{"agent":"web-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"web-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
 ROLE_WEB_QA_EOF
       ;;
     mobile-qa) cat > "$target" <<'ROLE_MOBILE_QA_EOF'
@@ -2711,6 +2770,17 @@ escalate to the caller instead of guessing.
   local runs are the default.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.
+
+## Watch telemetry (live teaching overlay)
+
+`astack watch` renders this run live from
+`.agent-stack/runs/<run-id>/events.jsonl` (see `docs/watch.md` in the kit).
+Append telemetry with `astack run-state event --run <run-id> ...`; only the
+resolver uses `transition` and `record-*`:
+
+- On entry: `--type agent-start --detail '{"agent":"mobile-qa","model":"<harness model or inherit>"}'`
+- Around each Jev call: `--type jev-request --detail '<full {model,state,questions} JSON>'` before the call, `--type jev-response --detail '<full verdict JSON>'` after. Full bodies render collapsed in watch; never include API keys or credentials.
+- On exit: `--type agent-end --detail '{"agent":"mobile-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"mobile-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
 ROLE_MOBILE_QA_EOF
       ;;
   esac

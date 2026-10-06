@@ -47,6 +47,8 @@ Usage:
   astack prune                Remove only safe, stale generated files.
   astack run-state ...        Validated run state (see run-state --help).
   astack validate ...         Validate contract JSON (see validate --help).
+  astack watch --run RUN [--port N] [--host ADDR] [--open|--no-open]
+                                Serve the read-only live run viewer.
   astack --version            Print the installed kit version.
   astack --help               Show this help.
 
@@ -149,6 +151,11 @@ case "$command" in
     ;;
   validate)
     exec python3 "$KIT_ROOT/scripts/validate-contracts.py" --kit-root "$KIT_ROOT" "$@"
+    ;;
+  watch)
+    command -v python3 >/dev/null 2>&1 || die 'python3 is required for `astack watch`'
+    exec python3 "$KIT_ROOT/scripts/watch.py" --root "$PWD" \
+      --kit-root "$KIT_ROOT" "$@"
     ;;
   --version|-v)
     kit_version

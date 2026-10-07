@@ -16,6 +16,7 @@ Installing a skill never implicitly authorizes the actions it describes.
 | implementation | Developer | Scoped implementation using OpenSpec apply and applicable project skills |
 | ui-review | Design QA | Evidence-based PASS, BLOCKING, or UNVERIFIED report |
 | git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, cross-links |
+| typesafe-jev | Web QA, Mobile QA | Bounded action recommendations, fail-closed validation, separate evaluation |
 
 Canonical sources live in `.agent-stack/skills/<name>/SKILL.md` with an
 Agent Skills `name`/`description` frontmatter matching the directory name.

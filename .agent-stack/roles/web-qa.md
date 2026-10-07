@@ -21,7 +21,8 @@ Before testing, discover — never assume:
    missing. Never hardcode a port or credential.
 4. Resolve the browser MCP from the connected servers (do not hardcode a
    server name) and the Jev helper at `scripts/qa/ask-jev.ts` with its
-   question library at `scripts/qa/questions.ts`.
+   question library at `scripts/qa/questions.ts`. Load `typesafe-jev` before
+   making Jev requests.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.
@@ -38,17 +39,31 @@ or `url + task`. Clarify in one round when needed:
 
 ## 3. Drive (code owns the loop)
 
-You own browser control flow. Jev never picks browser actions.
+You own browser control flow. Jev recommends among candidates you author;
+it never drives the browser.
 
-1. Navigate with the browser MCP, capture the accessibility tree snapshot,
-   visible copy, console errors, and network failures at each checkpoint.
-2. Act deterministically: one action, one observation. Record
-   `{ action, observed }` in the trace.
-3. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
-   never send screenshots. The `inherit` model compresses the page to
+1. At each checkpoint observe the page, including accessibility tree, visible
+   copy, console errors, and network failures.
+2. Build a closed candidate set from that observation. Always include
+   `inspect_more`; include `stop` when the goal is met, blocked, or over
+   budget. Offer only observed, authorized actions with checkable preconditions;
+   never add an open-ended option. Each candidate has an opaque stable id,
+   description, possible effects, and local authorization/precondition data.
+3. Use `buildSelectionQuestion` and ask one `choice` through
+   `scripts/qa/ask-jev.ts`. Send only the goal, redacted observation, ids,
+   descriptions, and effects. Jev returns one id and never supplies values.
+4. Re-observe, then run `scripts/jev/validate-action-selection.ts` with the
+   raw response, exact candidates, submitted observation, and fresh
+   observation. Execute one browser MCP action only when it returns
+   `status: execute` and the current candidate id. `inspect_more` means
+   inspect; `stop` means finish. Any other result means do not act; refresh,
+   rebuild, or escalate `UNVERIFIED`. The gate checks id, probability map,
+   confidence (fixed floor 0.75), authorization, and JSON Pointer
+   preconditions. Jev never grants authorization or controls the browser.
+5. One action, one observation. Record `{ action, observed }`, refresh state
+   before asking again, and re-check persistence where relevant. Jev is
+   text-only: never send screenshots; compress pages to
    `{ url, title, visible_copy, aria_truncated, console_errors }`.
-4. Re-check persistence where relevant (reload, re-query) for functional
-   and business claims.
 
 ## 4. Judge (Jev supplies verdicts)
 
@@ -66,10 +81,11 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
-Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
-Ask narrow atomic questions together across all selected dimensions and let
-code decide which answers apply (speculative fan-out):
+Selection (§3) and evaluation are separate calls. Selection never produces
+a verdict; this section judges what already happened. Send one evaluation
+call per checkpoint through `scripts/qa/ask-jev.ts` with state
+`{ test_goal, expected, governance, page, trace }`. Ask narrow atomic
+questions together across all selected dimensions (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
   `error_blocked_task`, `persisted_after_reload`;
@@ -113,8 +129,11 @@ escalate to the caller instead of guessing.
 ## Guardrails
 
 - Browser actions only against the supplied test target. Never edit, commit,
-  or migrate code, specs, or data.
+  or migrate code, specs, or data. A Jev recommendation never widens the
+  write scope, the target, or any authorization boundary.
 - Reports only: you may write `reports/qa/*.md`. Do not touch anything else.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+  No selection or evaluation request carries credentials, personal data,
+  screenshots, or sensitive information.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.

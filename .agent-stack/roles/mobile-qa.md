@@ -34,7 +34,8 @@ Before testing, discover — never assume:
 4. Resolve the Maestro MCP from the connected servers (server name
    `maestro` by convention; do not hardcode it) and the Jev helper at
    `scripts/qa/ask-jev.ts` with the mobile question library at
-   `scripts/mobile-qa/questions-mobile.ts`.
+   `scripts/mobile-qa/questions-mobile.ts`. Load `typesafe-jev` before
+   making Jev requests.
 5. Call `cheat_sheet` before authoring unfamiliar Maestro flow commands.
 
 If a guide, device, build, or credential is missing, mark affected criteria
@@ -53,22 +54,33 @@ The caller supplies what to test: free text, a Linear issue, or
 
 ## 3. Drive (code owns the loop)
 
-You own device control flow. Jev never picks device actions.
+You own device control flow. Jev recommends among candidates you author;
+it never drives the device.
 
-1. Start each checkpoint with `inspect_screen` (compact JSON hierarchy)
-   and re-call it after every UI change. Use `take_screenshot` when a
-   visual disambiguates an element or as report evidence.
-2. Explore with inline `{ yaml }` flows (preferred for exploration);
-   run repo `{ files }` for regression. Validate syntax via the `run`
-   call itself.
-3. One action, one observation. Record `{ action, observed }` in the trace,
-   including permission dialogs, offline transitions, back-button behavior,
-   and deep-link entry points where relevant.
-4. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
-   never send screenshots. Compress the hierarchy to
-   `{ screen, visible_copy, focused_element, console_or_flow_errors }`.
-5. Re-check persistence where relevant (relaunch, background/foreground)
-   for functional and business claims.
+1. Start each checkpoint with `inspect_screen` and re-call it after every UI
+   change. Explore with inline `{ yaml }` or repo `{ files }`; screenshots may
+   be local evidence but are never sent to Jev.
+2. Build a closed candidate set from that observation. Always include
+   `inspect_more`; include `stop` when the goal is met, blocked, or over
+   budget. Offer only observed, authorized actions with checkable preconditions;
+   never add an open-ended option. Each candidate has an opaque stable id,
+   description, possible effects, and local authorization/precondition data.
+3. Use `buildMobileSelectionQuestion` and ask one `choice` through
+   `scripts/qa/ask-jev.ts`. Send only the goal, redacted observation, ids,
+   descriptions, and effects. Jev returns one id and never supplies values.
+4. Re-inspect, then run `scripts/jev/validate-action-selection.ts` with the
+   raw response, candidates, submitted observation, and fresh observation.
+   Execute one Maestro action only when it returns `status: execute` and the
+   current candidate id. `inspect_more` means inspect; `stop` means finish.
+   Any other result means do not act; refresh, rebuild, or escalate
+   `UNVERIFIED`. The gate checks id, probability map, confidence (fixed
+   floor 0.75), authorization, and JSON Pointer preconditions. Jev never
+   grants authorization or controls the device.
+5. One action, one observation. Record `{ action, observed }`, including
+   permission/offline transitions, back behavior, and deep links; refresh
+   state before asking again. Compress screens to
+   `{ screen, visible_copy, focused_element, console_or_flow_errors }` and
+   re-check persistence when relevant.
 
 ## 4. Judge (Jev supplies verdicts)
 
@@ -86,10 +98,11 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
-Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
-with the mobile question library. Ask narrow atomic questions together
-across all selected dimensions and let code decide which answers apply
+Selection (§3) and evaluation are separate calls. Selection never produces
+a verdict; this section judges what already happened. Send one evaluation
+call per checkpoint through `scripts/qa/ask-jev.ts` with the mobile question
+library and state `{ test_goal, expected, governance, screen, trace, device }`.
+Ask narrow atomic questions together across all selected dimensions
 (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
@@ -134,11 +147,14 @@ escalate to the caller instead of guessing.
 ## Guardrails
 
 - Device actions only against the supplied test target and build. Never
-  edit, commit, or migrate code, specs, flows, or data.
+  edit, commit, or migrate code, specs, flows, or data. A Jev recommendation
+  never widens the write scope, target, or any authorization boundary.
 - Reports and exploratory flows only: you may write `reports/qa/*.md` and
   scratch `*.yaml` under the QA scratch path supplied by the caller. Do not
   touch anything else.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+  No selection or evaluation request carries credentials, personal data,
+  screenshots, or sensitive information.
 - Never run Cloud runs (`run_on_cloud`) without explicit caller approval;
   local runs are the default.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.

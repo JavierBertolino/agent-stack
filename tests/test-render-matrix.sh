@@ -43,6 +43,8 @@ expect "$T/.claude/agents/mobile-qa.md" '^name: mobile-qa$' 'claude mobile-qa na
 # QA resources are installed.
 expect "$T/scripts/qa/ask-jev.ts" 'TYPESAFE_API_KEY' 'qa jev helper installed'
 expect "$T/scripts/mobile-qa/questions-mobile.ts" 'buildMobileQuestions' 'mobile-qa questions installed'
+expect "$T/scripts/jev/action-selection.ts" 'validateActionSelection' 'shared Jev action-selection module installed'
+expect "$T/scripts/jev/validate-action-selection.ts" 'fixed at 0.75' 'shared Jev validation gate installed'
 # Maestro MCP (opt-in local stdio) registers on every platform.
 M=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-maestro.XXXXXX")
 sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$M" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp linear,maestro --specs-repository OWNER/specs >/dev/null 2>&1
@@ -53,7 +55,7 @@ expect "$M/.cursor/mcp.json" '"maestro"' 'cursor maestro registered'
 expect "$M/.codex/config.toml" 'mcp_servers.maestro' 'codex maestro registered'
 rm -rf "$M"
 # Mandatory skill mirrors resolve for every enabled platform.
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery typesafe-jev; do
   for mirror in ".opencode/skills/$skill/SKILL.md" ".claude/skills/$skill/SKILL.md" ".agents/skills/$skill/SKILL.md" ".cursor/skills/$skill/SKILL.md"; do
     cmp -s "$T/.agent-stack/skills/$skill/SKILL.md" "$T/$mirror" \
       || { printf 'FAIL render mirror %s\n' "$mirror" >&2; FAIL=1; }

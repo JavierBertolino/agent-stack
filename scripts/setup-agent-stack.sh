@@ -37,7 +37,7 @@ ENABLE_CODEX=1
 ENABLE_CURSOR=1
 
 # Canonical skill names installed by ensure_skills and mirrored per platform.
-SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery"
+SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery typesafe-jev"
 
 # MCP and model settings are loaded from project config, then optionally
 # changed by the interactive installer wizard. All integrations are opt-in
@@ -2466,7 +2466,8 @@ Before testing, discover — never assume:
    missing. Never hardcode a port or credential.
 4. Resolve the browser MCP from the connected servers (do not hardcode a
    server name) and the Jev helper at `scripts/qa/ask-jev.ts` with its
-   question library at `scripts/qa/questions.ts`.
+   question library at `scripts/qa/questions.ts`. Load `typesafe-jev` before
+   making Jev requests.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.
@@ -2483,17 +2484,31 @@ or `url + task`. Clarify in one round when needed:
 
 ## 3. Drive (code owns the loop)
 
-You own browser control flow. Jev never picks browser actions.
+You own browser control flow. Jev recommends among candidates you author;
+it never drives the browser.
 
-1. Navigate with the browser MCP, capture the accessibility tree snapshot,
-   visible copy, console errors, and network failures at each checkpoint.
-2. Act deterministically: one action, one observation. Record
-   `{ action, observed }` in the trace.
-3. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
-   never send screenshots. The `inherit` model compresses the page to
+1. At each checkpoint observe the page, including accessibility tree, visible
+   copy, console errors, and network failures.
+2. Build a closed candidate set from that observation. Always include
+   `inspect_more`; include `stop` when the goal is met, blocked, or over
+   budget. Offer only observed, authorized actions with checkable preconditions;
+   never add an open-ended option. Each candidate has an opaque stable id,
+   description, possible effects, and local authorization/precondition data.
+3. Use `buildSelectionQuestion` and ask one `choice` through
+   `scripts/qa/ask-jev.ts`. Send only the goal, redacted observation, ids,
+   descriptions, and effects. Jev returns one id and never supplies values.
+4. Re-observe, then run `scripts/jev/validate-action-selection.ts` with the
+   raw response, exact candidates, submitted observation, and fresh
+   observation. Execute one browser MCP action only when it returns
+   `status: execute` and the current candidate id. `inspect_more` means
+   inspect; `stop` means finish. Any other result means do not act; refresh,
+   rebuild, or escalate `UNVERIFIED`. The gate checks id, probability map,
+   confidence (fixed floor 0.75), authorization, and JSON Pointer
+   preconditions. Jev never grants authorization or controls the browser.
+5. One action, one observation. Record `{ action, observed }`, refresh state
+   before asking again, and re-check persistence where relevant. Jev is
+   text-only: never send screenshots; compress pages to
    `{ url, title, visible_copy, aria_truncated, console_errors }`.
-4. Re-check persistence where relevant (reload, re-query) for functional
-   and business claims.
 
 ## 4. Judge (Jev supplies verdicts)
 
@@ -2511,10 +2526,11 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
-Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
-Ask narrow atomic questions together across all selected dimensions and let
-code decide which answers apply (speculative fan-out):
+Selection (§3) and evaluation are separate calls. Selection never produces
+a verdict; this section judges what already happened. Send one evaluation
+call per checkpoint through `scripts/qa/ask-jev.ts` with state
+`{ test_goal, expected, governance, page, trace }`. Ask narrow atomic
+questions together across all selected dimensions (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
   `error_blocked_task`, `persisted_after_reload`;
@@ -2558,9 +2574,12 @@ escalate to the caller instead of guessing.
 ## Guardrails
 
 - Browser actions only against the supplied test target. Never edit, commit,
-  or migrate code, specs, or data.
+  or migrate code, specs, or data. A Jev recommendation never widens the
+  write scope, the target, or any authorization boundary.
 - Reports only: you may write `reports/qa/*.md`. Do not touch anything else.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+  No selection or evaluation request carries credentials, personal data,
+  screenshots, or sensitive information.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.
 ROLE_WEB_QA_EOF
@@ -2602,7 +2621,8 @@ Before testing, discover — never assume:
 4. Resolve the Maestro MCP from the connected servers (server name
    `maestro` by convention; do not hardcode it) and the Jev helper at
    `scripts/qa/ask-jev.ts` with the mobile question library at
-   `scripts/mobile-qa/questions-mobile.ts`.
+   `scripts/mobile-qa/questions-mobile.ts`. Load `typesafe-jev` before
+   making Jev requests.
 5. Call `cheat_sheet` before authoring unfamiliar Maestro flow commands.
 
 If a guide, device, build, or credential is missing, mark affected criteria
@@ -2621,22 +2641,33 @@ The caller supplies what to test: free text, a Linear issue, or
 
 ## 3. Drive (code owns the loop)
 
-You own device control flow. Jev never picks device actions.
+You own device control flow. Jev recommends among candidates you author;
+it never drives the device.
 
-1. Start each checkpoint with `inspect_screen` (compact JSON hierarchy)
-   and re-call it after every UI change. Use `take_screenshot` when a
-   visual disambiguates an element or as report evidence.
-2. Explore with inline `{ yaml }` flows (preferred for exploration);
-   run repo `{ files }` for regression. Validate syntax via the `run`
-   call itself.
-3. One action, one observation. Record `{ action, observed }` in the trace,
-   including permission dialogs, offline transitions, back-button behavior,
-   and deep-link entry points where relevant.
-4. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
-   never send screenshots. Compress the hierarchy to
-   `{ screen, visible_copy, focused_element, console_or_flow_errors }`.
-5. Re-check persistence where relevant (relaunch, background/foreground)
-   for functional and business claims.
+1. Start each checkpoint with `inspect_screen` and re-call it after every UI
+   change. Explore with inline `{ yaml }` or repo `{ files }`; screenshots may
+   be local evidence but are never sent to Jev.
+2. Build a closed candidate set from that observation. Always include
+   `inspect_more`; include `stop` when the goal is met, blocked, or over
+   budget. Offer only observed, authorized actions with checkable preconditions;
+   never add an open-ended option. Each candidate has an opaque stable id,
+   description, possible effects, and local authorization/precondition data.
+3. Use `buildMobileSelectionQuestion` and ask one `choice` through
+   `scripts/qa/ask-jev.ts`. Send only the goal, redacted observation, ids,
+   descriptions, and effects. Jev returns one id and never supplies values.
+4. Re-inspect, then run `scripts/jev/validate-action-selection.ts` with the
+   raw response, candidates, submitted observation, and fresh observation.
+   Execute one Maestro action only when it returns `status: execute` and the
+   current candidate id. `inspect_more` means inspect; `stop` means finish.
+   Any other result means do not act; refresh, rebuild, or escalate
+   `UNVERIFIED`. The gate checks id, probability map, confidence (fixed
+   floor 0.75), authorization, and JSON Pointer preconditions. Jev never
+   grants authorization or controls the device.
+5. One action, one observation. Record `{ action, observed }`, including
+   permission/offline transitions, back behavior, and deep links; refresh
+   state before asking again. Compress screens to
+   `{ screen, visible_copy, focused_element, console_or_flow_errors }` and
+   re-check persistence when relevant.
 
 ## 4. Judge (Jev supplies verdicts)
 
@@ -2654,10 +2685,11 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
-Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
-with the mobile question library. Ask narrow atomic questions together
-across all selected dimensions and let code decide which answers apply
+Selection (§3) and evaluation are separate calls. Selection never produces
+a verdict; this section judges what already happened. Send one evaluation
+call per checkpoint through `scripts/qa/ask-jev.ts` with the mobile question
+library and state `{ test_goal, expected, governance, screen, trace, device }`.
+Ask narrow atomic questions together across all selected dimensions
 (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
@@ -2702,11 +2734,14 @@ escalate to the caller instead of guessing.
 ## Guardrails
 
 - Device actions only against the supplied test target and build. Never
-  edit, commit, or migrate code, specs, flows, or data.
+  edit, commit, or migrate code, specs, flows, or data. A Jev recommendation
+  never widens the write scope, target, or any authorization boundary.
 - Reports and exploratory flows only: you may write `reports/qa/*.md` and
   scratch `*.yaml` under the QA scratch path supplied by the caller. Do not
   touch anything else.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+  No selection or evaluation request carries credentials, personal data,
+  screenshots, or sensitive information.
 - Never run Cloud runs (`run_on_cloud`) without explicit caller approval;
   local runs are the default.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
@@ -3296,13 +3331,139 @@ revisions invalidate or refresh publication evidence.
   `awaiting_merge` and stop.
 SKILL_GIT_DELIVERY_EOF
       ;;
+    typesafe-jev) cat > "$target" <<'SKILL_TYPESAFE_JEV_EOF'
+---
+name: typesafe-jev
+description: Use TypeSafe Jev safely in Agent Stack web and mobile QA: build bounded Choice decisions, validate recommendations, and keep evaluation separate from actions.
+metadata:
+  version: "1.0"
+  consumer: web-qa, mobile-qa
+  stage: qa
+---
+
+# TypeSafe Jev for QA
+
+Use this skill before making Jev selection or evaluation calls. Jev returns
+typed judgments; the QA agent owns the workflow, verifies evidence, and calls
+the browser MCP or Maestro. **Jev never executes an action, grants
+authorization, or supplies a value.**
+
+## Source of truth
+
+The installed `scripts/qa/ask-jev.ts` is the transport and provider-routing
+authority. Reuse it; do not add a second TypeSafe client, hardcode a provider,
+or move credentials into project files. When changing the integration or
+depending on a response detail, check the current TypeSafe docs:
+
+- [System One API](https://docs.typesafe.ai/api.md)
+- [Choice](https://docs.typesafe.ai/primitives/choice.md)
+- [Confidence](https://docs.typesafe.ai/confidence.md)
+- [State](https://docs.typesafe.ai/concepts/state.md)
+- [TypeSafe agent skill](https://docs.typesafe.ai/agent-skill.md)
+
+Choice responses contain `type: "choice"`, `choice`, `probabilities` for the
+options, and `confidence` from 0 to 1. Do not invent response properties. A
+question id is chosen by the caller; its answer is returned under that id.
+The Vercel adapter normalizes `noul` only; `choice` remains unchanged.
+
+## Select one next action
+
+Selection is separate from evaluation and happens at a checkpoint:
+
+1. Observe the current page/screen. Build a closed candidate set from that
+   observation, with `inspect_more` always present and `stop` only when the
+   goal is met, blocked, or the test budget is exhausted. Keep the set small
+   (2–15); do not include an open-ended option.
+2. Give every candidate a stable opaque `id`, clear `description`, possible
+   `effects`, local `authorized` result, and JSON-Pointer `preconditions`
+   whose expected values come from the observed state. Do not include
+   unauthorized candidates. Never put form values or executable tool
+   arguments in the Jev option description.
+3. Use `buildSelectionQuestion` from `scripts/qa/questions.ts` or
+   `buildMobileSelectionQuestion` from
+   `scripts/mobile-qa/questions-mobile.ts`. Each builds one `choice`
+   question named `next_action`; only id, description, and possible effects
+   are sent to Jev. The state should be a redacted `{ test_goal, observation
+   }` summary. Do not send screenshots.
+4. Call the existing helper with a typed request, for example:
+
+   ```sh
+   node --experimental-strip-types scripts/qa/ask-jev.ts --request /tmp/jev-selection-request.json
+   ```
+
+   Keep transient request/response files outside the repository and remove
+   them after use. They must not contain secrets or sensitive data.
+5. Re-observe before acting. Feed the raw Jev response, the exact candidate
+   records, the submitted observation, and the fresh observation to
+   `scripts/jev/validate-action-selection.ts` on stdin. Its input shape is:
+
+   ```json
+   {
+     "question_id": "next_action",
+     "response": { "answers": { "next_action": {
+       "type": "choice", "choice": "open_record", "confidence": 0.91,
+       "probabilities": { "open_record": 0.91, "inspect_more": 0.09 }
+     } } },
+     "candidates": [
+       { "id": "open_record", "description": "Open the visible record",
+         "effects": "Shows its details", "authorized": true,
+         "preconditions": { "/page/visible_copy": "Records" } },
+       { "id": "inspect_more", "description": "Read the page again",
+         "effects": "No state change", "authorized": true,
+         "preconditions": {} }
+     ],
+     "submitted_observation": { "page": { "visible_copy": "Records" } },
+     "current_observation": { "page": { "visible_copy": "Records" } }
+   }
+   ```
+
+   Only a JSON result with `status: "execute"` and a `candidateId` matching
+   the current set can proceed to the MCP. `status: "inspect_more"` means
+   re-read the page/screen without a mutating action; `status: "stop"` means
+   end the QA flow. `reinspect`, `reject`, malformed output, nonzero exit,
+   or missing output means **do not act**; refresh, rebuild candidates, or
+   escalate as `UNVERIFIED`.
+6. The validator compares the submitted and fresh observations, checks the
+   selected id, verifies the complete probability map and confidence, checks
+   `authorized`, and matches every candidate JSON Pointer precondition
+   against the current observation. Its action confidence floor is fixed at
+   `0.75`, matching the existing QA contract. Do not lower or override it.
+7. Execute at most the single validated action through the browser MCP or
+   Maestro. Record `{ action, observed }`, then take a new observation before
+   asking Jev again. Never reuse an earlier selection after a page/screen
+   change. The validator is a gate for the agent's next tool call; it is not
+   an MCP controller and cannot grant access beyond existing permissions.
+
+## Values and data boundaries
+
+Jev selects among candidates; it does not generate record ids, amounts,
+dates, serials, or form values. The agent obtains and enters those values
+from the application, fixtures, or another deterministic source. Send Jev
+only the minimum redacted text needed to make the judgment — never API keys,
+session credentials, personal data, screenshots, or sensitive information.
+The question builder is not a redactor; review the state and candidate
+descriptions before sending.
+
+## Evaluate results separately
+
+After each action/observation and at the final checkpoint, use the existing
+web or mobile evaluation library and its functional, view, and business
+questions. Selection answers are not verdicts. Do not combine
+`next_action` into the evaluation batch: the evaluation call has its own
+state and produces PASS/BLOCKING/NIT/UNVERIFIED. Preserve the existing
+confidence handling for evaluation answers.
+
+If Jev is unavailable or an answer is invalid, do not fabricate a decision
+or verdict. Report the limitation and mark affected criteria `UNVERIFIED`.
+SKILL_TYPESAFE_JEV_EOF
+      ;;
     *) die "unknown skill: $skill" ;;
   esac
 }
 
 write_skills_manifest() {
   cat > "$1" <<'SKILLS_MANIFEST_EOF'
-{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, cross-links.", "mandatory_stages": ["branch", "publish", "deliver"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.0"}], "version": 1}
+{"description":"Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.","skills":[{"consumers":["resolver","designer","developer","design-qa"],"description":"Scoped source map, applicable instructions, evidence and gaps.","mandatory_stages":["intake"],"name":"project-context","path":"skills/project-context/SKILL.md","version":"1.0"},{"consumers":["resolver"],"description":"Normalized issue context and verified tracking updates.","mandatory_stages":["intake","closeout"],"name":"linear-workflow","path":"skills/linear-workflow/SKILL.md","version":"1.0"},{"consumers":["setup"],"description":"Proposed UX/UI governance and source provenance.","mandatory_stages":["setup"],"name":"governance-bootstrap","path":"skills/governance-bootstrap/SKILL.md","version":"1.0"},{"consumers":["resolver"],"description":"Ready artifacts through installed OpenSpec procedures.","mandatory_stages":["specify"],"name":"openspec-workflow","path":"skills/openspec-workflow/SKILL.md","version":"1.0"},{"consumers":["designer"],"description":"User flow, states, copy constraints, component reuse, acceptance criteria.","mandatory_stages":["design"],"name":"ux-design","path":"skills/ux-design/SKILL.md","version":"1.0"},{"consumers":["developer"],"description":"Scoped implementation using OpenSpec apply and applicable project skills.","mandatory_stages":["implement"],"name":"implementation","path":"skills/implementation/SKILL.md","version":"1.0"},{"consumers":["design-qa"],"description":"Evidence-based PASS, BLOCKING, or UNVERIFIED report.","mandatory_stages":["review"],"name":"ui-review","path":"skills/ui-review/SKILL.md","version":"1.0"},{"consumers":["resolver"],"description":"Safe worktrees, specification publication, implementation PRs, cross-links.","mandatory_stages":["branch","publish","deliver"],"name":"git-delivery","path":"skills/git-delivery/SKILL.md","version":"1.0"},{"consumers":["web-qa","mobile-qa"],"description":"Bounded Jev action recommendations, fail-closed validation, and separate evaluation.","mandatory_stages":["qa"],"name":"typesafe-jev","path":"skills/typesafe-jev/SKILL.md","version":"1.0"}],"version":1}
 SKILLS_MANIFEST_EOF
 }
 
@@ -3404,7 +3565,7 @@ record_sources() {
   # Record kit base hashes for three-way upgrades. Add-missing only;
   # scripts/upgrade-agent-stack.sh owns updates. Never overwrites entries.
   manifest=$ROOT/.agent-stack/sources.manifest
-  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
+  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/typesafe-jev/SKILL.md resources/web-qa/questions.ts resources/web-qa/README.md resources/mobile-qa/questions-mobile.ts resources/mobile-qa/README.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
     kit_file=$KIT_ROOT/.agent-stack/$relative
     [ -f "$kit_file" ] || continue
     if [ -f "$manifest" ] && awk -F'|' -v wanted="$relative" '$1 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$manifest"; then
@@ -3430,6 +3591,15 @@ ensure_mobileqa_resources() {
     source_file=$KIT_ROOT/.agent-stack/resources/mobile-qa/$f
     [ -f "$source_file" ] || continue
     copy_if_missing "$source_file" "$ROOT/scripts/mobile-qa/$f"
+  done
+}
+
+ensure_jev_resources() {
+  ensure_dir "$ROOT/scripts/jev"
+  for f in action-selection.ts validate-action-selection.ts; do
+    source_file=$KIT_ROOT/.agent-stack/resources/jev/$f
+    [ -f "$source_file" ] || continue
+    copy_if_missing "$source_file" "$ROOT/scripts/jev/$f"
   done
 }
 
@@ -4138,6 +4308,7 @@ case "$COMMAND" in
     render_platform_outputs sync
     ensure_webqa_resources
     ensure_mobileqa_resources
+    ensure_jev_resources
     ensure_mcp_config
     record_sources
     record_kit_version
@@ -4153,6 +4324,7 @@ case "$COMMAND" in
     ensure_skills
     ensure_webqa_resources
     ensure_mobileqa_resources
+    ensure_jev_resources
     configure_models
     persist_selection
     render_platform_outputs sync

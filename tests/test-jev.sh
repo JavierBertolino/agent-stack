@@ -5,4 +5,4 @@ if ! command -v node >/dev/null 2>&1 || ! node -e 'const [major,minor]=process.v
   printf '%s\n' 'SKIP Jev tests (Node.js 22.6+ unavailable)'
   exit 0
 fi
-node "$KIT_ROOT/tests/test-jev.mjs" "$KIT_ROOT"
+node --experimental-strip-types "$KIT_ROOT/tests/test-jev.mjs" "$KIT_ROOT"

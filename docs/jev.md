@@ -17,6 +17,66 @@ Severity is general: cosmetic polish; confusing but completable; or
 blocking the task / risking correctness, permissions, data integrity, or
 required auditability.
 
+Jev serves two distinct purposes for the QA agents: it recommends the next
+action while navigating, and it evaluates results. Nothing else — Jev never
+drives the browser or the device.
+
+## Action selection
+
+`web-qa` and `mobile-qa` ask Jev which candidate action to take, once per
+checkpoint. The agent owns the loop:
+
+1. Observe the current page or screen and build a **closed candidate set**
+   from that single observation. It always contains `inspect_more`, and
+   contains `stop` once the goal is met, blocked, or over budget. Only
+   actions whose preconditions can be checked against the current state are
+   offered — there is no open-ended option.
+2. Give each candidate an **opaque, stable identifier**, a description, and
+   its possible effects. Identifiers come from what the agent observed.
+3. Send one `choice` question whose `criteria` map is exactly that candidate
+   set, together with the observed state and the test goal. Jev returns one
+   identifier. The `choice` type is the same one used for the `verdict` and
+   `domain` questions, and needs no provider-specific handling: the Vercel
+   normalization only rewrites `noul` to `boolean`.
+
+    `buildSelectionQuestion` in `scripts/qa/questions.ts` and
+    `buildMobileSelectionQuestion` in `scripts/mobile-qa/questions-mobile.ts`
+    construct this question. Candidates also carry an explicit local
+    `authorized` result, possible effects, and JSON Pointer preconditions
+    whose values were observed in the page/screen. Only descriptions and
+    effects are sent to Jev.
+
+4. **Validate before executing.** After receiving Jev's raw response, the
+   agent takes a fresh observation and runs
+   `scripts/jev/validate-action-selection.ts` with the exact candidates, the
+   submitted observation, and the fresh observation. The gate validates the
+   selected id, the complete probability map, confidence in `[0,1]` (fixed
+   floor `0.75`), explicit local authorization, and every JSON Pointer
+   precondition against the fresh observation. Only `status: "execute"` and a
+   current `candidateId` may proceed to one MCP action. `inspect_more` means
+   inspect; `stop` means finish; `reinspect`, `reject`, low confidence,
+   malformed output, or a nonzero exit means do not act — refresh, rebuild, or
+   escalate as `UNVERIFIED`.
+5. Execute **one action, then observe**, record `{ action, observed }`, and
+   refresh the state before asking again. If the page changed under the
+   observation, the candidate set is stale and is discarded.
+
+Selection is advisory. The browser MCP or Maestro executes the action; the
+validator does not call either MCP and cannot enforce runtime access. Jev
+never invents values: ids, amounts, dates, serials, and form fields come from
+the application, from fixtures, or from another already-observed source, and
+the agent supplies them. No selection request carries credentials, personal
+data, screenshots, or sensitive information, and selection never widens the
+QA write scope, the test target, or any authorization boundary.
+
+## Evaluation
+
+Jev evaluates each checkpoint and the final result across the functional,
+view, and business dimensions. This is a separate call with its own state
+(`{ test_goal, expected, governance, page, trace }` for web, and
+`{ …, screen, trace, device }` for mobile) and the question set defined in
+the question libraries. A selection result is never reported as a verdict.
+
 ## Setup
 
 ```sh

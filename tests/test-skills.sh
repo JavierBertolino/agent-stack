@@ -28,7 +28,7 @@ for dir in "$KIT_ROOT"/.agent-stack/skills/*/; do
   fi
 done
 # Every manifest entry must have a directory.
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery typesafe-jev; do
   [ -f "$KIT_ROOT/.agent-stack/skills/$skill/SKILL.md" ] || { printf 'FAIL manifest skill %s missing directory\n' "$skill" >&2; FAIL=1; }
 done
 [ "$FAIL" -eq 0 ]

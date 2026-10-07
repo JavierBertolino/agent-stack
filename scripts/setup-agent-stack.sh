@@ -37,7 +37,7 @@ ENABLE_CODEX=1
 ENABLE_CURSOR=1
 
 # Canonical skill names installed by ensure_skills and mirrored per platform.
-SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery"
+SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops"
 
 # MCP and model settings are loaded from project config, then optionally
 # changed by the interactive installer wizard. All integrations are opt-in
@@ -1594,7 +1594,7 @@ render_opencode() {
     printf '%s\n' 'permission:'
     case "$role" in
       resolver)
-        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
+        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "astack run-state *": allow' '    "astack check *": allow' '    "astack doctor *": allow' '    "astack validate *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
         ;;
       designer)
         printf '%s\n' '  bash: deny' '  task: deny' '  edit:' '    "*": deny' '    "openspec/changes/**/ux.md": allow'
@@ -1753,8 +1753,7 @@ delegate, review, and close.
 You are the only agent that communicates with the user. Subagents return
 structured reports to you and never reply to the user directly.
 
-See `docs/PRODUCT_INTENT.md` in the Agent Stack kit for what this workflow
-is for. The consuming project's own instructions remain authoritative for
+The consuming project's own instructions remain authoritative for
 product behavior.
 
 ## 0. Project context and local guidance
@@ -1815,7 +1814,9 @@ resolved path/source, version or hash, and why each was used):
 - specify: `openspec-workflow`;
 - UI design delegation: designer loads `ux-design`;
 - implementation delegation: developer loads `implementation`;
-- UI review delegation: design-qa loads `ui-review`.
+- UI review delegation: design-qa loads `ui-review`;
+- installed-CLI steps at any stage (init, run-state, check, validate):
+  `astack-ops`.
 
 Missing mandatory dependencies block the relevant stage. Never pretend
 to execute a missing skill or capability. A skill never overrides
@@ -1837,75 +1838,46 @@ If a required answer is missing, stop and ask. Do not start a partial pipeline.
 
 ## 3.1 Task status
 
-For a linked Linear issue, once intake and clarification are complete and
-work is starting, inspect the task's current assignee before changing state:
-
-- If the task has no assignee, resolve the authenticated Linear user with
-  the connected user lookup using `me`, then assign that user to the issue.
-- If the task already has an assignee, preserve it and do not overwrite it.
-- If the lookup or assignment fails, stop before changing task state or
-  delegating work. Do not claim ownership without a successful Linear update.
-- Set the task to `TASK_STATE_IN_PROGRESS` from `.agent-stack/config.conf`
-  (default `In Progress`). If the configured state does not exist for the
-  team, stop and ask the user which team state to use instead of silently
-  substituting another state.
-- Record ownership, the state change, and the observed before/after states
-  in the run state (`record-external --key issueState`).
-
-Do not mark the task completed merely because a PR exists (see §11).
+On a linked Linear issue, at work start, apply `linear-workflow`
+`## Procedure` steps 3–4 (assignee and state rules). Record ownership and
+the before/after states in the run state
+(`record-external --key issueState`).
 
 ## 4. Branch setup
 
-Identify affected Git repositories and paths from the project instructions and
-the request. Do not assume a monorepo or fixed directory names.
-
-For each affected repository:
-
-1. Run `git status --porcelain`.
-2. Determine the base branch. An explicitly supplied issue, dependency, or
-   parent branch wins over the repository default branch.
-3. Ensure the repository has an ignored `<repo>/.worktrees/` directory. Add
-   `.worktrees/` to that repository's `.gitignore` if it is missing,
-   preserving all existing entries.
-4. Create or reuse a dedicated worktree at
-   `<repo>/.worktrees/<branch-slug>`, with the implementation branch created
-   from the selected base branch. Never place a worktree in `/tmp`, beside
-   the repository, or in the user's home directory.
-5. Leave unrelated dirty changes in the original checkout untouched. Do not
-   silently include them in the implementation worktree.
+Identify affected repositories and paths from the project instructions and
+the request; do not assume a monorepo or fixed directory names. Determine
+each repository's base branch: an explicitly supplied issue, dependency, or
+parent branch wins over the repository default branch. Worktree creation
+rules (placement under `<repo>/.worktrees/<branch-slug>`, the
+`.worktrees/` ignore setup, unrelated dirty changes) are `git-delivery`
+`## Procedure` step 1; the worktree strategy is mandatory.
 
 Use the issue branch name when available; otherwise use the project-approved
 fallback or the OpenSpec change name. Record the repository ID, base ref/SHA,
 branch, worktree root, and allowed output scope in the run state and the
-delegation contract. The worktree strategy is mandatory.
+delegation contract.
 
 If the selected base branch is another feature branch, retain that branch as
 the PR base. This is a stacked PR: do not silently retarget it to `main`.
 
 ## 5. Specify
 
-1. Create the OpenSpec change:
-   ```
-   openspec new change "<name>"
-   ```
-2. Read the artifact graph:
-   ```
-   openspec status --change "<name>" --json
-   ```
-   Use the installed CLI's artifact graph and instructions rather than
-   assuming a fixed command set or artifact list.
-3. For each ready artifact, read its instructions and completed dependencies,
-   then author it using the schema template.
-4. Repeat until all artifacts required for implementation are complete.
+Follow `openspec-workflow` `## Procedure` steps 1–5: create the change,
+read the artifact graph, author each artifact, apply the task
+`verification:` contract (step 4), and hold the readiness gate (step 5) —
+UI work MUST NOT reach implementation without a ready designer `ux.md`
+proposal. When `design.md` exists, add the design traceability block from
+`linear-workflow` `## Traceability block`.
 
 The resolver is the sole run-state writer. Create the run with the
-project's run-state helper before delegating:
+project's run-state helper (`astack-ops`) before delegating:
 
 ```sh
-scripts/run-state.py --root <project> init --run <run-id> --issue <id-or-empty> \
+astack run-state --root <project> init --run <run-id> --issue <id-or-empty> \
   --change <change-name> --worktree-root <path> --repo <id> \
   --base-ref <ref> --base-sha <sha> --scope <path> [--scope <path>]
-scripts/run-state.py --root <project> lock --run <run-id> --holder <session>
+astack run-state --root <project> lock --run <run-id> --holder <session>
 ```
 
 Record transitions (`transition --to <phase>`), evidence (`event`,
@@ -1923,71 +1895,21 @@ in the relevant UX/UI artifact. Repository-level safety, financial-control,
 and security instructions remain binding alongside UX/UI governance. Never
 assume that a rule from another project applies here.
 
-### 5.2 Task verification contract
-
-Every task in `tasks.md` MUST carry a concrete verification line:
-
-```md
-- [ ] Implement the primary behavior
-  verification: `<project test command>` — expected pass condition
-```
-
-The check should run in under five minutes, or name the closest available
-typecheck, lint, build, manual, or E2E check. The developer runs it, reports
-the command and result, and checks the task only after it passes.
-
-### 5.3 Design traceability block
-
-When `design.md` exists, add this block before `## Context`:
-
-```md
-## Traceability
-
-- Linear project: <project name> (`<project id>`)
-- Linear team: <team name> (`<team id>`)
-- Linear issue: <identifier> (`<issue id>`, <issue URL>)
-- Linear cycle: <name or none>
-- Linear milestone: <name or none>
-- OpenSpec change: <change-name>
-- Repositories: <repository paths>
-- Branch/worktree: <branch and path>
-- Captured at: <ISO-8601 timestamp>
-```
-
-Populate project, team, issue, cycle, and milestone values from the connected
-Linear MCP. Use `none` for unavailable values; never guess or copy tokens and
-secrets. For an unlinked change, use `Linear project: none` and
-`Linear issue: none`.
-
-### 5.4 Specification readiness gate
-
-Before implementation, require: the configured OpenSpec artifacts,
-acceptance criteria, concrete task verification, and — for UI work — a
-designer `ux.md` proposal recorded as ready. UI work MUST NOT reach
-implementation without design readiness. Backend-only changes skip designer
-and design-qa with a recorded reason. Artifact completion alone is not
-implementation verification.
-
 ## 6. Specification publication (local / mirror)
 
 Read the publication policy from `.agent-stack/config.conf`:
 
-- `SPECS_MODE=local` (default): OpenSpec artifacts stay in the code
-  repository. Do not attempt external publication and do not require
-  `SPECS_REPOSITORY`.
+- `SPECS_MODE=local` (default): artifacts stay in the code repository. Do
+  not attempt external publication and do not require `SPECS_REPOSITORY`.
 - `SPECS_MODE=mirror`: `SPECS_REPOSITORY` and publication authorization
-  are required. After specification readiness and BEFORE developer
-  delegation, create (or reuse on retry) the namespaced spec branch/PR
-  containing the ready specification, e.g.
-  `projects/<owner>/<repo>/changes/<issue-id>-<slug>/`. Record source
-  repository, branch, change ID, artifact hashes, and commit references.
-  Cross-link the issue, spec PR, and later implementation PRs.
+  are required; the publication procedure (create/reuse the namespaced
+  spec branch/PR, record, cross-link, refresh after amendments) is
+  `git-delivery` `## Procedure` step 2.
 
 A spec PR may remain open while implementation proceeds unless the project
-explicitly requires its approval (`SPECS_MERGE_GATE`). Do not require
-routine human approval of every completed specification. In mirror mode, a
-publication failure blocks progress; never silently fall back to local
-mode. Refresh the same spec PR after verified spec amendments.
+requires its approval (`SPECS_MERGE_GATE`); do not require routine human
+approval of every completed specification. In mirror mode, a publication
+failure blocks progress; never silently fall back to local mode.
 
 ## 7. Route UX and UI work
 
@@ -1995,12 +1917,9 @@ Treat a change as UI/UX work when it changes a user-facing screen, flow, copy,
 state, interaction, accessibility behavior, or visible state, even if the
 backend work is larger.
 
-For UI/UX work:
-
-1. Read `UX_AGENTS.md` and `UI_AGENTS.md` before delegation.
-2. Delegate proposal mode to `designer` before completing `design.md` and
-   `tasks.md`.
-3. Reference the applicable project-guide sections in the artifacts and tasks.
+For UI/UX work: delegate proposal mode to `designer` before completing
+`design.md` and `tasks.md`, with the applicable project-guide sections
+referenced in the artifacts and tasks (§0.2, §5.1).
 
 Pure backend, data, or internal tooling changes skip UX delegation and QA
 with a recorded reason.
@@ -2022,9 +1941,6 @@ Call `developer` with a versioned handoff
 - explicit instruction to return to the resolver only. The resolver must
   make this delegation immediately after finalizing the required specs; no
   spec-review approval gate is allowed.
-
-Handoff and skill contracts never override authorization, security,
-destructive-action, or verification requirements.
 
 ## 9. Review — evidence first
 
@@ -2085,44 +2001,25 @@ unconditional extra agents for every ticket.
 ## 11. Close
 
 1. Confirm OpenSpec status and verification evidence are complete.
-2. In mirror mode, refresh the specification publication with the verified
-   artifacts (reuse the same branch/PR). Publication procedure: use a local
-   clone of `SPECS_REPOSITORY` with its worktree under that repository's
-   ignored `.worktrees/` directory; copy the complete finalized
-   `openspec/changes/<change-name>/` directory into the same path without
-   touching unrelated specs; commit only the finalized change on a specs
-   branch from `SPECS_REPOSITORY_BASE_BRANCH`, push, and create (or reuse)
-   the PR against that exact base. Record the specs PR URL in the run state.
-3. Publish the implementation branch for every affected code repository:
-   - Commit the verified scoped changes in the supplied worktree, push the
-     branch to its GitHub remote, and create a PR with `gh pr create`.
-   - Pass the recorded base branch via `--base`. If it is another feature
-     branch, keep the stacked PR against that branch and record the parent
-     PR URL when available. Never default a stacked PR to `main`.
-   - If a PR already exists for the branch, update it instead of creating
-     a duplicate. Do not merge automatically.
-   - Record every implementation PR URL, base/head branch, worktree,
-     verification result, and specs PR URL in the run state
-     (`record-external --key implPr`).
-4. After all implementation PRs are open, set the linked Linear issue to
-   `TASK_STATE_IN_PR` (default `In PR`) through the connected Linear MCP
-   and record the state change. Preserve existing Linear assignees; an open
-   PR is not completed work. Only when the PRs are merged and project
-   policy requires it, move the issue to its completed state with the
-   closing evidence comment.
-5. Determine the Linear project name from the linked issue. Use the connected
-   Linear MCP to attach a document titled
-   `Spec: <linear-project-name> — <change-name>`. The document content MUST
-   begin with `Project: <linear-project-name>` and include the issue, change,
-   branch/worktree, verification evidence, and corrective rounds.
+2. In mirror mode, refresh the publication with the verified artifacts per
+   `git-delivery` `## Procedure` step 2 (same branch/PR); record the specs
+   PR URL in the run state.
+3. Publish implementation branches per `git-delivery` `## Procedure`
+   steps 3–4; record each PR URL with `record-external --key implPr`.
+4. Apply `linear-workflow` `## Procedure` steps 4–5 for Linear states:
+   `TASK_STATE_IN_PR` when PRs are open, assignees preserved; completed
+   state only after merge when policy requires, with the closing evidence
+   comment.
+5. Attach the closeout document per `linear-workflow` `## Procedure`
+   step 5 (`Spec: <linear-project-name> — <change-name>`).
 6. Follow the project's archive policy when configured. Default
    (`ARCHIVE_STAGE=after-merge`): transition the run to `awaiting_merge`
    with `record-external` PR references recorded, then stop. Merge
    observation and archive/completion are a separate invocation, hook, or
    existing project process — do not imply the resolver keeps observing
    after its session ends.
-7. Remaining work becomes a new issue or explicitly approved follow-up, not a
-   silent `*-followup` change.
+7. Remaining work becomes a new issue or explicitly approved follow-up, not
+   a silent `*-followup` change.
 8. Validate the run (`validate --run <run-id>`), append the closing event,
    unlock the run, and summarize scope, evidence,
    branches, files, and corrective rounds used.
@@ -2511,6 +2408,9 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
+Every `astack` subcommand and its usage moment is catalogued in
+`astack-ops`.
+
 Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
 (`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
 Ask narrow atomic questions together across all selected dimensions and let
@@ -2653,6 +2553,9 @@ Run:
 
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
+
+Every `astack` subcommand and its usage moment is catalogued in
+`astack-ops`.
 
 Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
 (`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
@@ -2918,6 +2821,51 @@ write_skill_source() {
   skill=$1
   target=$2
   case "$skill" in
+    astack-ops) cat > "$target" <<'SKILL_ASTACK_OPS_EOF'
+---
+name: astack-ops
+description: Operate the installed Agent Stack CLI. Use when a task scaffolds, syncs, audits, updates, or asks Jev through astack, or manages delivery-run state.
+metadata:
+  version: "1.0"
+  consumer: resolver, developer, web-qa, mobile-qa
+  stage: ops
+---
+
+# Astack Ops
+
+One map for the installed `astack` CLI: the moment each subcommand is the
+right tool. `astack <command> --help` is the authority for flags and
+syntax — never reconstruct a flag from memory, and never copy flag tables
+into prompts, specs, or reports.
+
+## Procedure
+
+1. `astack init` — scaffold and render managed files in a new or adopted project.
+2. `astack sync` — render missing or previously managed files after a kit or config change.
+3. `astack check` — fail when generated files drift from their canonical sources.
+4. `astack doctor` — audit dependencies, skills, governance, and mirrors.
+5. `astack auth jev` — store the Jev API key in user-level config, never in the repository.
+6. `astack jev ask` — ask Jev a typed question during web-qa verification.
+7. `astack update` — fetch a newer kit release; a human approves the install replacement.
+8. `astack upgrade` — three-way merge revised kit defaults into this project; prompts before touching tracked files.
+9. `astack prune` — remove only stale files recorded in the manifest; prompts before impact.
+10. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
+11. `astack validate` — validate contract JSON against the kit schemas.
+12. `astack --version` — print the installed kit version.
+13. `astack --help` — usage summary for every subcommand.
+
+## Evidence
+
+Record the subcommand run and its exit status in the step that used it;
+run-state calls also record the run id and phase.
+
+## Failure behavior
+
+- A non-zero exit blocks the step that ran it; report command and stderr verbatim.
+- Never hand-edit managed files to work around `update`, `upgrade`, or
+  `prune` — those commands gate installer-owned changes for a human.
+SKILL_ASTACK_OPS_EOF
+      ;;
     project-context) cat > "$target" <<'SKILL_PROJECT_CONTEXT_EOF'
 ---
 name: project-context
@@ -2995,6 +2943,33 @@ updates verifiable. Never hardcode an MCP server name.
    instead of substituting another state.
 5. On closeout, move the issue to the configured review/PR state and attach
    closing evidence (scope, verification, branches, files, rounds used).
+   Also attach a document titled
+   `Spec: <linear-project-name> — <change-name>` whose content begins
+   `Project: <linear-project-name>` and includes the issue, change,
+   branch/worktree, verification evidence, and corrective rounds.
+
+## Traceability block
+
+When `design.md` exists, add this block before `## Context`:
+
+```md
+## Traceability
+
+- Linear project: <project name> (`<project id>`)
+- Linear team: <team name> (`<team id>`)
+- Linear issue: <identifier> (`<issue id>`, <issue URL>)
+- Linear cycle: <name or none>
+- Linear milestone: <name or none>
+- OpenSpec change: <change-name>
+- Repositories: <repository paths>
+- Branch/worktree: <branch and path>
+- Captured at: <ISO-8601 timestamp>
+```
+
+Populate project, team, issue, cycle, and milestone values from the connected
+Linear MCP. Use `none` for unavailable values; never guess or copy tokens and
+secrets. For an unlinked change, use `Linear project: none` and
+`Linear issue: none`.
 
 ## Output
 
@@ -3302,7 +3277,7 @@ SKILL_GIT_DELIVERY_EOF
 
 write_skills_manifest() {
   cat > "$1" <<'SKILLS_MANIFEST_EOF'
-{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, cross-links.", "mandatory_stages": ["branch", "publish", "deliver"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.0"}], "version": 1}
+{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, cross-links.", "mandatory_stages": ["branch", "publish", "deliver"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.0"}, {"consumers": ["resolver", "developer", "web-qa", "mobile-qa"], "description": "Installed astack CLI subcommands, their usage moments, and --help flag authority.", "mandatory_stages": ["ops"], "name": "astack-ops", "path": "skills/astack-ops/SKILL.md", "version": "1.0"}], "version": 1}
 SKILLS_MANIFEST_EOF
 }
 
@@ -3404,7 +3379,7 @@ record_sources() {
   # Record kit base hashes for three-way upgrades. Add-missing only;
   # scripts/upgrade-agent-stack.sh owns updates. Never overwrites entries.
   manifest=$ROOT/.agent-stack/sources.manifest
-  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
+  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/astack-ops/SKILL.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
     kit_file=$KIT_ROOT/.agent-stack/$relative
     [ -f "$kit_file" ] || continue
     if [ -f "$manifest" ] && awk -F'|' -v wanted="$relative" '$1 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$manifest"; then
@@ -3976,6 +3951,36 @@ print_jev_status() {
   printf '\n%s\n' '  astack auth jev'
 }
 
+# Skill mirrors for hosts disabled since the last install are stale, not
+# unmanaged: generated.manifest still records them, so `check` reports each
+# stale root as removable (spec skill-mirror-dedup: a disabled host leaves
+# no residue) and `prune` removes the copies it recorded.
+report_stale_skill_roots() {
+  [ -f "$MANIFEST_FILE" ] || return 0
+  stale_roots=""
+  while IFS='|' read -r relative _hash; do
+    case "$relative" in
+      .opencode/skills/*) enabled=$ENABLE_OPENCODE ;;
+      .claude/skills/*) enabled=$ENABLE_CLAUDE ;;
+      .agents/skills/*) enabled=$ENABLE_CODEX ;;
+      .cursor/skills/*) enabled=$ENABLE_CURSOR ;;
+      *) continue ;;
+    esac
+    [ "$enabled" = 1 ] && continue
+    [ -e "$ROOT/$relative" ] || continue
+    skill_root=${relative%%/skills/*}/skills
+    case " $stale_roots " in
+      *" $skill_root "*) ;;
+      *) stale_roots="$stale_roots $skill_root" ;;
+    esac
+  done < "$MANIFEST_FILE"
+  for skill_root in $stale_roots; do
+    printf 'stale %s (host disabled; removable with: astack prune && astack sync)\n' \
+      "$ROOT/$skill_root" >&2
+    CONFLICTS=$((CONFLICTS + 1))
+  done
+}
+
 prune_generated() {
   [ -f "$MANIFEST_FILE" ] || return 0
   temporary=$(mktemp "$MANIFEST_FILE.XXXXXX")
@@ -4170,6 +4175,7 @@ case "$COMMAND" in
     resolve_mcp
     resolve_delivery_config
     render_platform_outputs check
+    report_stale_skill_roots
     governance_status
     if [ "$CONFLICTS" -gt 0 ]; then
       exit 1

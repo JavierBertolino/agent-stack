@@ -30,6 +30,33 @@ updates verifiable. Never hardcode an MCP server name.
    instead of substituting another state.
 5. On closeout, move the issue to the configured review/PR state and attach
    closing evidence (scope, verification, branches, files, rounds used).
+   Also attach a document titled
+   `Spec: <linear-project-name> — <change-name>` whose content begins
+   `Project: <linear-project-name>` and includes the issue, change,
+   branch/worktree, verification evidence, and corrective rounds.
+
+## Traceability block
+
+When `design.md` exists, add this block before `## Context`:
+
+```md
+## Traceability
+
+- Linear project: <project name> (`<project id>`)
+- Linear team: <team name> (`<team id>`)
+- Linear issue: <identifier> (`<issue id>`, <issue URL>)
+- Linear cycle: <name or none>
+- Linear milestone: <name or none>
+- OpenSpec change: <change-name>
+- Repositories: <repository paths>
+- Branch/worktree: <branch and path>
+- Captured at: <ISO-8601 timestamp>
+```
+
+Populate project, team, issue, cycle, and milestone values from the connected
+Linear MCP. Use `none` for unavailable values; never guess or copy tokens and
+secrets. For an unlinked change, use `Linear project: none` and
+`Linear issue: none`.
 
 ## Output
 

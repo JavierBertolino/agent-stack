@@ -11,10 +11,12 @@ trap 'rm -rf "$T" "$NK"' EXIT INT TERM
 sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$T" --kit-root "$KIT_ROOT" --platforms opencode --mcp none >/dev/null 2>&1
 # User customization that must survive.
 printf '\n# project customization\n' >> "$T/.agent-stack/roles/resolver.md"
-# Fake newer kit: changed managed file + brand-new skill.
+# Fake newer kit: changed managed files (role, ux-design, and the new
+# astack-ops skill).
 mkdir -p "$NK/.agent-stack"
 cp -r "$KIT_ROOT/.agent-stack/roles" "$KIT_ROOT/.agent-stack/skills" "$KIT_ROOT/.agent-stack/contracts" "$NK/.agent-stack/"
 printf '\n# upstream fix\n' >> "$NK/.agent-stack/skills/ux-design/SKILL.md"
+printf '\n# upstream fix\n' >> "$NK/.agent-stack/skills/astack-ops/SKILL.md"
 printf '\n# upstream fix\n' >> "$NK/.agent-stack/roles/resolver.md"
 
 # --check is a dry run: reports pending work, changes nothing.
@@ -32,6 +34,8 @@ grep -q 'project customization' "$T/.agent-stack/roles/resolver.md" \
   || { printf 'FAIL conflict must write .kit-new\n' >&2; FAIL=1; }
 grep -q 'upstream fix' "$T/.agent-stack/skills/ux-design/SKILL.md" \
   || { printf 'FAIL unchanged managed source must update\n' >&2; FAIL=1; }
+grep -q 'upstream fix' "$T/.agent-stack/skills/astack-ops/SKILL.md" \
+  || { printf 'FAIL new astack-ops skill must update on upgrade\n' >&2; FAIL=1; }
 grep -q 'upstream fix' "$T/.agent-stack/roles/resolver.md" \
   && { printf 'FAIL customized file must not be overwritten\n' >&2; FAIL=1; }
 

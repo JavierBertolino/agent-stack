@@ -154,7 +154,7 @@ fi
 for role in resolver designer design-qa developer web-qa mobile-qa; do
   upgrade_one "roles/$role.md"
 done
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops; do
   upgrade_one "skills/$skill/SKILL.md"
 done
 upgrade_one "skills/manifest.json"

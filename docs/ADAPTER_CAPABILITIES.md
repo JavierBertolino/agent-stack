@@ -14,6 +14,7 @@ What each adapter enforces versus what remains prompt policy. Tested by
 | Boundary | OpenCode | Claude Code | Codex | Cursor |
 | --- | --- | --- | --- | --- |
 | Resolver Skill access | enforced (`skill: allow`) | inherited tools (Skill available) | host-managed | host-managed |
+| Resolver shell scope | enforced (scoped `allow` for `openspec`/`astack run-state`/`check`/`doctor`/`validate`, `"*": ask`) | prompt policy (no tool list rendered) | prompt policy (workspace-write sandbox) | prompt policy |
 | Designer shell denial | enforced (`bash: deny`) | enforced (no Bash in `tools`) | prompt policy (workspace-write sandbox) | prompt policy |
 | Designer ux.md-only writes | enforced (path-scoped edit) | prompt policy (`Write` unscoped) | prompt policy | prompt policy |
 | Design-QA read-only | enforced (edit+bash+task deny) | enforced (read-only `tools`) | enforced (`read-only` sandbox) | enforced (`readonly: true`) |
@@ -26,13 +27,18 @@ skills block the stage on every host; adapters never weaken that gate.
 ## Per-host notes
 
 - OpenCode (`adapters/opencode/adapter.md`): supported skill permissions
-  per role; discovery through `.opencode/skills/`, `.claude/skills/`, and
-  `.agents/skills/`. No hardcoded `.opencode` paths in neutral roles.
-- Claude Code (`adapters/claude/adapter.md`): `skills` preload for small
-  mandatory procedures; Skill tool retained for on-demand use. Preload is
-  not an ACL. `Write` cannot be path-scoped by the tool list, so the
-  designer ux.md-only boundary is prompt policy.
-- Codex (`adapters/codex/adapter.md`): `.agents/skills/` discovery with
+  per role; discovery walks `.opencode/skills/` plus the primary roots of
+  Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`), which must
+  stay separate for those hosts. Residual overlap across enabled hosts is
+  expected: `doctor.sh` warns naming any skill visible through more than
+  one root of one host, and fails on differing hashes. No hardcoded
+  `.opencode` paths in neutral roles.
+- Claude Code (`adapters/claude/adapter.md`): `.claude/skills/` primary
+  root plus `skills` preload for small mandatory procedures; Skill tool
+  retained for on-demand use. Preload is not an ACL. `Write` cannot be
+  path-scoped by the tool list, so the designer ux.md-only boundary is
+  prompt policy.
+- Codex (`adapters/codex/adapter.md`): `.agents/skills/` primary root with
   runtime metadata; coarse `sandbox_mode` (workspace-write except QA
   read-only). Path-scoped write boundaries are prompt policy.
 - Cursor (`adapters/cursor/adapter.md`): verify skill discovery and
@@ -51,7 +57,8 @@ documentation alone does not establish runtime compatibility.
 ## Verification
 
 - `scripts/doctor.sh`: dependencies, skill frontmatter, manifest,
-  contracts, governance status, mirror consistency and collisions.
+  contracts, governance status, mirror consistency, multi-root visibility
+  warnings, and collisions.
 - `setup check`: rendered files match canonical sources (roles, skills,
   mirrors, configs).
 - Fresh-worktree test: install, commit skills, create a worktree, and

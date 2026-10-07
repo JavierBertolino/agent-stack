@@ -28,7 +28,9 @@ jobs:
           node-version: "20"
       - name: Install OpenSpec
         run: |
-          npm install -g @fission-ai/openspec@latest
+          # Version pinned in package.json; dependabot bumps it with review.
+          npm ci
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Tag matches VERSION
         run: |
           TAG="${{ inputs.tag || github.ref_name }}"

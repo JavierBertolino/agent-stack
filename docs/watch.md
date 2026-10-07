@@ -7,7 +7,8 @@ self-reported token usage.
 
 ```sh
 cd my-project
-astack watch --run <run-id> --port 4311 --open
+astack watch --open            # follow the latest run (start before the workflow)
+astack watch --run <run-id>    # pin to one run instead
 ```
 
 OpenCode-first: the viewer is a single self-contained page with no external
@@ -19,10 +20,14 @@ today.
 
 - Live only. The server tails `.agent-stack/runs/<run-id>/state.json` and
   append-only `events.jsonl` and polls from the browser every second.
-  There is no replay fixture and no static export.
-- Read-only. The server implements GET only (`/`, `/api/state`,
-  `/api/events?since=N`, `/api/meta`); POST/PUT/DELETE/PATCH return 405.
-  Pausing freezes this page only. The server never writes to the run.
+  Without `--run` it starts immediately — even before any run exists — and
+  follows the most recently updated run, switching automatically when a new
+  run appears; the header picker can pin any run instead. With `--run` it
+  stays on that run. There is no replay fixture and no static export.
+- Read-only. The server implements GET only (`/`, `/api/runs`,
+  `/api/state`, `/api/events?since=N`, `/api/meta`); POST/PUT/DELETE/PATCH
+  return 405. Pausing freezes this page only. The server never writes to
+  the run. Stop it with Ctrl-C.
 
 ## Telemetry event types
 

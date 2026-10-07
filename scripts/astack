@@ -47,7 +47,7 @@ Usage:
   astack prune                Remove only safe, stale generated files.
   astack run-state ...        Validated run state (see run-state --help).
   astack validate ...         Validate contract JSON (see validate --help).
-  astack watch --run RUN [--port N] [--host ADDR] [--open|--no-open]
+  astack watch [--run RUN] [--port N] [--host ADDR] [--open|--no-open]
                                 Serve the read-only live run viewer.
   astack --version            Print the installed kit version.
   astack --help               Show this help.

@@ -118,6 +118,87 @@ fi
 kill "$SERVER_PID" 2>/dev/null || true
 wait "$SERVER_PID" 2>/dev/null || true
 
+# 4b. Follow mode: no --run serves the run list and tracks new runs.
+E="$T/empty"
+mkdir -p "$E"
+PORT2=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+python3 "$KIT_ROOT/scripts/watch.py" --root "$E" --kit-root "$KIT_ROOT" \
+  --host 127.0.0.1 --port "$PORT2" --no-open \
+  >"$T/watch2.log" 2>&1 &
+SERVER2_PID=$!
+READY2=0
+i=0
+while [ "$i" -lt 50 ]; do
+  if python3 - "$PORT2" <<'PY' >/dev/null 2>&1
+import json, sys, urllib.request
+port = sys.argv[1]
+with urllib.request.urlopen("http://127.0.0.1:%s/api/runs" % port, timeout=2) as r:
+    json.load(r)
+PY
+  then READY2=1; break
+  fi
+  sleep 0.1
+  i=$((i + 1))
+done
+if [ "$READY2" != 1 ]; then
+  printf 'FAIL follow-mode server did not start\n' >&2
+  sed 's/^/  watch2.log: /' "$T/watch2.log" >&2 || true
+  FAIL=1
+elif ! python3 - "$PORT2" <<'PY' >/dev/null 2>&1
+import json, sys, urllib.request, urllib.error
+port = sys.argv[1]
+def get(path, expect=200):
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%s%s" % (port, path), timeout=2) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        if e.code != expect:
+            raise
+        return e.code, e.read()
+status, body = get("/api/runs")
+assert status == 200 and json.loads(body) == {"runs": []}, (status, body)
+status, body = get("/api/state", expect=404)
+assert status == 404 and "no runs yet" in body.decode(), (status, body)
+status, body = get("/")
+assert status == 200 and b"latest" in body, status
+PY
+then printf 'FAIL follow mode must start empty and wait for runs\n' >&2; FAIL=1
+else
+  python3 "$KIT_ROOT/scripts/run-state.py" --root "$E" init --run follow-1 \
+    --change demo-change --worktree-root "$E/.worktrees/demo" --repo demo \
+    --base-ref main --base-sha abc123 --scope src >/dev/null 2>&1
+  if ! python3 - "$PORT2" <<'PY' >/dev/null 2>&1
+import json, sys, urllib.request
+port = sys.argv[1]
+def get(path):
+    with urllib.request.urlopen("http://127.0.0.1:%s%s" % (port, path), timeout=2) as r:
+        return r.status, r.read()
+status, body = get("/api/runs")
+runs = json.loads(body)["runs"]
+assert len(runs) == 1 and runs[0]["runId"] == "follow-1", runs
+status, body = get("/api/events?since=0")
+data = json.loads(body)
+assert data["runId"] == "follow-1" and data["nextOffset"] >= 1, data
+PY
+  then printf 'FAIL follow mode must pick up new runs\n' >&2; FAIL=1
+  fi
+  # ?run=bogus must 404 (exit 0 means the fetch raised 404 as expected).
+  if python3 - "$PORT2" <<'PY' >/dev/null 2>&1
+import sys, urllib.request, urllib.error
+port = sys.argv[1]
+try:
+    urllib.request.urlopen("http://127.0.0.1:%s/api/events?run=bogus&since=0" % port, timeout=2)
+except urllib.error.HTTPError as e:
+    sys.exit(0 if e.code == 404 else 1)
+sys.exit(1)
+PY
+  then :
+  else printf 'FAIL unknown ?run= must 404\n' >&2; FAIL=1
+  fi
+fi
+kill "$SERVER2_PID" 2>/dev/null || true
+wait "$SERVER2_PID" 2>/dev/null || true
+
 # 5. Dispatcher exposes watch.
 if ! sh "$KIT_ROOT/scripts/astack" watch --help 2>&1 | grep -q 'Read-only'; then
   printf 'FAIL astack watch --help missing\n' >&2; FAIL=1

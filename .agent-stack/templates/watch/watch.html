@@ -67,6 +67,7 @@
   <span class="spacer"></span>
   <span class="note" id="tokens-total">tokens total —</span>
   <span class="note" id="jev-model"></span>
+  <select id="runpick" title="Run to follow"><option value="">follow latest</option></select>
   <button id="pause" type="button">Pause</button>
 </header>
 <div id="banner" role="status"></div>
@@ -109,7 +110,11 @@
     "implement","review","qa","close","awaiting_merge"];
   var COLORS = ["#1d4ed8","#047857","#7c3aed","#b45309","#0e7490","#be123c","#4d7c0f"];
   var nextOffset = 0, paused = false, allEvents = [];
-  var runId = "__ASTACK_RUN__";
+  var serverHint = "__ASTACK_RUN__"; // pinned run id, or "latest"
+  var pinned = serverHint !== "latest";
+  var currentRun = pinned ? serverHint : null;
+  var followLatest = !pinned;
+  var knownRunIds = [];
 
   function el(tag, text, cls) {
     var n = document.createElement(tag);
@@ -302,26 +307,66 @@
     if (!paused) feed.lastChild.scrollIntoView({ block: "nearest" });
   }
 
+  function api(path) {
+    return fetch(path, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error(path + " " + r.status);
+      return r.json();
+    });
+  }
+
+  function renderRunPicker(runs) {
+    var sel = document.getElementById("runpick");
+    var ids = runs.map(function (r) { return r.runId; });
+    var changed = ids.length !== knownRunIds.length ||
+      ids.some(function (id, i) { return id !== knownRunIds[i]; });
+    if (!changed) return;
+    knownRunIds = ids;
+    var keep = sel.value;
+    sel.textContent = "";
+    var home = document.createElement("option");
+    home.value = ""; home.textContent = "follow latest";
+    sel.appendChild(home);
+    ids.forEach(function (id) {
+      var o = document.createElement("option");
+      o.value = id; o.textContent = id;
+      sel.appendChild(o);
+    });
+    if (ids.indexOf(keep) >= 0) sel.value = keep;
+    else sel.value = followLatest ? "" : (currentRun || "");
+  }
+
   function poll() {
     if (paused) return;
-    Promise.all([
-      fetch("api/state", { cache: "no-store" }).then(function (r) {
-        if (!r.ok) throw new Error("state " + r.status); return r.json();
-      }),
-      fetch("api/events?since=" + nextOffset, { cache: "no-store" }).then(function (r) {
-        if (!r.ok) throw new Error("events " + r.status); return r.json();
-      }),
-      fetch("api/meta", { cache: "no-store" }).then(function (r) {
-        if (!r.ok) throw new Error("meta " + r.status); return r.json();
-      })
-    ]).then(function (parts) {
+    Promise.all([api("api/meta"), api("api/runs")]).then(function (parts) {
+      var meta = parts[0], runs = (parts[1] && parts[1].runs) || [];
+      renderRunPicker(runs);
+      var target;
+      if (pinned) target = meta.runId;
+      else if (followLatest || !currentRun) target = runs.length ? runs[0].runId : null;
+      else target = knownRunIds.indexOf(currentRun) >= 0 ? currentRun :
+        (runs.length ? runs[0].runId : null);
+      if (!target) {
+        banner("waiting for first run — start a delivery run and this view follows it");
+        document.getElementById("phase").textContent = "…";
+        return null;
+      }
+      if (target !== currentRun) {
+        currentRun = target; nextOffset = 0; allEvents = [];
+      }
+      return Promise.all([
+        api("api/state?run=" + encodeURIComponent(target)),
+        api("api/events?run=" + encodeURIComponent(target) + "&since=" + nextOffset),
+        meta
+      ]);
+    }).then(function (parts) {
+      if (!parts) return;
       var state = parts[0], ev = parts[1], meta = parts[2];
       banner(null);
       document.getElementById("phase").textContent = state.phase || "?";
       document.getElementById("change").textContent =
         (state.changeId ? "change " + state.changeId : "") +
         (state.issueId ? " · issue " + state.issueId : "");
-      document.getElementById("run").textContent = "run " + (state.runId || runId);
+      document.getElementById("run").textContent = "run " + (state.runId || currentRun);
       document.getElementById("jev-model").textContent =
         "jev " + ((meta && meta.jev && meta.jev.model) || "?");
       renderPipeline(state.phase);
@@ -330,9 +375,15 @@
       nextOffset = ev.nextOffset !== undefined ? ev.nextOffset : nextOffset;
       renderActive(); renderTokens(); renderFeed();
     }).catch(function (err) {
-      banner("waiting for run — " + err.message + " (is `astack watch --run " + runId + "` serving this run?)");
+      banner("waiting for run " + (currentRun || "latest") + " — " + err.message);
     });
   }
+
+  document.getElementById("runpick").onchange = function () {
+    followLatest = !this.value;
+    if (this.value) currentRun = null; // re-resolve to latest on next poll
+  };
+  if (pinned) document.getElementById("runpick").style.display = "none";
 
   document.getElementById("pause").onclick = function () {
     paused = !paused;

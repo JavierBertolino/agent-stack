@@ -165,7 +165,7 @@ astack check         # fail when generated files drift
 astack doctor        # dependencies, skills, governance, updates
 astack auth jev      # configure the Jev QA provider (user-level)
 astack jev ask      # evaluate typed Jev questions from a JSON request
-astack watch --run RUN  # serve the read-only live run viewer
+astack watch [--run RUN]  # serve the read-only live run viewer
 astack update        # update the installed CLI and kit
 astack upgrade       # upgrade the current project to the installed kit
 astack prune         # remove only safe, stale generated files

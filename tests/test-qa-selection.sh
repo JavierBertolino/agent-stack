@@ -113,4 +113,9 @@ if sed -n '/^export function buildMobileQuestions/,/^}/p' \
   report 'buildMobileQuestions must not emit next_action'
 fi
 
+# --- Mobile prerequisites stay a numbered discovery step -----------------
+if grep -q '^## 0\. Prerequisites' "$mobile"; then
+  report 'mobile-qa still has a separate section 0'
+fi
+
 [ "$FAIL" -eq 0 ]

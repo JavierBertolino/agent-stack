@@ -45,3 +45,22 @@ MCP, execute an action, or grant authorization.
   preconditions match
 - **THEN** the gate returns the corresponding non-execution status, and the
   agent inspects or ends the flow without treating it as a verdict
+
+### Requirement: The neutral Jev skill and shared validator ship to both QA roles
+
+The kit SHALL ship `.agent-stack/skills/typesafe-jev/SKILL.md` for both
+`web-qa` and `mobile-qa`, register and mirror it through all enabled hosts,
+and install the shared action-selection resources under `scripts/jev/` during
+init and sync. The skill and validator SHALL not contain host-specific
+credentials, paths, product data, or unadapted vendor-specific rules.
+
+#### Scenario: Fresh install includes the skill and gate
+- **WHEN** a consuming project runs `astack init` with web/mobile QA enabled
+- **THEN** it receives the canonical skill mirrors and both shared validator
+  files, and the roles name the skill and gate before their first Jev action
+
+#### Scenario: Upgrade preserves human changes
+- **WHEN** an existing project upgrades to this kit version
+- **THEN** the skill participates in the normal three-way source merge, and
+  shared resources are installed missing-only without overwriting human-owned
+  files

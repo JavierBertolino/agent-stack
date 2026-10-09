@@ -31,7 +31,7 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Resolver prompt reduced from 18,412 B to 13,728 B (−25.4%): run-state
+- Resolver prompt reduced from 18,412 B to 13,636 B (−25.9%): run-state
   command detail lives in `linear-workflow`, the readiness-gate detail in
   `openspec-workflow`, §5.2–§5.4 folded into one pointer paragraph, and §7
   compressed; §2/§9/§10/§12 stay byte-identical.
@@ -43,6 +43,19 @@ follow [Semantic Versioning](https://semver.org/).
   `docs/ADAPTER_CAPABILITIES.md`) states the per-host skill root mapping
   and that residual overlap across enabled hosts is expected, replacing the
   claim that the installer deduplicates roots it must keep separate.
+- `astack worktree audit` and `astack worktree cleanup` for guarded cleanup of
+  Agent Stack-managed worktrees after GitHub confirms the exact PR head was
+  merged.
+- Resolver closeout now relocates to the primary checkout and records cleanup
+  evidence before completing merged work.
+
+- Pin CI OpenSpec tooling to the exact manifest/lockfile version and preserve
+  release validation for historical tags that predate the lockfile.
+
+### Fixed
+
+- `astack upgrade --check` now reports project kit-version drift as a pending
+  update even when all managed source files already match the installed kit.
 
 ## [0.1.4] — 2026-09-29
 

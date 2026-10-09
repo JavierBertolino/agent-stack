@@ -261,9 +261,14 @@ unconditional extra agents for every ticket.
    observation and archive/completion are a separate invocation, hook, or
    existing project process — do not imply the resolver keeps observing
    after its session ends.
-7. Remaining work becomes a new issue or explicitly approved follow-up, not
-   a silent `*-followup` change.
-8. Validate the run (`validate --run <run-id>`), append the closing event,
+7. After affected PRs are re-read as `MERGED`, move to the primary checkout and
+   run `astack worktree cleanup --root <repo-root> --branch <branch>` via
+   `git-delivery`. Record it before issue completion with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   Never force cleanup; preserve unsafe worktrees and report blockers.
+8. Remaining work becomes a new issue or explicitly approved follow-up, not a
+   silent `*-followup` change.
+9. Validate the run (`validate --run <run-id>`), append the closing event,
    unlock the run, and summarize scope, evidence,
    branches, files, and corrective rounds used.
 

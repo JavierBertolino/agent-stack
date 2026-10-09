@@ -14,8 +14,9 @@ behavior, `UX_AGENTS.md`, and `UI_AGENTS.md`.
   `contracts/`, `resources/`, `templates/`). Never hardcode host paths
   inside neutral roles or skills.
 - Regenerate the standalone distribution with
-  `scripts/build-installer.sh`; never hand-edit `setup.sh`
-  (CI enforces reproducibility).
+  `scripts/build-installer.sh`; never hand-edit `setup.sh`. To change
+  installer behavior, edit `scripts/setup-agent-stack.sh` or the neutral
+  sources under `.agent-stack/`, then regenerate; CI enforces reproducibility.
 - Keep `scripts/*.sh` and `install.sh` POSIX `sh` (`sh -n` must pass).
   Python is allowed for `run-state.py`, `validate-contracts.py`,
   `build-installer.sh`, and `build-release.sh` (stdlib only).

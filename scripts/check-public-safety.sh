@@ -23,7 +23,7 @@ report() { printf 'public-safety: %s\n' "$1" >&2; FAIL=1; }
 if [ -d "$KIT_ROOT/.git" ]; then
   FILES=$(cd "$KIT_ROOT" && git ls-files)
 else
-  FILES=$(cd "$KIT_ROOT" && find . -path ./.git -prune -o -path ./dist -prune -o -type f -print | sed 's|^\./||')
+  FILES=$(cd "$KIT_ROOT" && find . -path ./.git -prune -o -path ./dist -prune -o -path ./node_modules -prune -o -type f -print | sed 's|^\./||')
 fi
 
 scan() {

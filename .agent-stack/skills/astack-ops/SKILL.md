@@ -1,8 +1,8 @@
 ---
 name: astack-ops
-description: Operate the installed Agent Stack CLI. Use when a task scaffolds, syncs, audits, updates, or asks Jev through astack, or manages delivery-run state.
+description: Operate the installed Agent Stack CLI. Use when a task scaffolds, syncs, audits, updates, cleans merged worktrees, asks Jev through astack, or manages delivery-run state.
 metadata:
-  version: "1.0"
+  version: "1.1"
   consumer: resolver, developer, web-qa, mobile-qa
   stage: ops
 ---
@@ -25,10 +25,12 @@ into prompts, specs, or reports.
 7. `astack update` — fetch a newer kit release; a human approves the install replacement.
 8. `astack upgrade` — three-way merge revised kit defaults into this project; prompts before touching tracked files.
 9. `astack prune` — remove only stale files recorded in the manifest; prompts before impact.
-10. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
-11. `astack validate` — validate contract JSON against the kit schemas.
-12. `astack --version` — print the installed kit version.
-13. `astack --help` — usage summary for every subcommand.
+10. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
+11. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
+12. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
+13. `astack validate` — validate contract JSON against the kit schemas.
+14. `astack --version` — print the installed kit version.
+15. `astack --help` — usage summary for every subcommand.
 
 ## Evidence
 

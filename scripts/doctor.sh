@@ -327,7 +327,8 @@ if [ "$(get_config MCP_MAESTRO_ENABLED 0)" = 1 ]; then check_ok "Maestro configu
 # --- Updates ---
 printf '\nUpdates\n'
 if [ -n "$VERSION" ] && [ -f "$ROOT/.agent-stack/.kit-version" ]; then
-  project_version=$(cat "$ROOT/.agent-stack/.kit-version")
+  project_version=$(sed -n '1p' "$ROOT/.agent-stack/.kit-version")
+  [ -n "$project_version" ] || project_version=unknown
   if [ "$project_version" = "$VERSION" ]; then
     check_ok "Agent Stack $VERSION is current"
   else
@@ -335,7 +336,8 @@ if [ -n "$VERSION" ] && [ -f "$ROOT/.agent-stack/.kit-version" ]; then
     WARN=$((WARN + 1))
   fi
 elif [ -n "$VERSION" ]; then
-  check_ok "Agent Stack $VERSION is current"
+  info "project kit version is missing (run 'astack upgrade')"
+  WARN=$((WARN + 1))
 fi
 
 # Fresh-worktree reminder: uncommitted setup files do not travel

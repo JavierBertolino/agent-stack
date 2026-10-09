@@ -1594,7 +1594,7 @@ render_opencode() {
     printf '%s\n' 'permission:'
     case "$role" in
       resolver)
-        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "astack run-state *": allow' '    "astack check *": allow' '    "astack doctor *": allow' '    "astack validate *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
+        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "astack run-state *": allow' '    "astack check *": allow' '    "astack doctor *": allow' '    "astack validate *": allow' '    "astack worktree audit *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
         ;;
       designer)
         printf '%s\n' '  bash: deny' '  task: deny' '  edit:' '    "*": deny' '    "openspec/changes/**/ux.md": allow'
@@ -2008,9 +2008,14 @@ unconditional extra agents for every ticket.
    observation and archive/completion are a separate invocation, hook, or
    existing project process — do not imply the resolver keeps observing
    after its session ends.
-7. Remaining work becomes a new issue or explicitly approved follow-up, not
-   a silent `*-followup` change.
-8. Validate the run (`validate --run <run-id>`), append the closing event,
+7. After affected PRs are re-read as `MERGED`, move to the primary checkout and
+   run `astack worktree cleanup --root <repo-root> --branch <branch>` via
+   `git-delivery`. Record it before issue completion with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   Never force cleanup; preserve unsafe worktrees and report blockers.
+8. Remaining work becomes a new issue or explicitly approved follow-up, not a
+   silent `*-followup` change.
+9. Validate the run (`validate --run <run-id>`), append the closing event,
    unlock the run, and summarize scope, evidence,
    branches, files, and corrective rounds used.
 
@@ -2814,9 +2819,9 @@ write_skill_source() {
     astack-ops) cat > "$target" <<'SKILL_ASTACK_OPS_EOF'
 ---
 name: astack-ops
-description: Operate the installed Agent Stack CLI. Use when a task scaffolds, syncs, audits, updates, or asks Jev through astack, or manages delivery-run state.
+description: Operate the installed Agent Stack CLI. Use when a task scaffolds, syncs, audits, updates, cleans merged worktrees, asks Jev through astack, or manages delivery-run state.
 metadata:
-  version: "1.0"
+  version: "1.1"
   consumer: resolver, developer, web-qa, mobile-qa
   stage: ops
 ---
@@ -2839,10 +2844,12 @@ into prompts, specs, or reports.
 7. `astack update` — fetch a newer kit release; a human approves the install replacement.
 8. `astack upgrade` — three-way merge revised kit defaults into this project; prompts before touching tracked files.
 9. `astack prune` — remove only stale files recorded in the manifest; prompts before impact.
-10. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
-11. `astack validate` — validate contract JSON against the kit schemas.
-12. `astack --version` — print the installed kit version.
-13. `astack --help` — usage summary for every subcommand.
+10. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
+11. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
+12. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
+13. `astack validate` — validate contract JSON against the kit schemas.
+14. `astack --version` — print the installed kit version.
+15. `astack --help` — usage summary for every subcommand.
 
 ## Evidence
 
@@ -3211,7 +3218,7 @@ SKILL_UI_REVIEW_EOF
 name: git-delivery
 description: Manage worktrees, specification publication, implementation PRs, and cross-links. Use for branch setup, mirror-mode spec PRs, and delivery closeout.
 metadata:
-  version: "1.0"
+  version: "1.2"
   consumer: resolver
   stage: deliver
 ---
@@ -3220,6 +3227,8 @@ metadata:
 
 Keep branches, PRs, and publications traceable and reusable across retries.
 Record external side effects immediately.
+For `astack` command usage and flags, load `astack-ops`; this skill owns the
+delivery policy and safety boundaries around those commands.
 
 ## Procedure
 
@@ -3244,15 +3253,34 @@ Record external side effects immediately.
    Cross-link issue, spec PR, and implementation PRs. Reuse branches/PRs on
    retry; resume discovers existing PRs instead of duplicating them.
 4. Base branches other than main (stacked work) retain the recorded base.
+5. Post-merge cleanup: only after re-reading the remote PR and observing state
+   `MERGED`, move the active session out of the feature worktree and into the
+   repository's primary checkout. Run
+   `astack worktree cleanup --root <repo-root> --branch <branch>` and record its
+   `CLEANED` evidence with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   The command is the safety boundary: it only removes a clean worktree below
+   `.worktrees/` when the local and extant remote branch heads exactly match
+   the merged PR head. It removes the local branch but never the remote
+   branch. Never substitute `rm -rf`, `git worktree remove --force`, or
+   `git branch -D` by hand when the command skips a worktree.
+ 6. If cleanup reports the branch as current, dirty, detached, unpublished,
+    locked, unmerged, outside `.worktrees/`, or SHA-mismatched, stop cleanup and
+    report the exact reason. A merged PR does not authorize discarding later or
+    uncommitted work. When session relocation is unavailable, provide the exact
+    cleanup command for a later invocation instead of deleting the active
+    worktree.
 
 ## Output
 
-Branch/PR references with hashes, cross-links, and next action.
+Branch/PR references with hashes, cross-links, cleanup evidence, and next
+action.
 
 ## Evidence
 
-PR IDs, branch names, SHAs, and observed remote state. Later source
-revisions invalidate or refresh publication evidence.
+PR IDs, branch names, SHAs, observed remote state, and the `SAFE`/`CLEANED`
+result from `astack worktree`. Later source revisions invalidate or refresh
+publication and cleanup evidence.
 
 ## Failure behavior
 
@@ -3267,7 +3295,7 @@ SKILL_GIT_DELIVERY_EOF
 
 write_skills_manifest() {
   cat > "$1" <<'SKILLS_MANIFEST_EOF'
-{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, cross-links.", "mandatory_stages": ["branch", "publish", "deliver"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.0"}, {"consumers": ["resolver", "developer", "web-qa", "mobile-qa"], "description": "Installed astack CLI subcommands, their usage moments, and --help flag authority.", "mandatory_stages": ["ops"], "name": "astack-ops", "path": "skills/astack-ops/SKILL.md", "version": "1.0"}], "version": 1}
+{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, post-merge cleanup, and cross-links.", "mandatory_stages": ["branch", "publish", "deliver", "closeout"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.2"}, {"consumers": ["resolver", "developer", "web-qa", "mobile-qa"], "description": "Installed astack CLI subcommands, their usage moments, and --help flag authority.", "mandatory_stages": ["ops"], "name": "astack-ops", "path": "skills/astack-ops/SKILL.md", "version": "1.1"}], "version": 1}
 SKILLS_MANIFEST_EOF
 }
 

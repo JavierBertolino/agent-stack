@@ -15,7 +15,7 @@ Installing a skill never implicitly authorizes the actions it describes.
 | ux-design | Designer | User flow, states, copy constraints, component reuse, acceptance criteria |
 | implementation | Developer | Scoped implementation using OpenSpec apply and applicable project skills |
 | ui-review | Design QA | Evidence-based PASS, BLOCKING, or UNVERIFIED report |
-| git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, cross-links |
+| git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, post-merge cleanup, cross-links |
 | astack-ops | Resolver, Developer, QA | Installed astack CLI subcommands, usage moments, and --help flag authority |
 
 Canonical sources live in `.agent-stack/skills/<name>/SKILL.md` with an

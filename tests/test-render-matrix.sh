@@ -35,6 +35,11 @@ if grep -q '"astack \*": allow' "$T/.opencode/agents/resolver.md" 2>/dev/null; t
   printf 'FAIL render resolver grants blanket astack allow\n' >&2
   FAIL=1
 fi
+expect "$T/.opencode/agents/resolver.md" '"astack worktree audit \*": allow' 'opencode resolver allows read-only worktree audit'
+if grep -q '"astack worktree cleanup \*": allow' "$T/.opencode/agents/resolver.md"; then
+  printf 'FAIL render resolver must keep destructive worktree cleanup gated\n' >&2
+  FAIL=1
+fi
 # Claude format + boundaries.
 expect "$T/.claude/agents/resolver.md" '^name: resolver$' 'claude resolver name'
 tools=$(awk '/^tools: /{print; exit}' "$T/.claude/agents/designer.md")

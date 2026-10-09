@@ -17,7 +17,7 @@ list_hashes() {
   root=$1
   out=$2
   paths=""
-  for candidate in .agent-stack .opencode .claude .codex .cursor .agents UX_AGENTS.md UI_AGENTS.md opencode.jsonc .mcp.json; do
+  for candidate in .agent-stack .opencode .claude .codex .cursor .agents UX_AGENTS.md UI_AGENTS.md opencode.jsonc .mcp.json scripts; do
     [ -e "$root/$candidate" ] && paths="$paths $candidate"
   done
   # shellcheck disable=SC2086

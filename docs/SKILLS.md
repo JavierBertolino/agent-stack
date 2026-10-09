@@ -17,6 +17,7 @@ Installing a skill never implicitly authorizes the actions it describes.
 | ui-review | Design QA | Evidence-based PASS, BLOCKING, or UNVERIFIED report |
 | git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, post-merge cleanup, cross-links |
 | astack-ops | Resolver, Developer, QA | Installed astack CLI subcommands, usage moments, and --help flag authority |
+| typesafe-jev | Web QA, Mobile QA | Bounded action recommendations, fail-closed validation, separate evaluation |
 
 Canonical sources live in `.agent-stack/skills/<name>/SKILL.md` with an
 Agent Skills `name`/`description` frontmatter matching the directory name.

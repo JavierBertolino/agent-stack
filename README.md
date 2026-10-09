@@ -101,8 +101,8 @@ platforms: OpenCode, Claude Code, Codex, and Cursor.
 
 Canonical skills (`project-context`, `linear-workflow`,
 `governance-bootstrap`, `openspec-workflow`, `ux-design`, `implementation`,
-`ui-review`, `git-delivery`) are mirrored per platform and verified by
-`astack check` and `astack doctor`.
+`ui-review`, `git-delivery`, `typesafe-jev`) are mirrored per platform and
+verified by `astack check` and `astack doctor`.
 
 ## OpenSpec
 

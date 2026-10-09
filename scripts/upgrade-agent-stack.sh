@@ -138,6 +138,60 @@ upgrade_one() {
   CONFLICTS=$((CONFLICTS + 1))
 }
 
+upgrade_project_resource() {
+  source_relative=$1
+  target_relative=$2
+  kit_file=$KIT_ROOT/.agent-stack/$source_relative
+  project_file=$ROOT/$target_relative
+  [ -f "$kit_file" ] || return 0
+  new_hash=$(file_hash "$kit_file")
+
+  if [ ! -e "$project_file" ]; then
+    if [ "$CHECK" = 1 ]; then
+      printf 'would add %s (new kit resource)\n' "$project_file"
+      UPDATED=$((UPDATED + 1))
+    else
+      mkdir -p "$(dirname -- "$project_file")"
+      cp "$kit_file" "$project_file"
+      record_base "$source_relative" "$new_hash"
+      printf 'added %s\n' "$project_file"
+      UPDATED=$((UPDATED + 1))
+    fi
+    return 0
+  fi
+
+  project_hash=$(file_hash "$project_file")
+  if [ "$project_hash" = "$new_hash" ]; then
+    [ "$CHECK" = 0 ] && record_base "$source_relative" "$new_hash"
+    return 0
+  fi
+
+  old_base=$(base_hash "$source_relative" 2>/dev/null || true)
+  if [ -n "$old_base" ] && [ "$project_hash" = "$old_base" ]; then
+    if [ "$CHECK" = 1 ]; then
+      printf 'would update %s (unchanged managed resource)\n' "$project_file"
+      UPDATED=$((UPDATED + 1))
+    else
+      cp "$kit_file" "$project_file"
+      record_base "$source_relative" "$new_hash"
+      printf 'updated %s\n' "$project_file"
+      UPDATED=$((UPDATED + 1))
+    fi
+    return 0
+  fi
+
+  if [ -z "$old_base" ]; then
+    printf 'conflict, no recorded base for %s; preserved %s\n' "$source_relative" "$project_file" >&2
+  else
+    printf 'conflict, preserved customized %s\n' "$project_file" >&2
+  fi
+  if [ "$CHECK" = 0 ]; then
+    cp "$kit_file" "$project_file.kit-new"
+    printf 'wrote %s.kit-new for manual merge\n' "$project_file" >&2
+  fi
+  CONFLICTS=$((CONFLICTS + 1))
+}
+
 [ -d "$ROOT/.agent-stack" ] || die "not an installed project: $ROOT/.agent-stack missing (run init first)"
 [ -d "$KIT_ROOT/.agent-stack" ] || die "kit directory missing: $KIT_ROOT/.agent-stack"
 
@@ -165,8 +219,29 @@ fi
 for role in resolver designer design-qa developer web-qa mobile-qa; do
   upgrade_one "roles/$role.md"
 done
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev; do
   upgrade_one "skills/$skill/SKILL.md"
+done
+upgrade_project_resource resources/web-qa/questions.ts scripts/qa/questions.ts
+upgrade_project_resource resources/web-qa/README.md scripts/qa/README.md
+upgrade_project_resource resources/mobile-qa/questions-mobile.ts scripts/mobile-qa/questions-mobile.ts
+upgrade_project_resource resources/mobile-qa/README.md scripts/mobile-qa/README.md
+for resource in jev/action-selection.ts jev/validate-action-selection.ts; do
+  # Shared Jev helper resources are add-missing; never overwrite project files.
+  kit_resource=$KIT_ROOT/.agent-stack/resources/$resource
+  project_resource=$ROOT/scripts/$resource
+  [ -f "$kit_resource" ] || continue
+  if [ ! -e "$project_resource" ]; then
+    if [ "$CHECK" = 1 ]; then
+      printf 'would add %s (new shared Jev resource)\n' "$project_resource"
+      UPDATED=$((UPDATED + 1))
+    else
+      mkdir -p "$(dirname -- "$project_resource")"
+      cp "$kit_resource" "$project_resource"
+      printf 'added %s\n' "$project_resource"
+      UPDATED=$((UPDATED + 1))
+    fi
+  fi
 done
 upgrade_one "skills/manifest.json"
 for contract in handoff.schema.json report.schema.json run-state.schema.json event.schema.json; do

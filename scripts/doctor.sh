@@ -110,7 +110,7 @@ for role in resolver designer design-qa developer web-qa mobile-qa; do
   else fail "kit role $role missing"; fi
 done
 
-SKILLS="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops"
+SKILLS="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev"
 skills_ok=1
 for skill in $SKILLS; do
   file=$KIT_ROOT/.agent-stack/skills/$skill/SKILL.md

@@ -58,10 +58,14 @@ printf '\n# project customization\n' >> "$T/.agent-stack/roles/resolver.md"
 # Fake newer kit: changed managed files (role, ux-design, and the new
 # astack-ops skill).
 mkdir -p "$NK/.agent-stack"
-cp -r "$KIT_ROOT/.agent-stack/roles" "$KIT_ROOT/.agent-stack/skills" "$KIT_ROOT/.agent-stack/contracts" "$NK/.agent-stack/"
+cp -r "$KIT_ROOT/.agent-stack/roles" "$KIT_ROOT/.agent-stack/skills" "$KIT_ROOT/.agent-stack/contracts" "$KIT_ROOT/.agent-stack/resources" "$NK/.agent-stack/"
 printf '\n# upstream fix\n' >> "$NK/.agent-stack/skills/ux-design/SKILL.md"
 printf '\n# upstream fix\n' >> "$NK/.agent-stack/skills/astack-ops/SKILL.md"
 printf '\n# upstream fix\n' >> "$NK/.agent-stack/roles/resolver.md"
+printf '\n// upstream resource update\n' >> "$NK/.agent-stack/resources/web-qa/questions.ts"
+rm "$T/scripts/jev/action-selection.ts"
+printf '\n// project customization\n' >> "$T/scripts/jev/validate-action-selection.ts"
+printf '\n// mobile project customization\n' >> "$T/scripts/mobile-qa/questions-mobile.ts"
 
 # --check is a dry run: reports pending work, changes nothing.
 if sh "$KIT_ROOT/scripts/upgrade-agent-stack.sh" --root "$T" --kit-root "$NK" --check >/dev/null 2>&1; then
@@ -82,5 +86,15 @@ grep -q 'upstream fix' "$T/.agent-stack/skills/astack-ops/SKILL.md" \
   || { printf 'FAIL new astack-ops skill must update on upgrade\n' >&2; FAIL=1; }
 grep -q 'upstream fix' "$T/.agent-stack/roles/resolver.md" \
   && { printf 'FAIL customized file must not be overwritten\n' >&2; FAIL=1; }
+grep -q 'upstream resource update' "$T/scripts/qa/questions.ts" \
+  || { printf 'FAIL unchanged question resource must update\n' >&2; FAIL=1; }
+[ -f "$T/scripts/mobile-qa/questions-mobile.ts.kit-new" ] \
+  || { printf 'FAIL customized question resource must receive .kit-new\n' >&2; FAIL=1; }
+grep -q 'mobile project customization' "$T/scripts/mobile-qa/questions-mobile.ts" \
+  || { printf 'FAIL mobile question resource customization lost\n' >&2; FAIL=1; }
+[ -f "$T/scripts/jev/action-selection.ts" ] \
+  || { printf 'FAIL missing shared Jev resource must be restored on upgrade\n' >&2; FAIL=1; }
+grep -q 'project customization' "$T/scripts/jev/validate-action-selection.ts" \
+  || { printf 'FAIL project-owned Jev resource must survive upgrade\n' >&2; FAIL=1; }
 
 [ "$FAIL" -eq 0 ]

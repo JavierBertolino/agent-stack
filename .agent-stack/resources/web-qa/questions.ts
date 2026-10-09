@@ -6,6 +6,13 @@
 // constraints, allowed side effects, valid state transitions, and
 // traceability — never product-specific payment or register rules.
 
+import {
+  buildActionSelectionQuestion,
+  INSPECT_MORE,
+  STOP,
+  type ActionCandidate,
+} from "../jev/action-selection.ts";
+
 export type Dim = "functional" | "view" | "business";
 
 export interface QuestionDef {
@@ -15,6 +22,17 @@ export interface QuestionDef {
 }
 
 export const DIMENSIONS: Dim[] = ["functional", "view", "business"];
+
+export type CandidateAction = ActionCandidate;
+export { INSPECT_MORE, STOP };
+
+// Bounded action selection, separate from evaluation. Returns a single
+// `choice` question whose criteria map is exactly the candidate set, so Jev
+// can only recommend one of the options the agent authored. It never adds
+// questions to the evaluation library.
+export function buildSelectionQuestion(candidates: CandidateAction[]): QuestionDef {
+  return buildActionSelectionQuestion(candidates, "page");
+}
 
 export function buildQuestions(dims: Dim[] = DIMENSIONS): Record<string, QuestionDef> {
   const q: Record<string, QuestionDef> = {};

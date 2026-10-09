@@ -15,13 +15,21 @@ Installing a skill never implicitly authorizes the actions it describes.
 | ux-design | Designer | User flow, states, copy constraints, component reuse, acceptance criteria |
 | implementation | Developer | Scoped implementation using OpenSpec apply and applicable project skills |
 | ui-review | Design QA | Evidence-based PASS, BLOCKING, or UNVERIFIED report |
-| git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, cross-links |
+| git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, post-merge cleanup, cross-links |
+| astack-ops | Resolver, Developer, QA | Installed astack CLI subcommands, usage moments, and --help flag authority |
 | typesafe-jev | Web QA, Mobile QA | Bounded action recommendations, fail-closed validation, separate evaluation |
 
 Canonical sources live in `.agent-stack/skills/<name>/SKILL.md` with an
 Agent Skills `name`/`description` frontmatter matching the directory name.
 `manifest.json` records versions. Use additional project skills by task
 relevance; do not preload every available skill into every agent.
+
+Skill bodies are the home for procedure detail the prompts deliberately do
+not carry: step-level procedure, evidence rules, and failure behavior load
+on demand from the skill, keeping role prompts small (see
+`resolver-prompt-layout`). `astack-ops` is the CLI map — one usage moment
+per `astack` subcommand, deferring to `astack <command> --help` for every
+flag instead of duplicating the usage tables.
 
 ## Selection and evidence
 

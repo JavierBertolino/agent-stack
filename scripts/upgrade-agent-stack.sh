@@ -196,20 +196,30 @@ upgrade_project_resource() {
 [ -d "$KIT_ROOT/.agent-stack" ] || die "kit directory missing: $KIT_ROOT/.agent-stack"
 
 NEW_VERSION=$(kit_version)
-OLD_VERSION=$(cat "$ROOT/.agent-stack/.kit-version" 2>/dev/null || printf 'unknown')
+OLD_VERSION=$(sed -n '1p' "$ROOT/.agent-stack/.kit-version" 2>/dev/null || printf 'unknown')
+[ -n "$OLD_VERSION" ] || OLD_VERSION=unknown
 if [ "$CHECK" = 0 ]; then
   printf '\n%s\n' 'Agent Stack project upgrade'
   printf '%s\n' "$OLD_VERSION → $NEW_VERSION"
   printf '\n'
 fi
 
-# Managed sources: roles, skills, QA question resources, and contracts.
-# Project config.conf is never modified here; missing new defaults are
-# reported by doctor.sh instead.
+# A project version change is itself pending work even when the managed file
+# contents are identical between releases. A real upgrade records NEW_VERSION,
+# so --check must report the same transition and return a non-zero status.
+if [ -n "$NEW_VERSION" ] && [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+  if [ "$CHECK" = 1 ]; then
+    printf 'would align project kit version (%s → %s)\n' "$OLD_VERSION" "$NEW_VERSION"
+  fi
+  UPDATED=$((UPDATED + 1))
+fi
+
+# Managed sources: roles, skills, contracts. Project config.conf is never
+# modified here; missing new defaults are reported by doctor.sh instead.
 for role in resolver designer design-qa developer web-qa mobile-qa; do
   upgrade_one "roles/$role.md"
 done
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery typesafe-jev; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev; do
   upgrade_one "skills/$skill/SKILL.md"
 done
 upgrade_project_resource resources/web-qa/questions.ts scripts/qa/questions.ts

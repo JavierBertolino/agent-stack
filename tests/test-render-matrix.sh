@@ -24,6 +24,22 @@ expect "$T/.opencode/agents/developer.md" '^mode: subagent$' 'opencode developer
 expect "$T/.opencode/agents/designer.md" 'bash: deny' 'opencode designer denies shell'
 expect "$T/.opencode/agents/design-qa.md" 'edit: deny' 'opencode qa denies edit'
 expect "$T/.opencode/agents/resolver.md" 'skill: allow' 'opencode resolver skill access'
+# Resolver bash allow list: the four scoped astack entries the prompt directs
+# (design D9). No blanket astack allow exists, so update/upgrade/prune stay on
+# the "*": ask default and still prompt a human.
+for entry in run-state check doctor validate; do
+  expect "$T/.opencode/agents/resolver.md" "\"astack $entry \*\": allow" \
+    "opencode resolver allows astack $entry"
+done
+if grep -q '"astack \*": allow' "$T/.opencode/agents/resolver.md" 2>/dev/null; then
+  printf 'FAIL render resolver grants blanket astack allow\n' >&2
+  FAIL=1
+fi
+expect "$T/.opencode/agents/resolver.md" '"astack worktree audit \*": allow' 'opencode resolver allows read-only worktree audit'
+if grep -q '"astack worktree cleanup \*": allow' "$T/.opencode/agents/resolver.md"; then
+  printf 'FAIL render resolver must keep destructive worktree cleanup gated\n' >&2
+  FAIL=1
+fi
 # Claude format + boundaries.
 expect "$T/.claude/agents/resolver.md" '^name: resolver$' 'claude resolver name'
 tools=$(awk '/^tools: /{print; exit}' "$T/.claude/agents/designer.md")
@@ -55,11 +71,46 @@ expect "$M/.cursor/mcp.json" '"maestro"' 'cursor maestro registered'
 expect "$M/.codex/config.toml" 'mcp_servers.maestro' 'codex maestro registered'
 rm -rf "$M"
 # Mandatory skill mirrors resolve for every enabled platform.
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery typesafe-jev; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev; do
   for mirror in ".opencode/skills/$skill/SKILL.md" ".claude/skills/$skill/SKILL.md" ".agents/skills/$skill/SKILL.md" ".cursor/skills/$skill/SKILL.md"; do
     cmp -s "$T/.agent-stack/skills/$skill/SKILL.md" "$T/$mirror" \
       || { printf 'FAIL render mirror %s\n' "$mirror" >&2; FAIL=1; }
   done
 done
+
+# Single-platform installs write only that host's skill root
+# (spec skill-mirror-dedup: mirrors only for enabled hosts).
+S=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-single.XXXXXX")
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$S" --kit-root "$KIT_ROOT" --platforms opencode --mcp none >/dev/null 2>&1
+[ -d "$S/.opencode/skills" ] || { printf 'FAIL render opencode-only missing .opencode/skills\n' >&2; FAIL=1; }
+for absent in .claude/skills .agents/skills .cursor/skills; do
+  if [ -e "$S/$absent" ]; then
+    printf 'FAIL render opencode-only created %s\n' "$absent" >&2
+    FAIL=1
+  fi
+done
+rm -rf "$S"
+# A disabled host leaves no residue (spec skill-mirror-dedup): after a
+# re-run without claude, `setup check` reports the stale root as removable
+# and `prune` removes the managed skill copies its manifest recorded.
+R=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-stale.XXXXXX")
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$R" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp none >/dev/null 2>&1
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$R" --kit-root "$KIT_ROOT" --platforms opencode,codex,cursor --mcp none >/dev/null 2>&1
+if sh "$KIT_ROOT/scripts/setup-agent-stack.sh" check --root "$R" --kit-root "$KIT_ROOT" >"$R/check.log" 2>&1; then
+  printf 'FAIL render setup check passes with stale .claude/skills residue\n' >&2
+  FAIL=1
+fi
+expect "$R/check.log" 'stale .*claude/skills' 'check reports stale claude skill root'
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" prune --root "$R" --kit-root "$KIT_ROOT" >"$R/prune.log" 2>&1
+expect "$R/prune.log" 'pruned .*/.claude/skills/' 'prune removes stale claude skill copies'
+if [ -e "$R/.claude/skills/project-context/SKILL.md" ]; then
+  printf 'FAIL render prune left .claude/skills/project-context/SKILL.md\n' >&2
+  FAIL=1
+fi
+if grep -q 'claude/skills' "$R/.agent-stack/generated.manifest" 2>/dev/null; then
+  printf 'FAIL render manifest still records .claude/skills after prune\n' >&2
+  FAIL=1
+fi
+rm -rf "$R"
 
 [ "$FAIL" -eq 0 ]

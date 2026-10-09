@@ -77,10 +77,12 @@ invent verdicts without it.
 
 Selection (§3) and evaluation are separate calls. Selection recommends the
 next device action and never produces a verdict; this section judges what
-already happened. Send one `system_one` evaluation call per checkpoint
-through the helper with the mobile question library and state
-`{ test_goal, expected, governance, screen, trace, device }`. Ask narrow
-atomic questions together across all selected dimensions and let code
+already happened. Every `astack` subcommand and its usage moment is
+catalogued in `astack-ops`. Send one `system_one` evaluation call per
+checkpoint through `scripts/qa/ask-jev.ts` (`TYPESAFE_API_KEY` comes from
+the environment; the kit never writes it) with the mobile question library
+and state `{ test_goal, expected, governance, screen, trace, device }`. Ask
+narrow atomic questions together across all selected dimensions and let code
 decide which answers apply (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,

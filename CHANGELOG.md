@@ -8,13 +8,46 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `astack-ops` skill: one usage moment per installed CLI subcommand
+  (`init`, `sync`, `check`, `doctor`, `auth jev`, `jev ask`, `update`,
+  `upgrade`, `prune`, `run-state`, `validate`, `--version`, `--help`),
+  deferring to `astack <command> --help` for flags; registered in the
+  installer, doctor, upgrade, tests, manifest, and docs.
+- Scoped resolver bash permissions for the CLI the prompt directs:
+  `astack run-state/check/doctor/validate` are allowed while `update`,
+  `upgrade`, and `prune` stay on the `"*": ask` default.
+- Prompt-size budgets enforced by `tests/test-prompt-budgets.sh` (resolver
+  ≤ 13,800 B neutral and ≤ 14,900 B rendered, other roles ≤ 7,000 B,
+  eager skill descriptions ≤ 2,500 B).
+- `tests/test-path-integrity.sh`: installed roles and skills may reference
+  only paths a fresh install resolves, roles invoke `astack run-state`
+  rather than kit-side scripts, docs and roles agree on the entry point,
+  and no `astack` reference is orphaned from the `astack-ops` skill.
+- `scripts/doctor.sh` warns when one enabled host can discover a skill
+  through more than one root (naming skill and paths); differing hashes
+  still fail. Single-platform installs are asserted to leave no other
+  host's skill roots, and `setup check` reports stale skill roots of
+  disabled hosts as removable (`prune` removes them).
+
+### Changed
+
+- Resolver prompt reduced from 18,412 B to 13,636 B (−25.9%): run-state
+  command detail lives in `linear-workflow`, the readiness-gate detail in
+  `openspec-workflow`, §5.2–§5.4 folded into one pointer paragraph, and §7
+  compressed; §2/§9/§10/§12 stay byte-identical.
+- Shipped path references fixed: roles run `astack run-state --root …`
+  instead of `scripts/run-state.py`, no role cites kit-only
+  `docs/PRODUCT_INTENT.md`, and `docs/RUN_STATE.md` names `astack run-state`
+  as the installed-project entry point.
+- Adapter documentation (`adapters/opencode/adapter.md`,
+  `docs/ADAPTER_CAPABILITIES.md`) states the per-host skill root mapping
+  and that residual overlap across enabled hosts is expected, replacing the
+  claim that the installer deduplicates roots it must keep separate.
 - `astack worktree audit` and `astack worktree cleanup` for guarded cleanup of
   Agent Stack-managed worktrees after GitHub confirms the exact PR head was
   merged.
 - Resolver closeout now relocates to the primary checkout and records cleanup
   evidence before completing merged work.
-
-### Changed
 
 - Pin CI OpenSpec tooling to the exact manifest/lockfile version and preserve
   release validation for historical tags that predate the lockfile.

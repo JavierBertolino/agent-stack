@@ -2,7 +2,7 @@
 name: git-delivery
 description: Manage worktrees, specification publication, implementation PRs, and cross-links. Use for branch setup, mirror-mode spec PRs, and delivery closeout.
 metadata:
-  version: "1.1"
+  version: "1.2"
   consumer: resolver
   stage: deliver
 ---
@@ -11,6 +11,8 @@ metadata:
 
 Keep branches, PRs, and publications traceable and reusable across retries.
 Record external side effects immediately.
+For `astack` command usage and flags, load `astack-ops`; this skill owns the
+delivery policy and safety boundaries around those commands.
 
 ## Procedure
 

@@ -86,6 +86,9 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
+Every `astack` subcommand and its usage moment is catalogued in
+`astack-ops`.
+
 Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
 (`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
 with the mobile question library. Ask narrow atomic questions together

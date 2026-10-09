@@ -110,7 +110,7 @@ for role in resolver designer design-qa developer web-qa mobile-qa; do
   else fail "kit role $role missing"; fi
 done
 
-SKILLS="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery"
+SKILLS="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops"
 skills_ok=1
 for skill in $SKILLS; do
   file=$KIT_ROOT/.agent-stack/skills/$skill/SKILL.md
@@ -186,6 +186,8 @@ for guide in UX_AGENTS UI_AGENTS; do
 done
 
 # Skill mirrors: presence + collision detection (differing hashes = collision)
+expected_overlap_count=0
+expected_overlap_details=
 for skill in $SKILLS; do
   canon=$ROOT/.agent-stack/skills/$skill/SKILL.md
   [ -f "$canon" ] || { info "project skill $skill not installed"; WARN=$((WARN + 1)); continue; }
@@ -207,9 +209,39 @@ for skill in $SKILLS; do
     fail "skill collision $skill (mirrors disagree with each other)"
     remediate "astack sync"
   else
-    check_ok "skill mirrors $skill consistent"
+    # One host through several roots: OpenCode walks .opencode/skills,
+    # .claude/skills, and .agents/skills, so enabling Claude Code or Codex
+    # makes one skill discoverable twice by OpenCode. The roots must stay
+    # separate for the hosts they serve, so identical copies warn here —
+    # naming the skill and each path — instead of passing silently; the
+    # collision failure above already covers differing hashes.
+    visible=""
+    if [ "$(get_config ENABLE_OPENCODE 1)" != 0 ]; then
+      for oproot in "$ROOT/.opencode/skills/$skill/SKILL.md" "$ROOT/.claude/skills/$skill/SKILL.md" "$ROOT/.agents/skills/$skill/SKILL.md"; do
+        [ -f "$oproot" ] || continue
+        rel=${oproot#"$ROOT"/}
+        visible="$visible $rel"
+      done
+    fi
+    visible_count=$(printf '%s' "$visible" | wc -w)
+    if [ "$visible_count" -gt 1 ]; then
+      expected_overlap_count=$((expected_overlap_count + 1))
+      if [ -n "$expected_overlap_details" ]; then
+        expected_overlap_details="$expected_overlap_details
+  - $skill via$visible"
+      else
+        expected_overlap_details="  - $skill via$visible"
+      fi
+      WARN=$((WARN + 1))
+    else
+      check_ok "skill mirrors $skill consistent"
+    fi
   fi
 done
+if [ "$expected_overlap_count" -gt 0 ]; then
+  info "expected OpenCode skill visibility overlap across $expected_overlap_count skills (each host root stays; identical copies are not failures):"
+  printf '%s\n' "$expected_overlap_details"
+fi
 
 # Policy audit: policy (neutral prompts) is distinct from enforcement (host
 # permissions). Fail closed on required boundaries; never claim equivalent

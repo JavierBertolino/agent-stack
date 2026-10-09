@@ -24,6 +24,11 @@ expect "$T/.opencode/agents/developer.md" '^mode: subagent$' 'opencode developer
 expect "$T/.opencode/agents/designer.md" 'bash: deny' 'opencode designer denies shell'
 expect "$T/.opencode/agents/design-qa.md" 'edit: deny' 'opencode qa denies edit'
 expect "$T/.opencode/agents/resolver.md" 'skill: allow' 'opencode resolver skill access'
+expect "$T/.opencode/agents/resolver.md" '"astack worktree audit \*": allow' 'opencode resolver allows read-only worktree audit'
+if grep -q '"astack worktree cleanup \*": allow' "$T/.opencode/agents/resolver.md"; then
+  printf 'FAIL render resolver must keep destructive worktree cleanup gated\n' >&2
+  FAIL=1
+fi
 # Claude format + boundaries.
 expect "$T/.claude/agents/resolver.md" '^name: resolver$' 'claude resolver name'
 tools=$(awk '/^tools: /{print; exit}' "$T/.claude/agents/designer.md")

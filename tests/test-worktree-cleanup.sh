@@ -36,6 +36,10 @@ case "${1:-} ${2:-}" in
     if [ -n "${GH_HIT_LOG:-}" ]; then
       printf 'hit\n' >> "$GH_HIT_LOG"
     fi
+    if [ "${GH_FAIL_PR_QUERY:-}" = 1 ]; then
+      printf 'simulated GitHub query failure\n' >&2
+      exit 70
+    fi
     if [ -n "${GH_SLEEP:-}" ]; then
       sleep "$GH_SLEEP"
     fi
@@ -264,6 +268,36 @@ printf '%s\n' "$remote_output" | grep -q 'remote branch contains a different HEA
   || fail 'diverged remote cleanup did not enforce the origin fallback'
 [ -d "$NO_UPSTREAM_PATH" ] || fail 'diverged remote cleanup removed the worktree'
 
+REMOTE_ERROR_BRANCH=feature/remote-query-error
+REMOTE_ERROR_PATH=$(create_branch "$REMOTE_ERROR_BRANCH")
+REMOTE_ERROR_HEAD=$(git -C "$REMOTE_ERROR_PATH" rev-parse HEAD)
+git -C "$ROOT" config "branch.$REMOTE_ERROR_BRANCH.pushRemote" missing-remote
+set +e
+remote_error_output=$(cd "$ROOT" && PATH="$BIN:$PATH" \
+  GH_PR_STATE=MERGED GH_PR_BRANCH="$REMOTE_ERROR_BRANCH" GH_PR_HEAD="$REMOTE_ERROR_HEAD" \
+  sh "$KIT_ROOT/scripts/worktree-cleanup.sh" cleanup --branch "$REMOTE_ERROR_BRANCH" 2>&1)
+remote_error_status=$?
+set -e
+[ "$remote_error_status" -eq 2 ] || fail 'remote query failure did not produce a tool-error status'
+printf '%s\n' "$remote_error_output" | grep -q 'cannot query remote branch from missing-remote' \
+  || fail 'remote query failure was not reported'
+[ -d "$REMOTE_ERROR_PATH" ] || fail 'remote query failure removed the worktree'
+git -C "$ROOT" config --unset "branch.$REMOTE_ERROR_BRANCH.pushRemote"
+
+PR_ERROR_BRANCH=feature/pr-query-error
+PR_ERROR_PATH=$(create_branch "$PR_ERROR_BRANCH")
+PR_ERROR_HEAD=$(git -C "$PR_ERROR_PATH" rev-parse HEAD)
+set +e
+pr_error_output=$(cd "$ROOT" && PATH="$BIN:$PATH" \
+  GH_FAIL_PR_QUERY=1 GH_PR_STATE=MERGED GH_PR_BRANCH="$PR_ERROR_BRANCH" GH_PR_HEAD="$PR_ERROR_HEAD" \
+  sh "$KIT_ROOT/scripts/worktree-cleanup.sh" cleanup --branch "$PR_ERROR_BRANCH" 2>&1)
+pr_error_status=$?
+set -e
+[ "$pr_error_status" -eq 2 ] || fail 'GitHub query failure did not produce a tool-error status'
+printf '%s\n' "$pr_error_output" | grep -q 'cannot query GitHub pull requests' \
+  || fail 'GitHub query failure was not reported'
+[ -d "$PR_ERROR_PATH" ] || fail 'GitHub query failure removed the worktree'
+
 REAL_GIT=$(command -v git)
 FAIL_GIT_BIN=$T/fail-git-bin
 mkdir -p "$FAIL_GIT_BIN"
@@ -309,31 +343,66 @@ printf '%s\n' "$missing_output" | grep -q 'no attached worktree matches the requ
 
 INT_BRANCH=feature/interrupt
 INT_PATH=$(create_branch "$INT_BRANCH")
-INT_HEAD=$(git -C "$INT_PATH" rev-parse HEAD)
 INT_HIT_LOG=$T/interrupt-hit.log
 INT_OUTPUT=$T/interrupt-output.log
-(
-  trap - INT
-  exec env PATH="$BIN:$PATH" GH_PR_STATE=MERGED GH_PR_BRANCH="$INT_BRANCH" \
-    GH_PR_HEAD="$INT_HEAD" GH_SLEEP=2 GH_HIT_LOG="$INT_HIT_LOG" \
-    sh "$KIT_ROOT/scripts/worktree-cleanup.sh" cleanup --root "$ROOT" --branch "$INT_BRANCH"
-) > "$INT_OUTPUT" 2>&1 &
-INT_PID=$!
-poll=0
-while [ ! -s "$INT_HIT_LOG" ] && [ "$poll" -lt 100 ]; do
-  sleep 0.05
-  poll=$((poll + 1))
-done
-if [ ! -s "$INT_HIT_LOG" ]; then
-  fail 'interrupt test never reached the slow GitHub query'
+if PATH="$BIN:$PATH" GH_PR_STATE=MERGED GH_PR_BRANCH="$INT_BRANCH" \
+    GH_PR_HEAD="$(git -C "$INT_PATH" rev-parse HEAD)" GH_SLEEP=2 GH_HIT_LOG="$INT_HIT_LOG" \
+    node - "$KIT_ROOT/scripts/worktree-cleanup.sh" "$ROOT" "$INT_BRANCH" "$INT_HIT_LOG" "$INT_OUTPUT" <<'NODE'
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+
+const [script, root, branch, hitLog, output] = process.argv.slice(2);
+const stdout = fs.openSync(output, 'w');
+const stderr = fs.openSync(output, 'a');
+const child = spawn('sh', [script, 'cleanup', '--root', root, '--branch', branch], {
+  detached: true,
+  env: process.env,
+  stdio: ['ignore', stdout, stderr],
+});
+let sentInterrupt = false;
+const poll = setInterval(() => {
+  if (fs.existsSync(hitLog)) {
+    sentInterrupt = true;
+    clearInterval(poll);
+    try {
+      process.kill(-child.pid, 'SIGINT');
+    } catch (error) {
+      console.error(`could not interrupt cleanup process group: ${error.message}`);
+      process.exitCode = 1;
+    }
+  }
+}, 50);
+const timeout = setTimeout(() => {
+  console.error('interrupt test never reached the slow GitHub query');
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {}
+}, 5000);
+
+child.once('error', (error) => {
+  console.error(`could not start cleanup: ${error.message}`);
+  process.exitCode = 1;
+});
+child.once('close', (code, signal) => {
+  clearInterval(poll);
+  clearTimeout(timeout);
+  fs.closeSync(stdout);
+  fs.closeSync(stderr);
+  if (!sentInterrupt) {
+    console.error('interrupt test never signalled cleanup');
+    process.exitCode = 1;
+  } else if (code !== 130 && signal !== 'SIGINT') {
+    console.error(`expected cleanup to stop on SIGINT; got code=${code}, signal=${signal}`);
+    process.exitCode = 1;
+  }
+});
+NODE
+then
+  :
 else
-  kill -INT "$INT_PID" 2>/dev/null || fail 'could not interrupt cleanup process'
+  fail 'Ctrl-C did not abort cleanup with status 130'
+  cat "$INT_OUTPUT" >&2
 fi
-set +e
-wait "$INT_PID"
-interrupt_status=$?
-set -e
-[ "$interrupt_status" -eq 130 ] || fail 'Ctrl-C did not abort cleanup with status 130'
 [ -d "$INT_PATH" ] || fail 'Ctrl-C allowed cleanup to remove the worktree'
 if git -C "$ROOT" show-ref --verify --quiet "refs/heads/$INT_BRANCH"; then
   :

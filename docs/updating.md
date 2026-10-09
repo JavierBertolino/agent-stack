@@ -28,7 +28,10 @@ kit via three-way merge: unchanged managed sources update cleanly,
 customizations survive with visible `.kit-new` files, and project
 `config.conf` is never modified. The project records the kit version it
 was initialized with (`.agent-stack/.kit-version`), so the upgrade can
-report `old → new`.
+report `old → new`. `--check` treats a missing or differing marker as one
+pending update and exits non-zero; applying the upgrade records the installed
+kit version. `doctor` reports a missing marker or a mismatch and points to
+`astack upgrade`.
 
 After upgrading, re-rendered platform mirrors are synchronized
 automatically.

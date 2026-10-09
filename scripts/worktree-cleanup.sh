@@ -17,12 +17,13 @@ cleanup removes the worktree and its local branch only when all safety checks
 pass. Remote branches are never deleted.
 
 Safety checks require the worktree to:
-  - live directly below the repository's .worktrees/ directory;
+  - live directly below the primary repository's .worktrees/ directory;
   - not be the caller's current worktree;
-  - have a local branch and a clean working tree;
+  - have a local branch and no tracked, untracked, or ignored changes;
   - have a GitHub PR whose state is MERGED;
   - exactly match that merged PR's head SHA;
-  - match the remote branch SHA when the remote branch still exists.
+  - match the extant remote branch SHA when a configured/push-default/origin
+    remote branch exists.
 
 With --branch, a skipped or missing branch exits 1 so closeout automation can
 stop safely. Without --branch, unsafe and active worktrees are reported and
@@ -70,15 +71,48 @@ command -v gh >/dev/null 2>&1 || die 'GitHub CLI (gh) is required'
 
 target_top=$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null) \
   || die "not a Git repository: $ROOT"
-common_dir=$(git -C "$target_top" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+common_dir=$(git -C "$target_top" rev-parse --git-common-dir 2>/dev/null) \
   || die "cannot resolve common Git directory: $target_top"
-repo_root=$(canonical_dir "$(dirname -- "$common_dir")") \
-  || die "cannot resolve primary repository root from: $common_dir"
+case "$common_dir" in
+  /*) ;;
+  *) common_dir=$target_top/$common_dir ;;
+esac
+common_dir=$(canonical_dir "$common_dir") \
+  || die "cannot resolve common Git directory: $common_dir"
+target_git_dir=$(git -C "$target_top" rev-parse --git-dir 2>/dev/null) \
+  || die "cannot resolve Git directory: $target_top"
+case "$target_git_dir" in
+  /*) ;;
+  *) target_git_dir=$target_top/$target_git_dir ;;
+esac
+target_git_dir=$(canonical_dir "$target_git_dir") \
+  || die "cannot resolve Git directory: $target_git_dir"
+if [ "$target_git_dir" = "$common_dir" ]; then
+  # This also handles a primary worktree initialized with
+  # --separate-git-dir, for which worktree list reports the git-dir as its path.
+  repo_root=$(canonical_dir "$target_top") \
+    || die "cannot resolve primary worktree: $target_top"
+else
+  primary_candidate=$(git -C "$target_top" worktree list --porcelain 2>/dev/null \
+    | awk 'NR == 1 && /^worktree / { print substr($0, 10); exit }')
+  [ -n "$primary_candidate" ] || die 'Git returned no primary worktree'
+  repo_root=$(canonical_dir "$primary_candidate") \
+    || die "cannot resolve primary worktree: $primary_candidate"
+  if ! git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
+    die 'cannot resolve the primary checkout from this linked worktree; run from the primary checkout or pass its --root'
+  fi
+fi
 managed_root=$repo_root/.worktrees
 
 current_top=
 if current_candidate=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null); then
-  current_common=$(git -C "$current_candidate" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  current_common=$(git -C "$current_candidate" rev-parse --git-common-dir 2>/dev/null || true)
+  case "$current_common" in
+    /*) ;;
+    '') ;;
+    *) current_common=$current_candidate/$current_common ;;
+  esac
+  current_common=$(canonical_dir "$current_common" 2>/dev/null || true)
   if [ "$current_common" = "$common_dir" ]; then
     current_top=$(canonical_dir "$current_candidate" 2>/dev/null || true)
   fi
@@ -89,8 +123,12 @@ repo_slug=$(cd "$repo_root" && gh repo view --json nameWithOwner --jq '.nameWith
 [ -n "$repo_slug" ] || die 'GitHub repository name is empty'
 
 snapshot=$(mktemp "${TMPDIR:-/tmp}/astack-worktrees.XXXXXX")
-trap 'rm -f "$snapshot"' EXIT INT TERM
-git -C "$repo_root" worktree list --porcelain > "$snapshot"
+trap 'rm -f "$snapshot"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+git -C "$repo_root" worktree list --porcelain > "$snapshot" \
+  || die 'cannot list Git worktrees'
+grep -q '^worktree ' "$snapshot" || die 'Git returned no worktree records'
 
 SAFE=0
 CLEANED=0
@@ -100,6 +138,7 @@ MATCHED=0
 worktree_path=
 worktree_head=
 worktree_branch=
+worktree_locked=
 
 skip_worktree() {
   reason=$1
@@ -115,6 +154,7 @@ process_worktree() {
     refs/heads/*) branch=${branch#refs/heads/} ;;
     '')
       if [ -n "$BRANCH_FILTER" ]; then return 0; fi
+      worktree_branch='(detached)'
       skip_worktree 'detached HEAD'
       return 0
       ;;
@@ -139,7 +179,12 @@ process_worktree() {
   worktree_path=$canonical_path
 
   case "$canonical_path" in
-    "$managed_root"/*) ;;
+    "$managed_root"/*)
+      managed_relative=${canonical_path#"$managed_root"/}
+      case "$managed_relative" in
+        */*) skip_worktree 'not directly below the managed .worktrees directory'; return 0 ;;
+      esac
+      ;;
     *)
       if [ -n "$BRANCH_FILTER" ]; then
         skip_worktree 'not inside the managed .worktrees directory'
@@ -155,8 +200,18 @@ process_worktree() {
     return 0
   fi
 
-  if [ -n "$(git -C "$canonical_path" status --porcelain 2>/dev/null)" ]; then
-    skip_worktree 'working tree is not clean'
+  if [ -n "$worktree_locked" ]; then
+    skip_worktree "locked worktree${worktree_locked:+: $worktree_locked}"
+    return 0
+  fi
+
+  if ! status_output=$(git -C "$canonical_path" status \
+      --porcelain --ignored=matching 2>/dev/null); then
+    skip_worktree 'cannot inspect working tree status'
+    return 0
+  fi
+  if [ -n "$status_output" ]; then
+    skip_worktree 'working tree is not clean or contains ignored files'
     return 0
   fi
 
@@ -166,7 +221,16 @@ process_worktree() {
     return 0
   fi
 
-  remote=$(git -C "$repo_root" config --get "branch.$branch.remote" 2>/dev/null || true)
+  remote=$(git -C "$repo_root" config --get "branch.$branch.pushRemote" 2>/dev/null || true)
+  if [ -z "$remote" ]; then
+    remote=$(git -C "$repo_root" config --get remote.pushDefault 2>/dev/null || true)
+  fi
+  if [ -z "$remote" ]; then
+    remote=$(git -C "$repo_root" config --get "branch.$branch.remote" 2>/dev/null || true)
+  fi
+  if [ -z "$remote" ] && git -C "$repo_root" config --get remote.origin.url >/dev/null 2>&1; then
+    remote=origin
+  fi
   if [ -n "$remote" ] && [ "$remote" != '.' ]; then
     if ! remote_rows=$(git -C "$repo_root" ls-remote "$remote" "refs/heads/$branch" 2>/dev/null); then
       ERRORS=$((ERRORS + 1))
@@ -226,18 +290,23 @@ while IFS= read -r line || [ -n "$line" ]; do
     worktree\ *) worktree_path=${line#worktree } ;;
     HEAD\ *) worktree_head=${line#HEAD } ;;
     branch\ *) worktree_branch=${line#branch } ;;
+    locked*) worktree_locked=${line#locked }; [ -n "$worktree_locked" ] || worktree_locked=yes ;;
     '')
       process_worktree
       worktree_path=
       worktree_head=
       worktree_branch=
+      worktree_locked=
       ;;
   esac
 done < "$snapshot"
 process_worktree
 
 if [ "$MODE" = cleanup ]; then
-  git -C "$repo_root" worktree prune
+  if ! git -C "$repo_root" worktree prune; then
+    ERRORS=$((ERRORS + 1))
+    printf 'ERROR\tworktree prune failed\n' >&2
+  fi
 fi
 
 printf 'SUMMARY\tmode=%s\tsafe=%s\tcleaned=%s\tskipped=%s\terrors=%s\n' \
@@ -245,7 +314,10 @@ printf 'SUMMARY\tmode=%s\tsafe=%s\tcleaned=%s\tskipped=%s\terrors=%s\n' \
 
 [ "$ERRORS" -eq 0 ] || exit 2
 if [ -n "$BRANCH_FILTER" ]; then
-  [ "$MATCHED" -gt 0 ] || exit 1
+  if [ "$MATCHED" -eq 0 ]; then
+    printf 'SKIP\t%s\t\tno attached worktree matches the requested branch\n' "$BRANCH_FILTER"
+    exit 1
+  fi
   if [ "$MODE" = cleanup ]; then
     [ "$CLEANED" -gt 0 ] || exit 1
   else

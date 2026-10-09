@@ -1594,7 +1594,7 @@ render_opencode() {
     printf '%s\n' 'permission:'
     case "$role" in
       resolver)
-        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
+        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "astack worktree audit *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
         ;;
       designer)
         printf '%s\n' '  bash: deny' '  task: deny' '  edit:' '    "*": deny' '    "openspec/changes/**/ux.md": allow'
@@ -2119,16 +2119,18 @@ unconditional extra agents for every ticket.
    (`ARCHIVE_STAGE=after-merge`): transition the run to `awaiting_merge`
    with `record-external` PR references recorded, then stop. Merge
    observation and archive/completion are a separate invocation, hook, or
-    existing project process — do not imply the resolver keeps observing
-    after its session ends.
+   existing project process — do not imply the resolver keeps observing
+   after its session ends.
 7. On a later invocation after every affected PR is re-read as `MERGED`, clean
    up each implementation/specification worktree through the `git-delivery`
    skill. Move this session to the repository's primary checkout first, then
    run `astack worktree cleanup --root <repo-root> --branch <branch>`. Record
-   the `CLEANED` output in run state before completing the linked issue. Never
-   clean on approval alone, while a PR is merely open/closed, or by forcing a
-   dirty/current/SHA-mismatched worktree. If relocation or cleanup cannot run,
-   leave the worktree intact and report the blocker and exact follow-up command.
+   the result before completing the linked issue with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   Never clean on approval alone, while a PR is merely open/closed, or by
+   forcing a dirty/current/locked/SHA-mismatched worktree. If relocation or
+   cleanup cannot run, leave the worktree intact and report the blocker and
+   exact follow-up command.
 8. Remaining work becomes a new issue or explicitly approved follow-up, not a
    silent `*-followup` change.
 9. Validate the run (`validate --run <run-id>`), append the closing event,
@@ -3291,16 +3293,19 @@ Record external side effects immediately.
    `MERGED`, move the active session out of the feature worktree and into the
    repository's primary checkout. Run
    `astack worktree cleanup --root <repo-root> --branch <branch>` and record its
-   `CLEANED` evidence. The command is the safety boundary: it only removes a
-   clean worktree below `.worktrees/` when the local and extant remote branch
-   heads exactly match the merged PR head. It removes the local branch but
-   never the remote branch. Never substitute `rm -rf`, `git worktree remove
-   --force`, or `git branch -D` by hand when the command skips a worktree.
-6. If cleanup reports the branch as current, dirty, detached, unpublished,
-   unmerged, or SHA-mismatched, stop cleanup and report the exact reason. A
-   merged PR does not authorize discarding later or uncommitted work. When
-   session relocation is unavailable, provide the exact cleanup command for a
-   later invocation instead of deleting the active worktree.
+   `CLEANED` evidence with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   The command is the safety boundary: it only removes a clean worktree below
+   `.worktrees/` when the local and extant remote branch heads exactly match
+   the merged PR head. It removes the local branch but never the remote
+   branch. Never substitute `rm -rf`, `git worktree remove --force`, or
+   `git branch -D` by hand when the command skips a worktree.
+ 6. If cleanup reports the branch as current, dirty, detached, unpublished,
+    locked, unmerged, outside `.worktrees/`, or SHA-mismatched, stop cleanup and
+    report the exact reason. A merged PR does not authorize discarding later or
+    uncommitted work. When session relocation is unavailable, provide the exact
+    cleanup command for a later invocation instead of deleting the active
+    worktree.
 
 ## Output
 

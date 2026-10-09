@@ -372,16 +372,18 @@ unconditional extra agents for every ticket.
    (`ARCHIVE_STAGE=after-merge`): transition the run to `awaiting_merge`
    with `record-external` PR references recorded, then stop. Merge
    observation and archive/completion are a separate invocation, hook, or
-    existing project process — do not imply the resolver keeps observing
-    after its session ends.
+   existing project process — do not imply the resolver keeps observing
+   after its session ends.
 7. On a later invocation after every affected PR is re-read as `MERGED`, clean
    up each implementation/specification worktree through the `git-delivery`
    skill. Move this session to the repository's primary checkout first, then
    run `astack worktree cleanup --root <repo-root> --branch <branch>`. Record
-   the `CLEANED` output in run state before completing the linked issue. Never
-   clean on approval alone, while a PR is merely open/closed, or by forcing a
-   dirty/current/SHA-mismatched worktree. If relocation or cleanup cannot run,
-   leave the worktree intact and report the blocker and exact follow-up command.
+   the result before completing the linked issue with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   Never clean on approval alone, while a PR is merely open/closed, or by
+   forcing a dirty/current/locked/SHA-mismatched worktree. If relocation or
+   cleanup cannot run, leave the worktree intact and report the blocker and
+   exact follow-up command.
 8. Remaining work becomes a new issue or explicitly approved follow-up, not a
    silent `*-followup` change.
 9. Validate the run (`validate --run <run-id>`), append the closing event,

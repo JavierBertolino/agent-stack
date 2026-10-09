@@ -39,16 +39,19 @@ Record external side effects immediately.
    `MERGED`, move the active session out of the feature worktree and into the
    repository's primary checkout. Run
    `astack worktree cleanup --root <repo-root> --branch <branch>` and record its
-   `CLEANED` evidence. The command is the safety boundary: it only removes a
-   clean worktree below `.worktrees/` when the local and extant remote branch
-   heads exactly match the merged PR head. It removes the local branch but
-   never the remote branch. Never substitute `rm -rf`, `git worktree remove
-   --force`, or `git branch -D` by hand when the command skips a worktree.
-6. If cleanup reports the branch as current, dirty, detached, unpublished,
-   unmerged, or SHA-mismatched, stop cleanup and report the exact reason. A
-   merged PR does not authorize discarding later or uncommitted work. When
-   session relocation is unavailable, provide the exact cleanup command for a
-   later invocation instead of deleting the active worktree.
+   `CLEANED` evidence with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   The command is the safety boundary: it only removes a clean worktree below
+   `.worktrees/` when the local and extant remote branch heads exactly match
+   the merged PR head. It removes the local branch but never the remote
+   branch. Never substitute `rm -rf`, `git worktree remove --force`, or
+   `git branch -D` by hand when the command skips a worktree.
+ 6. If cleanup reports the branch as current, dirty, detached, unpublished,
+    locked, unmerged, outside `.worktrees/`, or SHA-mismatched, stop cleanup and
+    report the exact reason. A merged PR does not authorize discarding later or
+    uncommitted work. When session relocation is unavailable, provide the exact
+    cleanup command for a later invocation instead of deleting the active
+    worktree.
 
 ## Output
 

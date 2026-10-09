@@ -42,10 +42,10 @@ Usage:
                                (user-level, never in the repo).
   astack jev ask [--request FILE|-] [--model MODEL]
                                Evaluate typed Jev questions from JSON.
-  astack worktree audit [--branch BRANCH]
-                               Report safely removable merged worktrees.
-  astack worktree cleanup [--branch BRANCH]
-                               Remove verified merged worktrees and local branches.
+  astack worktree audit [--root PATH] [--branch BRANCH]
+                                Report safely removable merged worktrees.
+  astack worktree cleanup [--root PATH] [--branch BRANCH]
+                                Remove verified merged worktrees and local branches.
   astack update [--check]     Update the installed Agent Stack CLI and kit.
   astack upgrade [--check]    Upgrade the current project to the installed kit.
   astack prune                Remove only safe, stale generated files.

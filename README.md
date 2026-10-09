@@ -175,9 +175,10 @@ astack --help
 ```
 
 `astack worktree cleanup` is intentionally post-merge: PR approval is not
-enough. It removes only clean worktrees managed below `.worktrees/` whose local
-HEAD (and remote branch, when it still exists) exactly matches a merged GitHub
-PR. It also deletes the local branch, never the remote branch. See
+enough. It removes only clean, directly managed worktrees below `.worktrees/`
+whose local HEAD (and discoverable remote branch) exactly matches a merged
+GitHub PR. Ignored files also make a worktree non-clean. It deletes the local
+branch, never the remote branch. See
 [`docs/worktrees.md`](docs/worktrees.md).
 
 ## Architecture

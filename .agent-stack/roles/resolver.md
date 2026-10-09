@@ -91,20 +91,17 @@ If a required answer is missing, stop and ask. Do not start a partial pipeline.
 
 ## 3.1 Task status
 
-On a linked Linear issue, at work start, apply `linear-workflow`
-`## Procedure` steps 3–4 (assignee and state rules). Record ownership and
-the before/after states in the run state
-(`record-external --key issueState`).
+At linked-issue start, follow `linear-workflow` `## Procedure` (assignees/states);
+record ownership and before/after state via `record-external --key issueState`.
 
 ## 4. Branch setup
 
 Identify affected repositories and paths from the project instructions and
 the request; do not assume a monorepo or fixed directory names. Determine
 each repository's base branch: an explicitly supplied issue, dependency, or
-parent branch wins over the repository default branch. Worktree creation
-rules (placement under `<repo>/.worktrees/<branch-slug>`, the
-`.worktrees/` ignore setup, unrelated dirty changes) are `git-delivery`
-`## Procedure` step 1; the worktree strategy is mandatory.
+parent branch wins over the repository default branch. Worktree setup (the
+ignored `<repo>/.worktrees/<branch-slug>` path and leaving unrelated dirt
+untouched) follows `git-delivery` `## Procedure`; this strategy is mandatory.
 
 Use the issue branch name when available; otherwise use the project-approved
 fallback or the OpenSpec change name. Record the repository ID, base ref/SHA,
@@ -116,11 +113,9 @@ the PR base. This is a stacked PR: do not silently retarget it to `main`.
 
 ## 5. Specify
 
-Follow `openspec-workflow` `## Procedure` steps 1–5: create the change,
-read the artifact graph, author each artifact, apply the task
-`verification:` contract (step 4), and hold the readiness gate (step 5) —
-UI work MUST NOT reach implementation without a ready designer `ux.md`
-proposal. When `design.md` exists, add the design traceability block from
+Follow `openspec-workflow` `## Procedure` for artifact creation, task
+verification, and readiness. UI work MUST NOT reach implementation without a
+ready designer `ux.md` proposal. When `design.md` exists, add the traceability block from
 `linear-workflow` `## Traceability block`.
 
 The resolver is the sole run-state writer. Create the run with the
@@ -155,9 +150,7 @@ Read the publication policy from `.agent-stack/config.conf`:
 - `SPECS_MODE=local` (default): artifacts stay in the code repository. Do
   not attempt external publication and do not require `SPECS_REPOSITORY`.
 - `SPECS_MODE=mirror`: `SPECS_REPOSITORY` and publication authorization
-  are required; the publication procedure (create/reuse the namespaced
-  spec branch/PR, record, cross-link, refresh after amendments) is
-  `git-delivery` `## Procedure` step 2.
+  are required; follow `git-delivery` `## Procedure` for mirror publication.
 
 A spec PR may remain open while implementation proceeds unless the project
 requires its approval (`SPECS_MERGE_GATE`); do not require routine human
@@ -254,17 +247,14 @@ unconditional extra agents for every ticket.
 ## 11. Close
 
 1. Confirm OpenSpec status and verification evidence are complete.
-2. In mirror mode, refresh the publication with the verified artifacts per
-   `git-delivery` `## Procedure` step 2 (same branch/PR); record the specs
-   PR URL in the run state.
-3. Publish implementation branches per `git-delivery` `## Procedure`
-   steps 3–4; record each PR URL with `record-external --key implPr`.
-4. Apply `linear-workflow` `## Procedure` steps 4–5 for Linear states:
-   `TASK_STATE_IN_PR` when PRs are open, assignees preserved; completed
-   state only after merge when policy requires, with the closing evidence
-   comment.
-5. Attach the closeout document per `linear-workflow` `## Procedure`
-   step 5 (`Spec: <linear-project-name> — <change-name>`).
+2. In mirror mode, refresh the verified publication via `git-delivery`
+   `## Procedure` (same branch/PR); record its URL.
+3. Publish implementation branches via `git-delivery` `## Procedure`; record
+   each URL with `record-external --key implPr`.
+4. Apply `linear-workflow` `## Procedure`: set `TASK_STATE_IN_PR` for open
+   PRs, preserve assignees, and complete only after merge with evidence.
+5. Attach the closeout document via `linear-workflow` `## Procedure`:
+   `Spec: <linear-project-name> — <change-name>`.
 6. Follow the project's archive policy when configured. Default
    (`ARCHIVE_STAGE=after-merge`): transition the run to `awaiting_merge`
    with `record-external` PR references recorded, then stop. Merge

@@ -1,3 +1,7 @@
+Delivery split: group 1 is PR #16; groups 2–8 are PR #17. This shared change
+must remain unarchived until both implementation PRs are merged. Record the
+CI-pin changelog entry in PR #16 only.
+
 ## 1. Reproducible CI and generated-artifact hygiene (independent, land first)
 
 - [x] 1.1 Add `package.json` + `package-lock.json` at the repo root with `@fission-ai/openspec` pinned to an exact version (use the version CI resolves today)
@@ -99,7 +103,7 @@ codex 14,025, cursor 13,929; budget 14,900); other roles `3,243–6,180 B /
 - [x] 8.4 Run a fixture install for each platform combination used in tests (`opencode`, `claude`, `codex`, `cursor`, and all four) and confirm `setup check` reports no drift
 - [x] 8.5 Confirm `tests/test-upgrade.sh` shows unmodified roles/skills are replaced and edited ones surface merge conflicts under `astack upgrade`, including the new `astack-ops` skill
 - [x] 8.6 Record final measured sizes (neutral role, rendered resolver, total skill descriptions) against budgets in `tasks.md` group 3
-- [x] 8.7 Add a `CHANGELOG.md` entry covering the prompt-size reduction, the `astack run-state` wording fix, the scoped resolver permission entries, the new `astack-ops` skill, the new doctor warning, and the CI pin
+- [x] 8.7 Add a `CHANGELOG.md` entry covering the prompt-size reduction, the `astack run-state` wording fix, the scoped resolver permission entries, the new `astack-ops` skill, and the new doctor warning; the CI-pin entry is owned by PR #16
 - [x] 8.8 Fresh-worktree check for the spec's "Fresh worktree" scenario: in a fixture install, commit the installed skills, create a second checkout with `git worktree add`, and confirm every enabled host still discovers each skill exactly once with `setup check` and `scripts/doctor.sh` reporting no drift
 - [x] 8.9 Update `docs/SKILLS.md` (and `docs/RUN_STATE.md` if needed) so skill bodies are documented as the home for procedure detail previously inlined in the resolver, and `astack-ops` is documented as the CLI map
 - [x] 8.10 Confirm the change's file list omits `scripts/run-state.py` and every other gate-enforcing code path — the checkable form of the spec's "Enforcement code is untouched" scenario — so gate behavior is unchanged by construction

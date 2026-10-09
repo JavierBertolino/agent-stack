@@ -186,6 +186,8 @@ for guide in UX_AGENTS UI_AGENTS; do
 done
 
 # Skill mirrors: presence + collision detection (differing hashes = collision)
+expected_overlap_count=0
+expected_overlap_details=
 for skill in $SKILLS; do
   canon=$ROOT/.agent-stack/skills/$skill/SKILL.md
   [ -f "$canon" ] || { info "project skill $skill not installed"; WARN=$((WARN + 1)); continue; }
@@ -223,14 +225,23 @@ for skill in $SKILLS; do
     fi
     visible_count=$(printf '%s' "$visible" | wc -w)
     if [ "$visible_count" -gt 1 ]; then
-      info "skill $skill visible to opencode through $visible_count roots:$visible"
-      info "  residual overlap across enabled hosts is expected; each root stays for the host it serves (identical hashes: not a failure)"
+      expected_overlap_count=$((expected_overlap_count + 1))
+      if [ -n "$expected_overlap_details" ]; then
+        expected_overlap_details="$expected_overlap_details
+  - $skill via$visible"
+      else
+        expected_overlap_details="  - $skill via$visible"
+      fi
       WARN=$((WARN + 1))
     else
       check_ok "skill mirrors $skill consistent"
     fi
   fi
 done
+if [ "$expected_overlap_count" -gt 0 ]; then
+  info "expected OpenCode skill visibility overlap across $expected_overlap_count skills (each host root stays; identical copies are not failures):"
+  printf '%s\n' "$expected_overlap_details"
+fi
 
 # Policy audit: policy (neutral prompts) is distinct from enforcement (host
 # permissions). Fail closed on required boundaries; never claim equivalent

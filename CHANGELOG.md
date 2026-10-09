@@ -28,8 +28,6 @@ follow [Semantic Versioning](https://semver.org/).
   still fail. Single-platform installs are asserted to leave no other
   host's skill roots, and `setup check` reports stale skill roots of
   disabled hosts as removable (`prune` removes them).
-- Third-party CI pins (GitHub Actions, npm tooling) with Dependabot bumps
-  and pin-hygiene coverage in `tests/test-ci-pins.sh`.
 
 ### Changed
 

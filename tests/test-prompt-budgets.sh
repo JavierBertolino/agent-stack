@@ -3,8 +3,7 @@
 # growth shows up as a number instead of creeping in silently. Budgets are
 # declared once, here (spec: prompt-size-budgets).
 #
-# Expected to be RED for the resolver until the split (task group 3) lands:
-# the neutral resolver ships at 18,412 B against its 13,800 B budget.
+# The resolver split is complete; this ceiling now guards future prompt growth.
 set -eu
 KIT_ROOT=${KIT_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}
 FAIL=0

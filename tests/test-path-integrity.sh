@@ -121,6 +121,11 @@ fi
 if ! grep -q 'astack run-state' "$resolver"; then
   report 'installed resolver role does not name astack run-state'
 fi
+resolver_flat=$WORK/resolver.flat
+tr '\n' ' ' < "$KIT_ROOT/.agent-stack/roles/resolver.md" | tr -s ' ' > "$resolver_flat"
+if grep -qE '`## Procedure` steps? [0-9]' "$resolver_flat"; then
+  report 'resolver uses a numbered skill procedure pointer; cite the stable procedure section instead'
+fi
 docs_ep=$(grep ' run-state --root' "$docs" | head -1 | awk '{ print $1 }')
 role_ep=$(grep ' run-state --root' "$resolver" | head -1 | awk '{ print $1 }')
 if [ -z "$docs_ep" ] || [ -z "$role_ep" ] || [ "$docs_ep" != "$role_ep" ]; then

@@ -60,6 +60,13 @@ changes are additive and scoped: four `astack` allow entries in the rendered
 OpenCode resolver, nothing removed or loosened. No breaking change: installed
 file layout and command surface stay the same.
 
+## Delivery split
+
+The independent CI pinning and generated-artifact hygiene tasks ship in PR #16;
+the prompt, skill, path-integrity, and visibility work ships in PR #17. This
+OpenSpec change describes the combined outcome and remains unarchived until
+both PRs are merged. The CI-pin changelog entry belongs to PR #16 only.
+
 ## Capabilities
 
 ### New Capabilities

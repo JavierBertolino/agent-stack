@@ -2,7 +2,7 @@
 name: git-delivery
 description: Manage worktrees, specification publication, implementation PRs, and cross-links. Use for branch setup, mirror-mode spec PRs, and delivery closeout.
 metadata:
-  version: "1.0"
+  version: "1.1"
   consumer: resolver
   stage: deliver
 ---
@@ -35,15 +35,34 @@ Record external side effects immediately.
    Cross-link issue, spec PR, and implementation PRs. Reuse branches/PRs on
    retry; resume discovers existing PRs instead of duplicating them.
 4. Base branches other than main (stacked work) retain the recorded base.
+5. Post-merge cleanup: only after re-reading the remote PR and observing state
+   `MERGED`, move the active session out of the feature worktree and into the
+   repository's primary checkout. Run
+   `astack worktree cleanup --root <repo-root> --branch <branch>` and record its
+   `CLEANED` evidence with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   The command is the safety boundary: it only removes a clean worktree below
+   `.worktrees/` when the local and extant remote branch heads exactly match
+   the merged PR head. It removes the local branch but never the remote
+   branch. Never substitute `rm -rf`, `git worktree remove --force`, or
+   `git branch -D` by hand when the command skips a worktree.
+ 6. If cleanup reports the branch as current, dirty, detached, unpublished,
+    locked, unmerged, outside `.worktrees/`, or SHA-mismatched, stop cleanup and
+    report the exact reason. A merged PR does not authorize discarding later or
+    uncommitted work. When session relocation is unavailable, provide the exact
+    cleanup command for a later invocation instead of deleting the active
+    worktree.
 
 ## Output
 
-Branch/PR references with hashes, cross-links, and next action.
+Branch/PR references with hashes, cross-links, cleanup evidence, and next
+action.
 
 ## Evidence
 
-PR IDs, branch names, SHAs, and observed remote state. Later source
-revisions invalidate or refresh publication evidence.
+PR IDs, branch names, SHAs, observed remote state, and the `SAFE`/`CLEANED`
+result from `astack worktree`. Later source revisions invalidate or refresh
+publication and cleanup evidence.
 
 ## Failure behavior
 

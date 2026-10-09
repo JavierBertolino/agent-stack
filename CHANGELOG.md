@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `astack worktree audit` and `astack worktree cleanup` for guarded cleanup of
+  Agent Stack-managed worktrees after GitHub confirms the exact PR head was
+  merged.
+- Resolver closeout now relocates to the primary checkout and records cleanup
+  evidence before completing merged work.
+
 ### Fixed
 
 - `astack upgrade --check` now reports project kit-version drift as a pending

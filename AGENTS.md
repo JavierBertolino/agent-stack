@@ -16,8 +16,11 @@ Consuming projects own their product behavior, `UX_AGENTS.md`, and
 - Author neutral sources once under `.agent-stack/` (`roles/`, `skills/`,
   `contracts/`). Never hardcode host paths inside neutral roles or skills.
 - Regenerate the standalone distribution with
-  `scripts/build-installer.sh`; never hand-edit `setup.sh`
-  (CI enforces reproducibility).
+  `scripts/build-installer.sh`; never hand-edit or open `setup.sh` — it is a
+  generated build artifact (marked `linguist-generated` in `.gitattributes`).
+  To change installer behavior, edit `scripts/setup-agent-stack.sh` (or the
+  neutral sources under `.agent-stack/**`) and regenerate; CI enforces
+  reproducibility with `build-installer.sh --check`.
 - Keep `scripts/setup-agent-stack.sh` POSIX `sh` (`sh -n` must pass).
   Python is allowed for `run-state.py`, `validate-contracts.py`, and
   `build-installer.sh` (stdlib only).

@@ -14,6 +14,11 @@ follow [Semantic Versioning](https://semver.org/).
 - Resolver closeout now relocates to the primary checkout and records cleanup
   evidence before completing merged work.
 
+### Changed
+
+- Pin CI OpenSpec tooling to the exact manifest/lockfile version and preserve
+  release validation for historical tags that predate the lockfile.
+
 ### Fixed
 
 - `astack upgrade --check` now reports project kit-version drift as a pending

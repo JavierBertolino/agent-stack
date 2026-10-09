@@ -14,6 +14,11 @@ follow [Semantic Versioning](https://semver.org/).
 - Resolver closeout now relocates to the primary checkout and records cleanup
   evidence before completing merged work.
 
+### Fixed
+
+- `astack upgrade --check` now reports project kit-version drift as a pending
+  update even when all managed source files already match the installed kit.
+
 ## [0.1.4] — 2026-09-29
 
 ### Added

@@ -14,50 +14,79 @@ report() {
   FAIL=1
 }
 
-# 1. No floating tags: any npm install -g must name an exact x.y.z, and no
-#    workflow may reference @latest at all.
-unpinned=$(grep -Rn "npm install -g" "$WF" 2>/dev/null \
-  | grep -vE "@[0-9]+\.[0-9]+\.[0-9]+" || true)
+# 1. No floating tags: global npm installs must name an exact x.y.z, and
+#    registry shortcuts (latest/next/beta/canary) are forbidden in workflows.
+unpinned=$(grep -RhE 'npm[[:space:]]+(i|install)([[:space:]].*)?(-g|--global)' \
+  "$WF"/*.y*ml 2>/dev/null \
+  | grep -vE '@[0-9]+\.[0-9]+\.[0-9]+([[:space:]]|$)' || true)
 if [ -n "$unpinned" ]; then
-  printf 'FAIL unpinned npm install (declare the exact version in package.json):\n%s\n' \
+  printf 'FAIL unpinned global npm install (declare the exact version in package.json):\n%s\n' \
     "$unpinned" >&2
   FAIL=1
 fi
-latest=$(grep -Rn "@latest" "$WF" 2>/dev/null || true)
-if [ -n "$latest" ]; then
-  printf 'FAIL floating @latest reference in workflows:\n%s\n' "$latest" >&2
+floating=$(grep -RhE '@(latest|next|beta|canary)([^[:alnum:]._-]|$)' \
+  "$WF"/*.y*ml 2>/dev/null || true)
+if [ -n "$floating" ]; then
+  printf 'FAIL floating npm dist-tag in workflows:\n%s\n' "$floating" >&2
   FAIL=1
 fi
 
-# 2. Every uses: is SHA-pinned with a trailing version comment.
-unsha=$(grep -Rh "uses:" "$WF"/*.yml 2>/dev/null \
-  | grep -vE "@[0-9a-f]{40}[[:space:]]+#" || true)
+# 2. External actions are SHA-pinned; local reusable workflows use a path.
+unsha=$(grep -RhE '^[[:space:]]*uses:' "$WF"/*.y*ml 2>/dev/null \
+  | grep -vE 'uses:[[:space:]]+\./' \
+  | grep -vE 'uses:[[:space:]]+[^[:space:]]+@[0-9a-fA-F]{40}([[:space:]]+#.*)?$' || true)
 if [ -n "$unsha" ]; then
-  printf 'FAIL workflow action not SHA-pinned with a version comment:\n%s\n' \
+  printf 'FAIL workflow action is not SHA-pinned:\n%s\n' \
     "$unsha" >&2
   FAIL=1
 fi
 
-# 3. The tooling pin is an exact version in package.json.
-if ! grep -qE '"@fission-ai/openspec":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' \
-  "$KIT_ROOT/package.json"; then
-  report 'package.json must pin @fission-ai/openspec to an exact x.y.z version'
+# 3. The manifest, lockfile root dependency, and installed package all agree
+#    on one exact version.
+if ! node -e '
+  const fs = require("node:fs");
+  const [manifestPath, lockPath] = process.argv.slice(1);
+  const name = "@fission-ai/openspec";
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  const version = manifest.dependencies?.[name];
+  const rootVersion = lock.packages?.[""]?.dependencies?.[name];
+  const packageVersion = lock.packages?.[`node_modules/${name}`]?.version;
+  if (!/^\d+\.\d+\.\d+$/.test(version || "") ||
+      rootVersion !== version || packageVersion !== version) {
+    console.error(`manifest=${version}; lock root=${rootVersion}; lock package=${packageVersion}`);
+    process.exit(1);
+  }
+' "$KIT_ROOT/package.json" "$KIT_ROOT/package-lock.json"; then
+  report 'package.json and package-lock.json must agree on one exact OpenSpec version'
 fi
 
-# 4. Both workflows consume that pin through npm ci.
+# 4. CI installs the lockfile pin, while release falls back for historical
+#    tags that do not contain package-lock.json.
+PIN=$(node -p 'require(process.argv[1]).dependencies["@fission-ai/openspec"]' \
+  "$KIT_ROOT/package.json")
 for f in "$WF/ci.yml" "$WF/release.yml"; do
   if [ ! -f "$f" ]; then
     report "missing workflow $f"
-  elif ! grep -q "npm ci" "$f"; then
-    report "$(basename "$f") does not install the pinned tooling via npm ci"
+  elif ! grep -qE '^[[:space:]]*npm ci([[:space:]]|$)' "$f"; then
+    report "$(basename "$f") does not run npm ci as a workflow command"
   fi
 done
+if ! grep -qF 'npm install --global @fission-ai/openspec@'"$PIN" "$WF/release.yml"; then
+  report 'release.yml needs the exact-pin fallback for historical lockfile-free tags'
+fi
 
 # 5. dependabot covers the directory that holds package.json.
 npm_dir=$(awk '/- package-ecosystem:/ { flag = ($0 ~ /npm$/) }
   flag && /^[[:space:]]*directory:/ { print $2; flag = 0 }' "$DEP" 2>/dev/null || true)
 if [ "$npm_dir" != "/" ]; then
   report "dependabot.yml needs an npm entry with directory: / (got '${npm_dir:-<none>}')"
+fi
+
+# 6. The standalone installer is intentionally hidden from GitHub's generated
+#    diff, but must remain classified so CI can verify the generated artifact.
+if ! grep -Fxq 'setup.sh linguist-generated' "$KIT_ROOT/.gitattributes"; then
+  report '.gitattributes must mark setup.sh as linguist-generated'
 fi
 
 [ "$FAIL" -eq 0 ]

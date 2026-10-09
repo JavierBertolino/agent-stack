@@ -4,6 +4,13 @@ All notable changes to Agent Stack are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Pin CI OpenSpec tooling to the exact manifest/lockfile version and preserve
+  release validation for historical tags that predate the lockfile.
+
 ## [0.1.4] — 2026-09-29
 
 ### Added

@@ -33,11 +33,11 @@ checkpoint. The agent owns the loop:
    offered — there is no open-ended option.
 2. Give each candidate an **opaque, stable identifier**, a description, and
    its possible effects. Identifiers come from what the agent observed.
-3. Send one `choice` question whose `criteria` map is exactly that candidate
-   set, together with the observed state and the test goal. Jev returns one
-   identifier. The `choice` type is the same one used for the `verdict` and
-   `domain` questions, and needs no provider-specific handling: the Vercel
-   normalization only rewrites `noul` to `boolean`.
+3. Send one `choice` question keyed `next_action` whose `criteria` map is
+   exactly that candidate set, together with the observed state and the test
+   goal. Jev returns one identifier. The `choice` type is the same one used
+   for the `verdict` and `domain` questions, and needs no provider-specific
+   handling: the Vercel normalization only rewrites `noul` to `boolean`.
 
     `buildSelectionQuestion` in `scripts/qa/questions.ts` and
     `buildMobileSelectionQuestion` in `scripts/mobile-qa/questions-mobile.ts`

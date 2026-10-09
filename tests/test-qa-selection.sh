@@ -87,6 +87,9 @@ grep -q 'persisted_after_relaunch' "$mobile" || report "mobile-qa dropped persis
 grep -q 'status_explains_next_step' "$web" || report "web-qa dropped status_explains_next_step"
 grep -q 'persisted_after_reload' "$web" || report "web-qa dropped persisted_after_reload"
 grep -q 'touch_targets_and_density_ok' "$mobile" || report "mobile-qa dropped touch_targets_and_density_ok"
+if ! grep -q 'choice` question keyed `next_action`' "$KIT_ROOT/docs/jev.md"; then
+  report 'docs/jev.md must name the required next_action selection question key'
+fi
 
 # --- Question libraries: a selection builder, not a selection question --
 for lib in "$KIT_ROOT/.agent-stack/resources/web-qa/questions.ts" \

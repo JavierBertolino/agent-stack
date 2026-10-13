@@ -857,22 +857,32 @@ apply_mcp_selection() {
     none)
       MCP_LINEAR_ENABLED=0
       MCP_TRELLO_ENABLED=0
+      MCP_JIRA_ENABLED=0
       MCP_MAESTRO_ENABLED=0
       return 0
       ;;
     linear)
       MCP_LINEAR_ENABLED=1
       MCP_TRELLO_ENABLED=0
+      MCP_JIRA_ENABLED=0
       return 0
       ;;
     trello)
       MCP_LINEAR_ENABLED=0
       MCP_TRELLO_ENABLED=1
+      MCP_JIRA_ENABLED=0
+      return 0
+      ;;
+    jira)
+      MCP_LINEAR_ENABLED=0
+      MCP_TRELLO_ENABLED=0
+      MCP_JIRA_ENABLED=1
       return 0
       ;;
     both)
       MCP_LINEAR_ENABLED=1
       MCP_TRELLO_ENABLED=1
+      MCP_JIRA_ENABLED=0
       return 0
       ;;
     maestro)
@@ -887,16 +897,19 @@ apply_mcp_selection() {
       none)
         MCP_LINEAR_ENABLED=0
         MCP_TRELLO_ENABLED=0
+        MCP_JIRA_ENABLED=0
         MCP_MAESTRO_ENABLED=0
         ;;
       linear) MCP_LINEAR_ENABLED=1 ;;
       trello) MCP_TRELLO_ENABLED=1 ;;
+      jira) MCP_JIRA_ENABLED=1 ;;
       maestro) MCP_MAESTRO_ENABLED=1 ;;
       both)
         MCP_LINEAR_ENABLED=1
         MCP_TRELLO_ENABLED=1
+        MCP_JIRA_ENABLED=0
         ;;
-      *) die "unknown MCP selection: $token (use none, linear, trello, maestro, both, or comma-separated combos)" ;;
+      *) die "unknown MCP selection: $token (use none, linear, trello, jira, maestro, both, or comma-separated combos)" ;;
     esac
   done
   IFS=$oldIFS
@@ -905,6 +918,7 @@ apply_mcp_selection() {
 select_mcp_interactive() {
   linear=$MCP_LINEAR_ENABLED
   trello=$MCP_TRELLO_ENABLED
+  jira=$MCP_JIRA_ENABLED
   maestro=$MCP_MAESTRO_ENABLED
 
   wizard_step 'Configure Agent Stack for this project.'
@@ -915,18 +929,21 @@ select_mcp_interactive() {
   selector_initial=
   [ "$linear" = 1 ] && selector_initial=$(csv_add "$selector_initial" 1)
   [ "$trello" = 1 ] && selector_initial=$(csv_add "$selector_initial" 2)
-  [ "$maestro" = 1 ] && selector_initial=$(csv_add "$selector_initial" 3)
+  [ "$jira" = 1 ] && selector_initial=$(csv_add "$selector_initial" 3)
+  [ "$maestro" = 1 ] && selector_initial=$(csv_add "$selector_initial" 4)
 
   choose_multi 'Choose MCP integrations' "$selector_initial" \
-    'Linear' 'Trello' 'Maestro (local: mobile-qa)'
+    'Linear' 'Trello' 'Jira (Atlassian)' 'Maestro (local: mobile-qa)'
 
   linear=0
   trello=0
+  jira=0
   maestro=0
   while IFS= read -r integration; do
     case "$integration" in
       Linear) linear=1 ;;
       Trello) trello=1 ;;
+      'Jira (Atlassian)') jira=1 ;;
       'Maestro (local: mobile-qa)') maestro=1 ;;
     esac
   done <<EOF
@@ -935,6 +952,7 @@ EOF
 
   MCP_LINEAR_ENABLED=$linear
   MCP_TRELLO_ENABLED=$trello
+  MCP_JIRA_ENABLED=$jira
   MCP_MAESTRO_ENABLED=$maestro
   PERSIST_SELECTION=1
 }
@@ -946,6 +964,9 @@ resolve_mcp() {
   MCP_TRELLO_ENABLED=$(get_config MCP_TRELLO_ENABLED 0)
   MCP_TRELLO_NAME=$(get_config MCP_TRELLO_NAME trello)
   MCP_TRELLO_URL=$(get_config MCP_TRELLO_URL https://mcp.trello.com/mcp)
+  MCP_JIRA_ENABLED=$(get_config MCP_JIRA_ENABLED 0)
+  MCP_JIRA_NAME=$(get_config MCP_JIRA_NAME jira)
+  MCP_JIRA_URL=$(get_config MCP_JIRA_URL https://mcp.atlassian.com/v2/mcp)
   MCP_MAESTRO_ENABLED=$(get_config MCP_MAESTRO_ENABLED 0)
   MCP_MAESTRO_NAME=$(get_config MCP_MAESTRO_NAME maestro)
   MCP_MAESTRO_COMMAND=$(get_config MCP_MAESTRO_COMMAND maestro)
@@ -1555,6 +1576,9 @@ persist_selection() {
   set_config MCP_LINEAR_URL "$MCP_LINEAR_URL"
   set_config MCP_TRELLO_NAME "$MCP_TRELLO_NAME"
   set_config MCP_TRELLO_URL "$MCP_TRELLO_URL"
+  set_config MCP_JIRA_ENABLED "$MCP_JIRA_ENABLED"
+  set_config MCP_JIRA_NAME "$MCP_JIRA_NAME"
+  set_config MCP_JIRA_URL "$MCP_JIRA_URL"
   set_config MCP_MAESTRO_ENABLED "$MCP_MAESTRO_ENABLED"
   set_config MCP_MAESTRO_NAME "$MCP_MAESTRO_NAME"
   set_config MCP_MAESTRO_COMMAND "$MCP_MAESTRO_COMMAND"
@@ -1719,6 +1743,10 @@ render_config() {
     if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
       printf '%s\n' '' "[mcp_servers.$MCP_TRELLO_NAME]"
       printf '%s\n' "url = \"$MCP_TRELLO_URL\""
+    fi
+    if [ "$MCP_JIRA_ENABLED" = 1 ]; then
+      printf '%s\n' '' "[mcp_servers.$MCP_JIRA_NAME]"
+      printf '%s\n' "url = \"$MCP_JIRA_URL\""
     fi
     if [ "$MCP_MAESTRO_ENABLED" = 1 ]; then
       printf '%s\n' '' "[mcp_servers.$MCP_MAESTRO_NAME]"
@@ -2734,13 +2762,16 @@ CODEX_MAX_CONCURRENT_THREADS=4
 
 # Optional MCP integrations registered by the bootstrap for every enabled
 # platform. All integrations are opt-in by default; the interactive wizard
-# can enable any combination (Linear, Trello, Maestro, or none).
+# can enable any combination (Linear, Trello, Jira, Maestro, or none).
 MCP_LINEAR_ENABLED=0
 MCP_LINEAR_NAME=linear
 MCP_LINEAR_URL=https://mcp.linear.app/mcp
 MCP_TRELLO_ENABLED=0
 MCP_TRELLO_NAME=trello
 MCP_TRELLO_URL=https://mcp.trello.com/mcp
+MCP_JIRA_ENABLED=0
+MCP_JIRA_NAME=jira
+MCP_JIRA_URL=https://mcp.atlassian.com/v2/mcp
 
 # Maestro MCP for the mobile-qa agent. Local stdio server (maestro CLI +
 # Java required on PATH); opt-in because it needs a local toolchain.
@@ -3981,6 +4012,10 @@ ensure_mcp_server() {
       name=$MCP_TRELLO_NAME
       url=$MCP_TRELLO_URL
       ;;
+    jira)
+      name=$MCP_JIRA_NAME
+      url=$MCP_JIRA_URL
+      ;;
     *) die "unknown MCP server: $server" ;;
   esac
 
@@ -4039,6 +4074,9 @@ ensure_mcp_config() {
   fi
   if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
     ensure_mcp_server trello
+  fi
+  if [ "$MCP_JIRA_ENABLED" = 1 ]; then
+    ensure_mcp_server jira
   fi
   if [ "$MCP_MAESTRO_ENABLED" = 1 ]; then
     ensure_maestro_mcp
@@ -4205,7 +4243,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --mcp)
-      [ "$#" -gt 1 ] || die '--mcp requires none, linear, trello, maestro, both, or comma-separated combos'
+      [ "$#" -gt 1 ] || die '--mcp requires none, linear, trello, jira, maestro, both, or comma-separated combos'
       MCP_ARG=$2
       EXPLICIT_MCP=1
       shift

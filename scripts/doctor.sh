@@ -322,6 +322,7 @@ fi
 
 if [ "$(get_config MCP_LINEAR_ENABLED 0)" = 1 ]; then check_ok "Linear configured"; else info "Linear not configured"; fi
 if [ "$(get_config MCP_TRELLO_ENABLED 0)" = 1 ]; then check_ok "Trello configured"; else info "Trello not configured"; fi
+if [ "$(get_config MCP_JIRA_ENABLED 0)" = 1 ]; then check_ok "Jira configured"; else info "Jira not configured"; fi
 if [ "$(get_config MCP_MAESTRO_ENABLED 0)" = 1 ]; then check_ok "Maestro configured"; else info "Maestro not configured"; fi
 
 # --- Updates ---

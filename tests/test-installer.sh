@@ -17,6 +17,13 @@ grep -q 'governance UX_AGENTS: scaffold-only' "$T/init.log" \
   || { printf 'FAIL opencode skill mirror missing\n' >&2; FAIL=1; }
 [ -f "$T/.agents/skills/git-delivery/SKILL.md" ] \
   || { printf 'FAIL codex skill mirror missing\n' >&2; FAIL=1; }
+[ -f "$T/.opencode/skills/typesafe-jev/SKILL.md" ] \
+  || { printf 'FAIL TypeSafe Jev skill mirror missing\n' >&2; FAIL=1; }
+[ -f "$T/scripts/jev/action-selection.ts" ] \
+  && [ -f "$T/scripts/jev/validate-action-selection.ts" ] \
+  || { printf 'FAIL shared Jev validation resources missing\n' >&2; FAIL=1; }
+grep -q '^skills/typesafe-jev/SKILL.md|' "$T/.agent-stack/sources.manifest" \
+  || { printf 'FAIL TypeSafe Jev skill source hash missing\n' >&2; FAIL=1; }
 [ -f "$T/.agent-stack/contracts/handoff.schema.json" ] \
   || { printf 'FAIL contract not installed\n' >&2; FAIL=1; }
 

@@ -22,6 +22,10 @@ missing files only; existing project files are preserved).
   project-agnostic (business rules, side effects, state transitions,
   traceability). Import it when building custom callers; `ask-jev.ts`
   embeds the same defaults so `--questions` can be omitted.
+- `scripts/jev/action-selection.ts` (installed from the shared Jev resources)
+  builds bounded selection questions and validates Jev's recommendation;
+  `scripts/jev/validate-action-selection.ts` is its stdin/stdout gate. They
+  do not execute browser or device actions.
 
 Run:
 
@@ -51,3 +55,33 @@ State shape: `{ test_goal, expected, governance, page, trace }` where
 `page = { url, title, visible_copy, aria_truncated, console_errors }`.
 Jev is text-only — never send screenshots; the agent compresses snapshots
 to text first.
+
+## Action selection
+
+The agent also asks Jev to recommend the next action, separately from
+evaluation. `buildSelectionQuestion(candidates)` returns a single `choice`
+question whose `criteria` map is exactly the candidate set. Each candidate
+has an opaque stable `id`, a `description`, `effects`, an explicit local
+`authorized` result, and a JSON Pointer `preconditions` map of values observed
+in the current page. Keep authorization and preconditions out of the request:
+the question only sends descriptions and possible effects. `inspect_more` is
+always included; add `stop` when the goal is met, blocked, or over budget.
+
+```ts
+import { buildSelectionQuestion, INSPECT_MORE } from "./questions.ts";
+
+const question = buildSelectionQuestion([
+  { id: "open_task_row", description: "Open the visible task row", effects: "Loads its details", authorized: true, preconditions: { "/page/visible_copy": "Tasks" } },
+  { id: INSPECT_MORE, description: "Re-read the page", effects: "No state change", authorized: true, preconditions: {} },
+]);
+```
+
+After the Jev response, re-observe and pass the raw response, candidates,
+submitted observation, and fresh observation to the installed validator. Only
+`status: "execute"` with the current candidate id permits the agent to call
+the browser MCP once. `inspect_more` means inspect; `stop` means finish;
+`reinspect` or `reject` means do not act. The gate validates the option id,
+complete probability map, fixed confidence floor (0.75), explicit
+authorization, fresh observation, and all candidate preconditions. It is not
+an MCP controller and cannot grant permission. Reuse `ask-jev.ts` as the
+only transport; it forwards `choice` unchanged.

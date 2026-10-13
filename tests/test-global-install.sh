@@ -21,6 +21,8 @@ sh "$KIT_ROOT/install.sh" --global --prefix="$P" >/dev/null 2>&1 \
   || { printf 'FAIL astack version mismatch\n' >&2; FAIL=1; }
 [ "$("$P/bin/agent-stack" --version)" = "$EXPECTED" ] \
   || { printf 'FAIL compat alias version mismatch\n' >&2; FAIL=1; }
+("$P/bin/astack" worktree --help 2>&1 | grep -q 'worktree cleanup') \
+  || { printf 'FAIL astack worktree dispatch\n' >&2; FAIL=1; }
 
 (cd "$T" && PATH="$P/bin:$PATH" astack init --platforms opencode --mcp none >/dev/null 2>&1) \
   || { printf 'FAIL dispatcher init\n' >&2; FAIL=1; }

@@ -9,9 +9,11 @@ permissions, and delegation.
 Install canonical skills to all of (single source of truth is
 `.agent-stack/skills/`; the installer mirrors into):
 
-- `.opencode/skills/<name>/SKILL.md` (primary project config)
-- `.claude/skills/<name>/SKILL.md` (Claude-compatible, also visible here)
-- `.agents/skills/<name>/SKILL.md` (agent-compatible)
+- `.opencode/skills/<name>/SKILL.md` (OpenCode's own primary root)
+- `.claude/skills/<name>/SKILL.md` (Claude Code's primary root; OpenCode
+  also walks it)
+- `.agents/skills/<name>/SKILL.md` (Codex's primary root; OpenCode also
+  walks it)
 
 OpenCode walks up from the cwd to the git worktree and loads matching
 `skills/*/SKILL.md` under `.opencode/`, `.claude/skills/`, and
@@ -19,10 +21,16 @@ OpenCode walks up from the cwd to the git worktree and loads matching
 `~/.claude/skills/`, and `~/.agents/skills/` are also loaded.
 
 Use the explicit manifest (`.agent-stack/skills/manifest.json`) with
-collision detection. Never install duplicate same-name skills into every
-discovery root visible to one host without dedupe: the installer writes the
-canonical copy once per root only when that root is the host's primary, and
-`doctor.sh` reports collisions.
+collision detection. The installer writes each enabled host's primary root
+and never a root for a disabled host: `.opencode/skills/` for OpenCode,
+`.claude/skills/` for Claude Code, `.agents/skills/` for Codex,
+`.cursor/skills/` for Cursor. Those roots must stay separate for the hosts
+they serve, so enabling a second host whose root OpenCode also walks leaves
+every skill visible to OpenCode through more than one root — residual
+overlap the installer cannot remove without breaking the second host.
+`doctor.sh` warns, naming the skill and each path, whenever one host can
+discover a skill through several roots, and fails on collisions
+(differing hashes).
 
 Fresh worktrees: committed skills under `.agent-stack/skills/` plus rendered
 platform mirrors travel with the checkout. Uncommitted setup files in the

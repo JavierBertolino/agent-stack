@@ -23,6 +23,21 @@ scripts/run-state.py --root <project> validate --run <id> --kit-root <kit>
 scripts/run-state.py --root <project> unlock --run <id>
 ```
 
+## Installed project
+
+In a consuming project the project-facing entry point is the installed CLI;
+the resolver role documents this same command:
+
+```sh
+astack run-state --root <project> init --run <id> --change <name> ...
+astack run-state --root <project> lock --run <id> --holder <session>
+```
+
+`astack run-state` executes the installed kit's `scripts/run-state.py`
+(`--root` defaults to the current directory, so it stays explicit only when
+it differs). The `scripts/run-state.py` invocations above remain the
+kit-development form used inside the Agent Stack repository itself.
+
 ## Rules
 
 - Transitions are validated against the allowed phase graph; terminal runs

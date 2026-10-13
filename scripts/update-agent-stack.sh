@@ -164,7 +164,7 @@ mkdir -p "$TARGET"
 tar -xzf "$WORK/astack.tar.gz" -C "$TARGET" || die 'could not extract the release archive'
 
 # Sanity check before switching.
-for script in setup-agent-stack.sh doctor.sh upgrade-agent-stack.sh update-agent-stack.sh; do
+for script in setup-agent-stack.sh doctor.sh upgrade-agent-stack.sh update-agent-stack.sh worktree-cleanup.sh; do
   [ -f "$TARGET/scripts/$script" ] || die "release archive is missing scripts/$script"
   sh -n "$TARGET/scripts/$script" || die "sanity check failed for scripts/$script"
 done

@@ -4,6 +4,7 @@
 __pycache__/
 .worktrees/
 dist/
+node_modules/
 
 # Local files created when this repository is used as a target project.
 .agent-stack/config.conf

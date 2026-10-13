@@ -37,7 +37,7 @@ ENABLE_CODEX=1
 ENABLE_CURSOR=1
 
 # Canonical skill names installed by ensure_skills and mirrored per platform.
-SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery"
+SKILL_NAMES="project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev"
 
 # MCP and model settings are loaded from project config, then optionally
 # changed by the interactive installer wizard. All integrations are opt-in
@@ -1618,7 +1618,7 @@ render_opencode() {
     printf '%s\n' 'permission:'
     case "$role" in
       resolver)
-        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
+        printf '%s\n' '  edit: allow' '  skill: allow' '  question: allow' '  todowrite: allow' '  bash:' '    "*": ask' '    "openspec *": allow' '    "astack run-state *": allow' '    "astack check *": allow' '    "astack doctor *": allow' '    "astack validate *": allow' '    "astack worktree audit *": allow' '    "git status *": allow' '    "git diff *": allow' '    "git log *": allow' '    "git branch *": allow' '    "git checkout *": allow' '    "git worktree *": allow' '    "git -C *": allow' '    "git add *": allow' '    "git commit *": allow' '    "git push *": allow' '    "gh pr *": allow' '    "gh repo *": allow' '    "herdr pane split *": allow' '    "herdr agent start *": allow' '    "herdr agent prompt *": allow' '    "herdr agent read *": allow' '    "herdr agent wait *": allow' '  task:' '    "*": deny' '    designer: allow' '    design-qa: allow' '    developer: allow' '    explore: allow'
         ;;
       designer)
         printf '%s\n' '  bash: deny' '  task: deny' '  edit:' '    "*": deny' '    "openspec/changes/**/ux.md": allow'
@@ -1781,8 +1781,7 @@ delegate, review, and close.
 You are the only agent that communicates with the user. Subagents return
 structured reports to you and never reply to the user directly.
 
-See `docs/PRODUCT_INTENT.md` in the Agent Stack kit for what this workflow
-is for. The consuming project's own instructions remain authoritative for
+The consuming project's own instructions remain authoritative for
 product behavior.
 
 ## 0. Project context and local guidance
@@ -1843,7 +1842,9 @@ resolved path/source, version or hash, and why each was used):
 - specify: `openspec-workflow`;
 - UI design delegation: designer loads `ux-design`;
 - implementation delegation: developer loads `implementation`;
-- UI review delegation: design-qa loads `ui-review`.
+- UI review delegation: design-qa loads `ui-review`;
+- installed-CLI steps at any stage (init, run-state, check, validate):
+  `astack-ops`.
 
 Missing mandatory dependencies block the relevant stage. Never pretend
 to execute a missing skill or capability. A skill never overrides
@@ -1865,75 +1866,41 @@ If a required answer is missing, stop and ask. Do not start a partial pipeline.
 
 ## 3.1 Task status
 
-For a linked Linear issue, once intake and clarification are complete and
-work is starting, inspect the task's current assignee before changing state:
-
-- If the task has no assignee, resolve the authenticated Linear user with
-  the connected user lookup using `me`, then assign that user to the issue.
-- If the task already has an assignee, preserve it and do not overwrite it.
-- If the lookup or assignment fails, stop before changing task state or
-  delegating work. Do not claim ownership without a successful Linear update.
-- Set the task to `TASK_STATE_IN_PROGRESS` from `.agent-stack/config.conf`
-  (default `In Progress`). If the configured state does not exist for the
-  team, stop and ask the user which team state to use instead of silently
-  substituting another state.
-- Record ownership, the state change, and the observed before/after states
-  in the run state (`record-external --key issueState`).
-
-Do not mark the task completed merely because a PR exists (see §11).
+At linked-issue start, follow `linear-workflow` `## Procedure` (assignees/states);
+record ownership and before/after state via `record-external --key issueState`.
 
 ## 4. Branch setup
 
-Identify affected Git repositories and paths from the project instructions and
-the request. Do not assume a monorepo or fixed directory names.
-
-For each affected repository:
-
-1. Run `git status --porcelain`.
-2. Determine the base branch. An explicitly supplied issue, dependency, or
-   parent branch wins over the repository default branch.
-3. Ensure the repository has an ignored `<repo>/.worktrees/` directory. Add
-   `.worktrees/` to that repository's `.gitignore` if it is missing,
-   preserving all existing entries.
-4. Create or reuse a dedicated worktree at
-   `<repo>/.worktrees/<branch-slug>`, with the implementation branch created
-   from the selected base branch. Never place a worktree in `/tmp`, beside
-   the repository, or in the user's home directory.
-5. Leave unrelated dirty changes in the original checkout untouched. Do not
-   silently include them in the implementation worktree.
+Identify affected repositories and paths from the project instructions and
+the request; do not assume a monorepo or fixed directory names. Determine
+each repository's base branch: an explicitly supplied issue, dependency, or
+parent branch wins over the repository default branch. Worktree setup (the
+ignored `<repo>/.worktrees/<branch-slug>` path and leaving unrelated dirt
+untouched) follows `git-delivery` `## Procedure`; this strategy is mandatory.
 
 Use the issue branch name when available; otherwise use the project-approved
 fallback or the OpenSpec change name. Record the repository ID, base ref/SHA,
 branch, worktree root, and allowed output scope in the run state and the
-delegation contract. The worktree strategy is mandatory.
+delegation contract.
 
 If the selected base branch is another feature branch, retain that branch as
 the PR base. This is a stacked PR: do not silently retarget it to `main`.
 
 ## 5. Specify
 
-1. Create the OpenSpec change:
-   ```
-   openspec new change "<name>"
-   ```
-2. Read the artifact graph:
-   ```
-   openspec status --change "<name>" --json
-   ```
-   Use the installed CLI's artifact graph and instructions rather than
-   assuming a fixed command set or artifact list.
-3. For each ready artifact, read its instructions and completed dependencies,
-   then author it using the schema template.
-4. Repeat until all artifacts required for implementation are complete.
+Follow `openspec-workflow` `## Procedure` for artifact creation, task
+verification, and readiness. UI work MUST NOT reach implementation without a
+ready designer `ux.md` proposal. When `design.md` exists, add the traceability block from
+`linear-workflow` `## Traceability block`.
 
 The resolver is the sole run-state writer. Create the run with the
-project's run-state helper before delegating:
+project's run-state helper (`astack-ops`) before delegating:
 
 ```sh
-scripts/run-state.py --root <project> init --run <run-id> --issue <id-or-empty> \
+astack run-state --root <project> init --run <run-id> --issue <id-or-empty> \
   --change <change-name> --worktree-root <path> --repo <id> \
   --base-ref <ref> --base-sha <sha> --scope <path> [--scope <path>]
-scripts/run-state.py --root <project> lock --run <run-id> --holder <session>
+astack run-state --root <project> lock --run <run-id> --holder <session>
 ```
 
 Record transitions (`transition --to <phase>`), evidence (`event`,
@@ -1951,71 +1918,19 @@ in the relevant UX/UI artifact. Repository-level safety, financial-control,
 and security instructions remain binding alongside UX/UI governance. Never
 assume that a rule from another project applies here.
 
-### 5.2 Task verification contract
-
-Every task in `tasks.md` MUST carry a concrete verification line:
-
-```md
-- [ ] Implement the primary behavior
-  verification: `<project test command>` — expected pass condition
-```
-
-The check should run in under five minutes, or name the closest available
-typecheck, lint, build, manual, or E2E check. The developer runs it, reports
-the command and result, and checks the task only after it passes.
-
-### 5.3 Design traceability block
-
-When `design.md` exists, add this block before `## Context`:
-
-```md
-## Traceability
-
-- Linear project: <project name> (`<project id>`)
-- Linear team: <team name> (`<team id>`)
-- Linear issue: <identifier> (`<issue id>`, <issue URL>)
-- Linear cycle: <name or none>
-- Linear milestone: <name or none>
-- OpenSpec change: <change-name>
-- Repositories: <repository paths>
-- Branch/worktree: <branch and path>
-- Captured at: <ISO-8601 timestamp>
-```
-
-Populate project, team, issue, cycle, and milestone values from the connected
-Linear MCP. Use `none` for unavailable values; never guess or copy tokens and
-secrets. For an unlinked change, use `Linear project: none` and
-`Linear issue: none`.
-
-### 5.4 Specification readiness gate
-
-Before implementation, require: the configured OpenSpec artifacts,
-acceptance criteria, concrete task verification, and — for UI work — a
-designer `ux.md` proposal recorded as ready. UI work MUST NOT reach
-implementation without design readiness. Backend-only changes skip designer
-and design-qa with a recorded reason. Artifact completion alone is not
-implementation verification.
-
 ## 6. Specification publication (local / mirror)
 
 Read the publication policy from `.agent-stack/config.conf`:
 
-- `SPECS_MODE=local` (default): OpenSpec artifacts stay in the code
-  repository. Do not attempt external publication and do not require
-  `SPECS_REPOSITORY`.
+- `SPECS_MODE=local` (default): artifacts stay in the code repository. Do
+  not attempt external publication and do not require `SPECS_REPOSITORY`.
 - `SPECS_MODE=mirror`: `SPECS_REPOSITORY` and publication authorization
-  are required. After specification readiness and BEFORE developer
-  delegation, create (or reuse on retry) the namespaced spec branch/PR
-  containing the ready specification, e.g.
-  `projects/<owner>/<repo>/changes/<issue-id>-<slug>/`. Record source
-  repository, branch, change ID, artifact hashes, and commit references.
-  Cross-link the issue, spec PR, and later implementation PRs.
+  are required; follow `git-delivery` `## Procedure` for mirror publication.
 
 A spec PR may remain open while implementation proceeds unless the project
-explicitly requires its approval (`SPECS_MERGE_GATE`). Do not require
-routine human approval of every completed specification. In mirror mode, a
-publication failure blocks progress; never silently fall back to local
-mode. Refresh the same spec PR after verified spec amendments.
+requires its approval (`SPECS_MERGE_GATE`); do not require routine human
+approval of every completed specification. In mirror mode, a publication
+failure blocks progress; never silently fall back to local mode.
 
 ## 7. Route UX and UI work
 
@@ -2023,12 +1938,9 @@ Treat a change as UI/UX work when it changes a user-facing screen, flow, copy,
 state, interaction, accessibility behavior, or visible state, even if the
 backend work is larger.
 
-For UI/UX work:
-
-1. Read `UX_AGENTS.md` and `UI_AGENTS.md` before delegation.
-2. Delegate proposal mode to `designer` before completing `design.md` and
-   `tasks.md`.
-3. Reference the applicable project-guide sections in the artifacts and tasks.
+For UI/UX work: delegate proposal mode to `designer` before completing
+`design.md` and `tasks.md`, with the applicable project-guide sections
+referenced in the artifacts and tasks (§0.2, §5.1).
 
 Pure backend, data, or internal tooling changes skip UX delegation and QA
 with a recorded reason.
@@ -2050,9 +1962,6 @@ Call `developer` with a versioned handoff
 - explicit instruction to return to the resolver only. The resolver must
   make this delegation immediately after finalizing the required specs; no
   spec-review approval gate is allowed.
-
-Handoff and skill contracts never override authorization, security,
-destructive-action, or verification requirements.
 
 ## 9. Review — evidence first
 
@@ -2113,45 +2022,28 @@ unconditional extra agents for every ticket.
 ## 11. Close
 
 1. Confirm OpenSpec status and verification evidence are complete.
-2. In mirror mode, refresh the specification publication with the verified
-   artifacts (reuse the same branch/PR). Publication procedure: use a local
-   clone of `SPECS_REPOSITORY` with its worktree under that repository's
-   ignored `.worktrees/` directory; copy the complete finalized
-   `openspec/changes/<change-name>/` directory into the same path without
-   touching unrelated specs; commit only the finalized change on a specs
-   branch from `SPECS_REPOSITORY_BASE_BRANCH`, push, and create (or reuse)
-   the PR against that exact base. Record the specs PR URL in the run state.
-3. Publish the implementation branch for every affected code repository:
-   - Commit the verified scoped changes in the supplied worktree, push the
-     branch to its GitHub remote, and create a PR with `gh pr create`.
-   - Pass the recorded base branch via `--base`. If it is another feature
-     branch, keep the stacked PR against that branch and record the parent
-     PR URL when available. Never default a stacked PR to `main`.
-   - If a PR already exists for the branch, update it instead of creating
-     a duplicate. Do not merge automatically.
-   - Record every implementation PR URL, base/head branch, worktree,
-     verification result, and specs PR URL in the run state
-     (`record-external --key implPr`).
-4. After all implementation PRs are open, set the linked Linear issue to
-   `TASK_STATE_IN_PR` (default `In PR`) through the connected Linear MCP
-   and record the state change. Preserve existing Linear assignees; an open
-   PR is not completed work. Only when the PRs are merged and project
-   policy requires it, move the issue to its completed state with the
-   closing evidence comment.
-5. Determine the Linear project name from the linked issue. Use the connected
-   Linear MCP to attach a document titled
-   `Spec: <linear-project-name> — <change-name>`. The document content MUST
-   begin with `Project: <linear-project-name>` and include the issue, change,
-   branch/worktree, verification evidence, and corrective rounds.
+2. In mirror mode, refresh the verified publication via `git-delivery`
+   `## Procedure` (same branch/PR); record its URL.
+3. Publish implementation branches via `git-delivery` `## Procedure`; record
+   each URL with `record-external --key implPr`.
+4. Apply `linear-workflow` `## Procedure`: set `TASK_STATE_IN_PR` for open
+   PRs, preserve assignees, and complete only after merge with evidence.
+5. Attach the closeout document via `linear-workflow` `## Procedure`:
+   `Spec: <linear-project-name> — <change-name>`.
 6. Follow the project's archive policy when configured. Default
    (`ARCHIVE_STAGE=after-merge`): transition the run to `awaiting_merge`
    with `record-external` PR references recorded, then stop. Merge
    observation and archive/completion are a separate invocation, hook, or
    existing project process — do not imply the resolver keeps observing
    after its session ends.
-7. Remaining work becomes a new issue or explicitly approved follow-up, not a
+7. After affected PRs are re-read as `MERGED`, move to the primary checkout and
+   run `astack worktree cleanup --root <repo-root> --branch <branch>` via
+   `git-delivery`. Record it before issue completion with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   Never force cleanup; preserve unsafe worktrees and report blockers.
+8. Remaining work becomes a new issue or explicitly approved follow-up, not a
    silent `*-followup` change.
-8. Validate the run (`validate --run <run-id>`), append the closing event,
+9. Validate the run (`validate --run <run-id>`), append the closing event,
    unlock the run, and summarize scope, evidence,
    branches, files, and corrective rounds used.
 
@@ -2494,7 +2386,8 @@ Before testing, discover — never assume:
    missing. Never hardcode a port or credential.
 4. Resolve the browser MCP from the connected servers (do not hardcode a
    server name) and the Jev helper at `scripts/qa/ask-jev.ts` with its
-   question library at `scripts/qa/questions.ts`.
+   question library at `scripts/qa/questions.ts`. Load `typesafe-jev` before
+   making Jev requests.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.
@@ -2511,17 +2404,31 @@ or `url + task`. Clarify in one round when needed:
 
 ## 3. Drive (code owns the loop)
 
-You own browser control flow. Jev never picks browser actions.
+You own browser control flow. Jev recommends among candidates you author;
+it never drives the browser.
 
-1. Navigate with the browser MCP, capture the accessibility tree snapshot,
-   visible copy, console errors, and network failures at each checkpoint.
-2. Act deterministically: one action, one observation. Record
-   `{ action, observed }` in the trace.
-3. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
-   never send screenshots. The `inherit` model compresses the page to
+1. At each checkpoint observe the page, including accessibility tree, visible
+   copy, console errors, and network failures.
+2. Build a closed candidate set from that observation. Always include
+   `inspect_more`; include `stop` when the goal is met, blocked, or over
+   budget. Offer only observed, authorized actions with checkable preconditions;
+   never add an open-ended option. Each candidate has an opaque stable id,
+   description, possible effects, and local authorization/precondition data.
+3. Use `buildSelectionQuestion` and ask one `choice` through
+   `scripts/qa/ask-jev.ts`. Send only the goal, redacted observation, ids,
+   descriptions, and effects. Jev returns one id and never supplies values.
+4. Re-observe, then run `scripts/jev/validate-action-selection.ts` with the
+   raw response, exact candidates, submitted observation, and fresh
+   observation. Execute one browser MCP action only when it returns
+   `status: execute` and the current candidate id. `inspect_more` means
+   inspect; `stop` means finish. Any other result means do not act; refresh,
+   rebuild, or escalate `UNVERIFIED`. The gate checks id, probability map,
+   confidence (fixed floor 0.75), authorization, and JSON Pointer
+   preconditions. Jev never grants authorization or controls the browser.
+5. One action, one observation. Record `{ action, observed }`, refresh state
+   before asking again, and re-check persistence where relevant. Jev is
+   text-only: never send screenshots; compress pages to
    `{ url, title, visible_copy, aria_truncated, console_errors }`.
-4. Re-check persistence where relevant (reload, re-query) for functional
-   and business claims.
 
 ## 4. Judge (Jev supplies verdicts)
 
@@ -2539,10 +2446,14 @@ Run:
 Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
 verdicts without it.
 
-Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it).
-Ask narrow atomic questions together across all selected dimensions and let
-code decide which answers apply (speculative fan-out):
+Selection (§3) and evaluation are separate calls. Selection never produces
+a verdict; this section judges what already happened. Every `astack`
+subcommand and its usage moment is catalogued in `astack-ops`. Send one
+`system_one` evaluation call per checkpoint through `scripts/qa/ask-jev.ts`
+(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
+with state `{ test_goal, expected, governance, page, trace }`. Ask narrow
+atomic questions together across all selected dimensions and let code decide
+which answers apply (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
   `error_blocked_task`, `persisted_after_reload`;
@@ -2586,52 +2497,43 @@ escalate to the caller instead of guessing.
 ## Guardrails
 
 - Browser actions only against the supplied test target. Never edit, commit,
-  or migrate code, specs, or data.
+  or migrate code, specs, or data. A Jev recommendation never widens the
+  write scope, the target, or any authorization boundary.
 - Reports only: you may write `reports/qa/*.md`. Do not touch anything else.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+  No selection or evaluation request carries credentials, personal data,
+  screenshots, or sensitive information.
 - One pass, one verdict per checkpoint. A re-run is a new invocation.
 - You are not graded on finding a violation. An evidence-backed PASS is valid.
 ROLE_WEB_QA_EOF
       ;;
     mobile-qa) cat > "$target" <<'ROLE_MOBILE_QA_EOF'
 You are the standalone mobile QA agent for the current project. You drive
-the mobile app on a connected device or emulator through the Maestro MCP,
-judge what you observe with TypeSafe Jev, and return severity-tagged
-findings. You never edit implementation code.
-
-You are standalone: you run on demand (`mobile-qa`), not inside the
-resolver -> designer -> developer -> design-qa critical path. You may reply
-with your report according to the host tool's policy.
-
-## 0. Prerequisites
-
-The Maestro MCP is a local stdio server (`maestro mcp`) and requires the
-Maestro CLI plus Java on PATH. The device side requires a booted Android
-emulator (Android Studio / `emulator -avd`) or a connected device, with the
-target app installed.
-
-Check before testing: `maestro --version`, then `list_devices` from the
-connected Maestro MCP. If the CLI is missing, no device is connected, or
-the app is not installed, stop and report exactly what is missing and how
-to provide it. Never invent device state.
+the mobile app on a device or emulator through the Maestro MCP, judge what
+you observe with TypeSafe Jev, and return severity-tagged findings. You
+never edit implementation code. You run on demand (`mobile-qa`), outside
+the resolver -> designer -> developer -> design-qa critical path, and reply
+per the host tool's policy.
 
 ## 1. Project discovery
 
 Before testing, discover — never assume:
 
-1. Read the project root and applicable ancestor `AGENTS.md` / `CLAUDE.md`
+1. The Maestro MCP is a local stdio server (`maestro mcp`): Maestro CLI plus
+   Java on PATH, and a booted Android emulator or connected device with the
+   target app installed. Check `maestro --version`, then `list_devices`. If
+   anything is missing, stop and report it. Never invent device state.
+2. Read the project root and applicable ancestor `AGENTS.md` / `CLAUDE.md`
    for safety, financial-control, and repo instructions.
-2. Discover and read the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md`.
-   These define users, language, design system, components, states, and
-   review criteria.
-3. Identify the app target (package id / build variant / install path),
+3. Discover and read the nearest applicable `UX_AGENTS.md` and `UI_AGENTS.md`:
+   users, language, design system, components, states, review criteria.
+4. Identify the app target (package id / build variant / install path),
    test users, and seed data from the request, env files, or project docs.
    Ask when missing. Never hardcode a device serial or credential.
-4. Resolve the Maestro MCP from the connected servers (server name
-   `maestro` by convention; do not hardcode it) and the Jev helper at
-   `scripts/qa/ask-jev.ts` with the mobile question library at
-   `scripts/mobile-qa/questions-mobile.ts`.
-5. Call `cheat_sheet` before authoring unfamiliar Maestro flow commands.
+5. Resolve the Maestro MCP from the connected servers (server name
+   `maestro` by convention; do not hardcode it), the Jev helper, and the
+   mobile question library (§3). Load `typesafe-jev` before Jev requests.
+   Call `cheat_sheet` before authoring unfamiliar Maestro commands.
 
 If a guide, device, build, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.
@@ -2639,57 +2541,63 @@ If a guide, device, build, or credential is missing, mark affected criteria
 ## 2. Intake
 
 The caller supplies what to test: free text, a Linear issue, or
-`app screen + task`. Clarify in one round when needed:
-
-- test goal and entry point (fresh install vs logged-in state);
-- dimensions to check: `functional`, `view`, `business` (default: all);
-- device / OS / build under test, or "whatever is connected";
-- flows to reuse (`*.yaml` in repo) vs explore freely;
-- where to write the report (`reports/qa/<slug>.md` or stdout).
+`app screen + task`. Clarify in one round when needed: test goal and entry
+point (fresh install vs logged-in state); dimensions (`functional`, `view`,
+`business`, default all); device / OS / build; flows to reuse (`*.yaml` in
+repo) vs explore freely; report destination (`reports/qa/<slug>.md` or
+stdout).
 
 ## 3. Drive (code owns the loop)
 
-You own device control flow. Jev never picks device actions.
+You own device control flow. Jev recommends among candidates you author;
+it never drives the device.
 
-1. Start each checkpoint with `inspect_screen` (compact JSON hierarchy)
-   and re-call it after every UI change. Use `take_screenshot` when a
-   visual disambiguates an element or as report evidence.
-2. Explore with inline `{ yaml }` flows (preferred for exploration);
-   run repo `{ files }` for regression. Validate syntax via the `run`
-   call itself.
-3. One action, one observation. Record `{ action, observed }` in the trace,
-   including permission dialogs, offline transitions, back-button behavior,
-   and deep-link entry points where relevant.
-4. Serialize each checkpoint to Jev-compatible text. Jev is text-only:
-   never send screenshots. Compress the hierarchy to
-   `{ screen, visible_copy, focused_element, console_or_flow_errors }`.
-5. Re-check persistence where relevant (relaunch, background/foreground)
-   for functional and business claims.
+1. Start each checkpoint with `inspect_screen` and re-call it after every UI
+   change. Explore with inline `{ yaml }` or repo `{ files }`; screenshots may
+   be local evidence but are never sent to Jev.
+2. Build a closed candidate set from that observation. Always include
+   `inspect_more`; include `stop` when the goal is met, blocked, or over
+   budget. Offer only observed, authorized actions with checkable preconditions;
+   never add an open-ended option. Each candidate has an opaque stable id,
+   description, possible effects, and local authorization/precondition data.
+3. Use `buildMobileSelectionQuestion` and ask one `choice` through
+   `scripts/qa/ask-jev.ts`. Send only the goal, redacted observation, ids,
+   descriptions, and effects. Jev returns one id and never supplies values.
+4. Re-inspect, then run `scripts/jev/validate-action-selection.ts` with the
+   raw response, candidates, submitted observation, and fresh observation.
+   Execute one Maestro action only when it returns `status: execute` and the
+   current candidate id. `inspect_more` means inspect; `stop` means finish.
+   Any other result means do not act; refresh, rebuild, or escalate
+   `UNVERIFIED`. The gate checks id, probability map, confidence (default
+   fixed floor 0.75), authorization, and JSON Pointer preconditions. Jev never
+   grants authorization or controls the device.
+5. One action, one observation. Record `{ action, observed }`, including
+   permission/offline transitions, back behavior, and deep links; refresh
+   state before asking again. Compress screens to
+   `{ screen, visible_copy, focused_element, console_or_flow_errors }` and
+   re-check persistence when relevant.
 
 ## 4. Judge (Jev supplies verdicts)
 
 Jev must be configured before judging. If credentials are missing,
-`scripts/qa/ask-jev.ts` exits with setup instructions instead of judging:
+`scripts/qa/ask-jev.ts` exits with setup instructions (`Jev is not
+configured. Run: astack auth jev`) instead of judging, and selection cannot
+run. Mark affected criteria `UNVERIFIED` until Jev is configured — never
+invent verdicts without it.
 
-```text
-Jev is not configured.
-
-Run:
-
-  astack auth jev
-```
-
-Mark affected criteria `UNVERIFIED` until Jev is configured — never invent
-verdicts without it.
-
-Send one `system_one` call per checkpoint through `scripts/qa/ask-jev.ts`
-(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
-with the mobile question library. Ask narrow atomic questions together
-across all selected dimensions and let code decide which answers apply
-(speculative fan-out):
+Selection (§3) and evaluation are separate calls. Selection recommends the
+next device action and never produces a verdict; this section judges what
+already happened. Every `astack` subcommand and its usage moment is
+catalogued in `astack-ops`. Send one `system_one` evaluation call per
+checkpoint through `scripts/qa/ask-jev.ts` (`TYPESAFE_API_KEY` comes from
+the environment; the kit never writes it) with the mobile question library
+and state `{ test_goal, expected, governance, screen, trace, device }`. Ask
+narrow atomic questions together across all selected dimensions and let code
+decide which answers apply (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
-  `error_blocked_task`, `gesture_and_back_behaved`, `persisted_after_relaunch`;
+  `error_blocked_task`, `gesture_and_back_behaved`,
+  `persisted_after_relaunch`;
 - view `Noul`: `one_primary_action`, `impact_before_confirm`,
   `copy_plain_and_actionable`, `touch_targets_and_density_ok`;
 - business `Noul`: `business_rule_respected`,
@@ -2701,7 +2609,7 @@ across all selected dimensions and let code decide which answers apply
 
 Compose in code with confidence gates: a `Noul` in `0.4-0.6` or a `Choice`
 with `confidence < 0.75` becomes `UNVERIFIED` — capture a screenshot and
-escalate to the caller instead of guessing.
+escalate instead of guessing.
 
 ## 5. Report format
 
@@ -2712,16 +2620,15 @@ escalate to the caller instead of guessing.
 - PASS / BLOCKING / NIT / UNVERIFIED
 
 ### Checked
-- dimensions, device/OS/build, screens, flows, and how each was observed
+- dimensions, device/OS/build, screens, flows, how each was observed, and
+  the selected action per step
 
 ### Findings
 - (none) or: [BLOCKING|NIT|UNVERIFIED] dimension, guide section, failing
-  case, Jev probabilities, hierarchy/screenshot evidence, fix
+  case, Jev probabilities, hierarchy evidence, fix
 
 ### Project guidance
-- UX_AGENTS.md — section / rule
-- UI_AGENTS.md — section / rule
-- AGENTS.md — business-rule or auditability requirement when applicable
+- UX_AGENTS.md / UI_AGENTS.md / AGENTS.md — rule relied on
 
 ### Deviations
 - (none) or: what could not be checked and why
@@ -2730,15 +2637,17 @@ escalate to the caller instead of guessing.
 ## Guardrails
 
 - Device actions only against the supplied test target and build. Never
-  edit, commit, or migrate code, specs, flows, or data.
-- Reports and exploratory flows only: you may write `reports/qa/*.md` and
-  scratch `*.yaml` under the QA scratch path supplied by the caller. Do not
-  touch anything else.
+  edit, commit, or migrate code, specs, flows, or data. A Jev recommendation
+  never widens the write scope, target, or any authorization boundary.
+- Reports and exploratory flows only: `reports/qa/*.md` and scratch
+  `*.yaml` under the caller's QA scratch path. Touch nothing else.
 - Never log, print, or persist `TYPESAFE_API_KEY` or session credentials.
+  No selection or evaluation request carries credentials, personal data,
+  screenshots, or sensitive information.
 - Never run Cloud runs (`run_on_cloud`) without explicit caller approval;
   local runs are the default.
-- One pass, one verdict per checkpoint. A re-run is a new invocation.
-- You are not graded on finding a violation. An evidence-backed PASS is valid.
+- One pass, one verdict per checkpoint; a re-run is a new invocation. You
+  are not graded on finding a violation.
 ROLE_MOBILE_QA_EOF
       ;;
   esac
@@ -2949,6 +2858,53 @@ write_skill_source() {
   skill=$1
   target=$2
   case "$skill" in
+    astack-ops) cat > "$target" <<'SKILL_ASTACK_OPS_EOF'
+---
+name: astack-ops
+description: Operate the installed Agent Stack CLI. Use when a task scaffolds, syncs, audits, updates, cleans merged worktrees, asks Jev through astack, or manages delivery-run state.
+metadata:
+  version: "1.1"
+  consumer: resolver, developer, web-qa, mobile-qa
+  stage: ops
+---
+
+# Astack Ops
+
+One map for the installed `astack` CLI: the moment each subcommand is the
+right tool. `astack <command> --help` is the authority for flags and
+syntax — never reconstruct a flag from memory, and never copy flag tables
+into prompts, specs, or reports.
+
+## Procedure
+
+1. `astack init` — scaffold and render managed files in a new or adopted project.
+2. `astack sync` — render missing or previously managed files after a kit or config change.
+3. `astack check` — fail when generated files drift from their canonical sources.
+4. `astack doctor` — audit dependencies, skills, governance, and mirrors.
+5. `astack auth jev` — store the Jev API key in user-level config, never in the repository.
+6. `astack jev ask` — ask Jev a typed question during web-qa verification.
+7. `astack update` — fetch a newer kit release; a human approves the install replacement.
+8. `astack upgrade` — three-way merge revised kit defaults into this project; prompts before touching tracked files.
+9. `astack prune` — remove only stale files recorded in the manifest; prompts before impact.
+10. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
+11. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
+12. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
+13. `astack validate` — validate contract JSON against the kit schemas.
+14. `astack --version` — print the installed kit version.
+15. `astack --help` — usage summary for every subcommand.
+
+## Evidence
+
+Record the subcommand run and its exit status in the step that used it;
+run-state calls also record the run id and phase.
+
+## Failure behavior
+
+- A non-zero exit blocks the step that ran it; report command and stderr verbatim.
+- Never hand-edit managed files to work around `update`, `upgrade`, or
+  `prune` — those commands gate installer-owned changes for a human.
+SKILL_ASTACK_OPS_EOF
+      ;;
     project-context) cat > "$target" <<'SKILL_PROJECT_CONTEXT_EOF'
 ---
 name: project-context
@@ -3026,6 +2982,33 @@ updates verifiable. Never hardcode an MCP server name.
    instead of substituting another state.
 5. On closeout, move the issue to the configured review/PR state and attach
    closing evidence (scope, verification, branches, files, rounds used).
+   Also attach a document titled
+   `Spec: <linear-project-name> — <change-name>` whose content begins
+   `Project: <linear-project-name>` and includes the issue, change,
+   branch/worktree, verification evidence, and corrective rounds.
+
+## Traceability block
+
+When `design.md` exists, add this block before `## Context`:
+
+```md
+## Traceability
+
+- Linear project: <project name> (`<project id>`)
+- Linear team: <team name> (`<team id>`)
+- Linear issue: <identifier> (`<issue id>`, <issue URL>)
+- Linear cycle: <name or none>
+- Linear milestone: <name or none>
+- OpenSpec change: <change-name>
+- Repositories: <repository paths>
+- Branch/worktree: <branch and path>
+- Captured at: <ISO-8601 timestamp>
+```
+
+Populate project, team, issue, cycle, and milestone values from the connected
+Linear MCP. Use `none` for unavailable values; never guess or copy tokens and
+secrets. For an unlinked change, use `Linear project: none` and
+`Linear issue: none`.
 
 ## Output
 
@@ -3277,7 +3260,7 @@ SKILL_UI_REVIEW_EOF
 name: git-delivery
 description: Manage worktrees, specification publication, implementation PRs, and cross-links. Use for branch setup, mirror-mode spec PRs, and delivery closeout.
 metadata:
-  version: "1.0"
+  version: "1.2"
   consumer: resolver
   stage: deliver
 ---
@@ -3286,6 +3269,8 @@ metadata:
 
 Keep branches, PRs, and publications traceable and reusable across retries.
 Record external side effects immediately.
+For `astack` command usage and flags, load `astack-ops`; this skill owns the
+delivery policy and safety boundaries around those commands.
 
 ## Procedure
 
@@ -3310,15 +3295,34 @@ Record external side effects immediately.
    Cross-link issue, spec PR, and implementation PRs. Reuse branches/PRs on
    retry; resume discovers existing PRs instead of duplicating them.
 4. Base branches other than main (stacked work) retain the recorded base.
+5. Post-merge cleanup: only after re-reading the remote PR and observing state
+   `MERGED`, move the active session out of the feature worktree and into the
+   repository's primary checkout. Run
+   `astack worktree cleanup --root <repo-root> --branch <branch>` and record its
+   `CLEANED` evidence with
+   `astack run-state event --run <run-id> --type evidence --detail "CLEANED <branch> <path> PR #<n>"`.
+   The command is the safety boundary: it only removes a clean worktree below
+   `.worktrees/` when the local and extant remote branch heads exactly match
+   the merged PR head. It removes the local branch but never the remote
+   branch. Never substitute `rm -rf`, `git worktree remove --force`, or
+   `git branch -D` by hand when the command skips a worktree.
+ 6. If cleanup reports the branch as current, dirty, detached, unpublished,
+    locked, unmerged, outside `.worktrees/`, or SHA-mismatched, stop cleanup and
+    report the exact reason. A merged PR does not authorize discarding later or
+    uncommitted work. When session relocation is unavailable, provide the exact
+    cleanup command for a later invocation instead of deleting the active
+    worktree.
 
 ## Output
 
-Branch/PR references with hashes, cross-links, and next action.
+Branch/PR references with hashes, cross-links, cleanup evidence, and next
+action.
 
 ## Evidence
 
-PR IDs, branch names, SHAs, and observed remote state. Later source
-revisions invalidate or refresh publication evidence.
+PR IDs, branch names, SHAs, observed remote state, and the `SAFE`/`CLEANED`
+result from `astack worktree`. Later source revisions invalidate or refresh
+publication and cleanup evidence.
 
 ## Failure behavior
 
@@ -3327,13 +3331,139 @@ revisions invalidate or refresh publication evidence.
   `awaiting_merge` and stop.
 SKILL_GIT_DELIVERY_EOF
       ;;
+    typesafe-jev) cat > "$target" <<'SKILL_TYPESAFE_JEV_EOF'
+---
+name: typesafe-jev
+description: Use TypeSafe Jev safely in Agent Stack web and mobile QA: build bounded Choice decisions, validate recommendations, and keep evaluation separate from actions.
+metadata:
+  version: "1.0"
+  consumer: web-qa, mobile-qa
+  stage: qa
+---
+
+# TypeSafe Jev for QA
+
+Use this skill before making Jev selection or evaluation calls. Jev returns
+typed judgments; the QA agent owns the workflow, verifies evidence, and calls
+the browser MCP or Maestro. **Jev never executes an action, grants
+authorization, or supplies a value.**
+
+## Source of truth
+
+The installed `scripts/qa/ask-jev.ts` is the transport and provider-routing
+authority. Reuse it; do not add a second TypeSafe client, hardcode a provider,
+or move credentials into project files. When changing the integration or
+depending on a response detail, check the current TypeSafe docs:
+
+- [System One API](https://docs.typesafe.ai/api.md)
+- [Choice](https://docs.typesafe.ai/primitives/choice.md)
+- [Confidence](https://docs.typesafe.ai/confidence.md)
+- [State](https://docs.typesafe.ai/concepts/state.md)
+- [TypeSafe agent skill](https://docs.typesafe.ai/agent-skill.md)
+
+Choice responses contain `type: "choice"`, `choice`, `probabilities` for the
+options, and `confidence` from 0 to 1. Do not invent response properties. A
+question id is chosen by the caller; its answer is returned under that id.
+The Vercel adapter normalizes `noul` only; `choice` remains unchanged.
+
+## Select one next action
+
+Selection is separate from evaluation and happens at a checkpoint:
+
+1. Observe the current page/screen. Build a closed candidate set from that
+   observation, with `inspect_more` always present and `stop` only when the
+   goal is met, blocked, or the test budget is exhausted. Keep the set small
+   (2–15); do not include an open-ended option.
+2. Give every candidate a stable opaque `id`, clear `description`, possible
+   `effects`, local `authorized` result, and JSON-Pointer `preconditions`
+   whose expected values come from the observed state. Do not include
+   unauthorized candidates. Never put form values or executable tool
+   arguments in the Jev option description.
+3. Use `buildSelectionQuestion` from `scripts/qa/questions.ts` or
+   `buildMobileSelectionQuestion` from
+   `scripts/mobile-qa/questions-mobile.ts`. Each builds one `choice`
+   question named `next_action`; only id, description, and possible effects
+   are sent to Jev. The state should be a redacted `{ test_goal, observation
+   }` summary. Do not send screenshots.
+4. Call the existing helper with a typed request, for example:
+
+   ```sh
+   node --experimental-strip-types scripts/qa/ask-jev.ts --request /tmp/jev-selection-request.json
+   ```
+
+   Keep transient request/response files outside the repository and remove
+   them after use. They must not contain secrets or sensitive data.
+5. Re-observe before acting. Feed the raw Jev response, the exact candidate
+   records, the submitted observation, and the fresh observation to
+   `scripts/jev/validate-action-selection.ts` on stdin. Its input shape is:
+
+   ```json
+   {
+     "question_id": "next_action",
+     "response": { "answers": { "next_action": {
+       "type": "choice", "choice": "open_record", "confidence": 0.91,
+       "probabilities": { "open_record": 0.91, "inspect_more": 0.09 }
+     } } },
+     "candidates": [
+       { "id": "open_record", "description": "Open the visible record",
+         "effects": "Shows its details", "authorized": true,
+         "preconditions": { "/page/visible_copy": "Records" } },
+       { "id": "inspect_more", "description": "Read the page again",
+         "effects": "No state change", "authorized": true,
+         "preconditions": {} }
+     ],
+     "submitted_observation": { "page": { "visible_copy": "Records" } },
+     "current_observation": { "page": { "visible_copy": "Records" } }
+   }
+   ```
+
+   Only a JSON result with `status: "execute"` and a `candidateId` matching
+   the current set can proceed to the MCP. `status: "inspect_more"` means
+   re-read the page/screen without a mutating action; `status: "stop"` means
+   end the QA flow. `reinspect`, `reject`, malformed output, nonzero exit,
+   or missing output means **do not act**; refresh, rebuild candidates, or
+   escalate as `UNVERIFIED`.
+6. The validator compares the submitted and fresh observations, checks the
+   selected id, verifies the complete probability map and confidence, checks
+   `authorized`, and matches every candidate JSON Pointer precondition
+   against the current observation. Its action confidence floor is fixed at
+   `0.75`, matching the existing QA contract. Do not lower or override it.
+7. Execute at most the single validated action through the browser MCP or
+   Maestro. Record `{ action, observed }`, then take a new observation before
+   asking Jev again. Never reuse an earlier selection after a page/screen
+   change. The validator is a gate for the agent's next tool call; it is not
+   an MCP controller and cannot grant access beyond existing permissions.
+
+## Values and data boundaries
+
+Jev selects among candidates; it does not generate record ids, amounts,
+dates, serials, or form values. The agent obtains and enters those values
+from the application, fixtures, or another deterministic source. Send Jev
+only the minimum redacted text needed to make the judgment — never API keys,
+session credentials, personal data, screenshots, or sensitive information.
+The question builder is not a redactor; review the state and candidate
+descriptions before sending.
+
+## Evaluate results separately
+
+After each action/observation and at the final checkpoint, use the existing
+web or mobile evaluation library and its functional, view, and business
+questions. Selection answers are not verdicts. Do not combine
+`next_action` into the evaluation batch: the evaluation call has its own
+state and produces PASS/BLOCKING/NIT/UNVERIFIED. Preserve the existing
+confidence handling for evaluation answers.
+
+If Jev is unavailable or an answer is invalid, do not fabricate a decision
+or verdict. Report the limitation and mark affected criteria `UNVERIFIED`.
+SKILL_TYPESAFE_JEV_EOF
+      ;;
     *) die "unknown skill: $skill" ;;
   esac
 }
 
 write_skills_manifest() {
   cat > "$1" <<'SKILLS_MANIFEST_EOF'
-{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, cross-links.", "mandatory_stages": ["branch", "publish", "deliver"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.0"}], "version": 1}
+{"description": "Canonical Agent Stack skill registry. Versions are kit-owned; hashes are recorded at install time in the consuming project.", "skills": [{"consumers": ["resolver", "designer", "developer", "design-qa"], "description": "Scoped source map, applicable instructions, evidence and gaps.", "mandatory_stages": ["intake"], "name": "project-context", "path": "skills/project-context/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Normalized issue context and verified tracking updates.", "mandatory_stages": ["intake", "closeout"], "name": "linear-workflow", "path": "skills/linear-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["setup"], "description": "Proposed UX/UI governance and source provenance.", "mandatory_stages": ["setup"], "name": "governance-bootstrap", "path": "skills/governance-bootstrap/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Ready artifacts through installed OpenSpec procedures.", "mandatory_stages": ["specify"], "name": "openspec-workflow", "path": "skills/openspec-workflow/SKILL.md", "version": "1.0"}, {"consumers": ["designer"], "description": "User flow, states, copy constraints, component reuse, acceptance criteria.", "mandatory_stages": ["design"], "name": "ux-design", "path": "skills/ux-design/SKILL.md", "version": "1.0"}, {"consumers": ["developer"], "description": "Scoped implementation using OpenSpec apply and applicable project skills.", "mandatory_stages": ["implement"], "name": "implementation", "path": "skills/implementation/SKILL.md", "version": "1.0"}, {"consumers": ["design-qa"], "description": "Evidence-based PASS, BLOCKING, or UNVERIFIED report.", "mandatory_stages": ["review"], "name": "ui-review", "path": "skills/ui-review/SKILL.md", "version": "1.0"}, {"consumers": ["resolver"], "description": "Safe worktrees, specification publication, implementation PRs, post-merge cleanup, and cross-links.", "mandatory_stages": ["branch", "publish", "deliver", "closeout"], "name": "git-delivery", "path": "skills/git-delivery/SKILL.md", "version": "1.2"}, {"consumers": ["resolver", "developer", "web-qa", "mobile-qa"], "description": "Installed astack CLI subcommands, their usage moments, and --help flag authority.", "mandatory_stages": ["ops"], "name": "astack-ops", "path": "skills/astack-ops/SKILL.md", "version": "1.1"}, {"consumers": ["web-qa", "mobile-qa"], "description": "Bounded Jev action recommendations, fail-closed validation, and separate evaluation.", "mandatory_stages": ["qa"], "name": "typesafe-jev", "path": "skills/typesafe-jev/SKILL.md", "version": "1.0"}], "version": 1}
 SKILLS_MANIFEST_EOF
 }
 
@@ -3435,7 +3565,7 @@ record_sources() {
   # Record kit base hashes for three-way upgrades. Add-missing only;
   # scripts/upgrade-agent-stack.sh owns updates. Never overwrites entries.
   manifest=$ROOT/.agent-stack/sources.manifest
-  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
+  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/astack-ops/SKILL.md skills/typesafe-jev/SKILL.md resources/web-qa/questions.ts resources/web-qa/README.md resources/mobile-qa/questions-mobile.ts resources/mobile-qa/README.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
     kit_file=$KIT_ROOT/.agent-stack/$relative
     [ -f "$kit_file" ] || continue
     if [ -f "$manifest" ] && awk -F'|' -v wanted="$relative" '$1 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$manifest"; then
@@ -3461,6 +3591,15 @@ ensure_mobileqa_resources() {
     source_file=$KIT_ROOT/.agent-stack/resources/mobile-qa/$f
     [ -f "$source_file" ] || continue
     copy_if_missing "$source_file" "$ROOT/scripts/mobile-qa/$f"
+  done
+}
+
+ensure_jev_resources() {
+  ensure_dir "$ROOT/scripts/jev"
+  for f in action-selection.ts validate-action-selection.ts; do
+    source_file=$KIT_ROOT/.agent-stack/resources/jev/$f
+    [ -f "$source_file" ] || continue
+    copy_if_missing "$source_file" "$ROOT/scripts/jev/$f"
   done
 }
 
@@ -4014,6 +4153,36 @@ print_jev_status() {
   printf '\n%s\n' '  astack auth jev'
 }
 
+# Skill mirrors for hosts disabled since the last install are stale, not
+# unmanaged: generated.manifest still records them, so `check` reports each
+# stale root as removable (spec skill-mirror-dedup: a disabled host leaves
+# no residue) and `prune` removes the copies it recorded.
+report_stale_skill_roots() {
+  [ -f "$MANIFEST_FILE" ] || return 0
+  stale_roots=""
+  while IFS='|' read -r relative _hash; do
+    case "$relative" in
+      .opencode/skills/*) enabled=$ENABLE_OPENCODE ;;
+      .claude/skills/*) enabled=$ENABLE_CLAUDE ;;
+      .agents/skills/*) enabled=$ENABLE_CODEX ;;
+      .cursor/skills/*) enabled=$ENABLE_CURSOR ;;
+      *) continue ;;
+    esac
+    [ "$enabled" = 1 ] && continue
+    [ -e "$ROOT/$relative" ] || continue
+    skill_root=${relative%%/skills/*}/skills
+    case " $stale_roots " in
+      *" $skill_root "*) ;;
+      *) stale_roots="$stale_roots $skill_root" ;;
+    esac
+  done < "$MANIFEST_FILE"
+  for skill_root in $stale_roots; do
+    printf 'stale %s (host disabled; removable with: astack prune && astack sync)\n' \
+      "$ROOT/$skill_root" >&2
+    CONFLICTS=$((CONFLICTS + 1))
+  done
+}
+
 prune_generated() {
   [ -f "$MANIFEST_FILE" ] || return 0
   temporary=$(mktemp "$MANIFEST_FILE.XXXXXX")
@@ -4176,6 +4345,7 @@ case "$COMMAND" in
     render_platform_outputs sync
     ensure_webqa_resources
     ensure_mobileqa_resources
+    ensure_jev_resources
     ensure_mcp_config
     record_sources
     record_kit_version
@@ -4191,6 +4361,7 @@ case "$COMMAND" in
     ensure_skills
     ensure_webqa_resources
     ensure_mobileqa_resources
+    ensure_jev_resources
     configure_models
     persist_selection
     render_platform_outputs sync
@@ -4208,6 +4379,7 @@ case "$COMMAND" in
     resolve_mcp
     resolve_delivery_config
     render_platform_outputs check
+    report_stale_skill_roots
     governance_status
     if [ "$CONFLICTS" -gt 0 ]; then
       exit 1

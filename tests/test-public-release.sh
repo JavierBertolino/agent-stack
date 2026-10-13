@@ -44,9 +44,15 @@ if ASTACK_RELEASE_BASE=$BAD sh "$KIT_ROOT/install.sh" --prefix="$WORK/badprefix"
   printf 'FAIL corrupt checksum must abort install\n' >&2; FAIL=1
 fi
 
-# Init records the kit version and points at `astack auth jev` when Jev is absent.
-(cd "$T" && PATH="$P/bin:$PATH" astack init --platforms opencode --mcp none >"$WORK/init.log" 2>&1) \
-  || { printf 'FAIL init\n' >&2; FAIL=1; }
+# Init records the kit version and points at `astack auth jev` when Jev is
+# absent. Force that state: hermetic XDG_CONFIG_HOME and no key variables, so
+# the check passes on machines where the developer has configured Jev.
+(
+  unset TYPESAFE_API_KEY AI_GATEWAY_API_KEY JEV_GATEWAY_API_KEY
+  cd "$T" || exit 1
+  XDG_CONFIG_HOME="$WORK/xdg" PATH="$P/bin:$PATH" \
+    astack init --platforms opencode --mcp none >"$WORK/init.log" 2>&1
+) || { printf 'FAIL init\n' >&2; FAIL=1; }
 grep -q 'Jev is not configured yet' "$WORK/init.log" \
   || { printf 'FAIL init must print the Jev follow-up\n' >&2; FAIL=1; }
 grep -q 'astack auth jev' "$WORK/init.log" \

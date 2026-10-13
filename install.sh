@@ -126,7 +126,7 @@ install_versioned() {
   done
 
   # Sanity check before switching.
-  for script in setup-agent-stack.sh doctor.sh upgrade-agent-stack.sh update-agent-stack.sh astack; do
+  for script in setup-agent-stack.sh doctor.sh upgrade-agent-stack.sh update-agent-stack.sh worktree-cleanup.sh astack; do
     [ -f "$target/scripts/$script" ] || path_error "kit source is missing scripts/$script"
     sh -n "$target/scripts/$script" || path_error "sanity check failed for scripts/$script"
   done

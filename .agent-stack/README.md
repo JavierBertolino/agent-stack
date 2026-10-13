@@ -38,7 +38,7 @@ defaults are embedded as fallbacks, so you can copy `setup-agent-stack.sh` alone
 to another project (or share it) and it still works. When the `.agent-stack/`
 kit directory is present, its files are used as overrides.
 
-The bootstrap optionally registers Linear and Trello MCP servers in every
+The bootstrap optionally registers Linear, Trello, and Jira MCP servers in every
 enabled platform's config. Their names and URLs are stored in the generated
 `config.conf`:
 `opencode.jsonc` (OpenCode), `.mcp.json` (Claude), `.cursor/mcp.json` (Cursor),

@@ -45,7 +45,12 @@ expect "$T/scripts/qa/ask-jev.ts" 'TYPESAFE_API_KEY' 'qa jev helper installed'
 expect "$T/scripts/mobile-qa/questions-mobile.ts" 'buildMobileQuestions' 'mobile-qa questions installed'
 # Maestro MCP (opt-in local stdio) registers on every platform.
 M=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-maestro.XXXXXX")
-sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$M" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp linear,maestro --specs-repository OWNER/specs >/dev/null 2>&1
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$M" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp linear,jira,maestro --specs-repository OWNER/specs >/dev/null 2>&1
+expect "$M/opencode.jsonc" '"jira"' 'opencode jira registered'
+expect "$M/opencode.jsonc" 'mcp.atlassian.com/v2/mcp' 'opencode jira uses Atlassian remote MCP'
+expect "$M/.mcp.json" '"jira"' 'claude jira registered'
+expect "$M/.cursor/mcp.json" '"jira"' 'cursor jira registered'
+expect "$M/.codex/config.toml" 'mcp_servers.jira' 'codex jira registered'
 expect "$M/opencode.jsonc" '"maestro"' 'opencode maestro registered'
 expect "$M/opencode.jsonc" '"type": "local"' 'opencode maestro is local stdio'
 expect "$M/.mcp.json" '"maestro"' 'claude maestro registered'

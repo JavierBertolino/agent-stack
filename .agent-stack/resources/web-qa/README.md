@@ -1,7 +1,7 @@
 # web-qa resources
 
 Companion scripts for the standalone `web-qa` agent. Copied to the consuming
-project as `scripts/qa/` by `setup-agent-stack.sh` (`init`/`sync` create
+project as `scripts/qa/` by `astack init` and `astack sync` (those commands create
 missing files only; existing project files are preserved).
 
 - `ask-jev.ts` — zero-dependency Jev caller (Node.js 22.6+). Credentials come

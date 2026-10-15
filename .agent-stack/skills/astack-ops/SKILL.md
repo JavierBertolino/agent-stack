@@ -24,13 +24,14 @@ into prompts, specs, or reports.
 6. `astack jev ask` — ask Jev a typed question during web-qa verification.
 7. `astack update` — fetch a newer kit release; a human approves the install replacement.
 8. `astack upgrade` — three-way merge revised kit defaults into this project; prompts before touching tracked files.
-9. `astack prune` — remove only stale files recorded in the manifest; prompts before impact.
-10. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
-11. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
-12. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
-13. `astack validate` — validate contract JSON against the kit schemas.
-14. `astack --version` — print the installed kit version.
-15. `astack --help` — usage summary for every subcommand.
+9. `astack prune` — remove generated files for platforms that are disabled. Changed files stay.
+10. `astack uninstall` — remove generated files for every platform. Refuses unless you confirm or pass `--yes`. Project guides stay.
+11. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
+12. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
+13. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
+14. `astack validate` — validate contract JSON against the kit schemas.
+15. `astack --version` — print the installed kit version.
+16. `astack --help` — usage summary for every subcommand.
 
 ## Evidence
 

@@ -68,11 +68,11 @@ scan '[Pp]rivate repository access' 'private-distro'
 # Primary `agent-stack` commands must not appear in public docs; the
 # canonical command is `astack`. Matches lines like `agent-stack init`
 # while allowing paths (.agent-stack/, share/agent-stack), the tarball
-# name, and the alias discussion itself.
+# name, the alias discussion, and `npx agent-stack` (the published package).
 doc_hits=0
 for f in README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md docs/*.md .github/PULL_REQUEST_TEMPLATE.md; do
   [ -f "$KIT_ROOT/$f" ] || continue
-  out=$(grep -E -n -e '(^|[^a-zA-Z0-9_./-])agent-stack +(init|sync|check|doctor|auth|update|upgrade|prune|run-state|validate|--version|--help)' "$KIT_ROOT/$f" 2>/dev/null | grep -v -i -e 'alias' -e 'backwards-compat' || true)
+  out=$(grep -E -n -e '(^|[^a-zA-Z0-9_./-])agent-stack +(init|sync|check|doctor|auth|update|upgrade|prune|run-state|validate|--version|--help)' "$KIT_ROOT/$f" 2>/dev/null | grep -v -i -e 'alias' -e 'backwards-compat' -e 'npx agent-stack' || true)
   if [ -n "$out" ]; then
     printf '%s\n' "$out" | while IFS= read -r line; do
       printf 'public-safety [legacy-command]: %s:%s\n' "$f" "$line" >&2

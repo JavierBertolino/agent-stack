@@ -70,6 +70,20 @@ normalize_target() {
   esac
 }
 
+require_node() {
+  if ! command -v node >/dev/null 2>&1; then
+    printf '%s\n' 'install.sh: Node.js 18 or newer is required.' >&2
+    printf '%s\n' 'Install Node.js from https://nodejs.org and run this installer again.' >&2
+    exit 1
+  fi
+  node -e 'const major = Number(process.versions.node.split(".")[0]); process.exit(major >= 18 ? 0 : 1)' \
+    || {
+      printf '%s\n' 'install.sh: Node.js 18 or newer is required.' >&2
+      printf '%s\n' 'Install Node.js from https://nodejs.org and run this installer again.' >&2
+      exit 1
+    }
+}
+
 detect_platform() {
   os=$(uname -s 2>/dev/null || printf 'unknown')
   arch=$(uname -m 2>/dev/null || printf 'unknown')
@@ -140,6 +154,9 @@ install_versioned() {
     [ -e "$source_dir/$entry" ] || path_error "kit source is missing $entry: $source_dir"
     cp -r "$source_dir/$entry" "$target/"
   done
+  if [ -d "$source_dir/cli" ]; then
+    cp -R "$source_dir/cli" "$target/cli"
+  fi
   for optional in LICENSE README.md CHANGELOG.md; do
     [ -e "$source_dir/$optional" ] && cp "$source_dir/$optional" "$target/"
   done
@@ -223,6 +240,7 @@ case "$MODE" in
       --kit-root "$SCRIPT_DIR" $SETUP_ARGS
     ;;
   global)
+    require_node
     case "$PREFIX" in
       /*) ;;
       *) path_error "--prefix must be absolute: $PREFIX" ;;
@@ -239,6 +257,7 @@ case "$MODE" in
     exit 0
     ;;
   public)
+    require_node
     case "$PREFIX" in
       /*) ;;
       *) path_error "--prefix must be absolute: $PREFIX" ;;

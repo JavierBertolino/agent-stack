@@ -110,6 +110,27 @@ case "$command" in
     exec sh "$KIT_ROOT/scripts/worktree-cleanup.sh" "$@"
     ;;
   init|sync|check|adopt|prune|uninstall)
+    node_cli=
+    for candidate in "$KIT_ROOT/cli/dist/bin.js" "$KIT_ROOT/packages/cli/dist/bin.js"; do
+      if [ -f "$candidate" ]; then
+        node_cli=$candidate
+        break
+      fi
+    done
+    if [ -n "$node_cli" ]; then
+      if ! command -v node >/dev/null 2>&1; then
+        printf '%s\n' 'astack: Node.js 18 or newer is required for this command.' >&2
+        printf '%s\n' 'Install Node.js from https://nodejs.org and retry.' >&2
+        exit 1
+      fi
+      node -e 'const major = Number(process.versions.node.split(".")[0]); process.exit(major >= 18 ? 0 : 1)' \
+        || {
+          printf '%s\n' 'astack: Node.js 18 or newer is required for this command.' >&2
+          printf '%s\n' 'Install Node.js from https://nodejs.org and retry.' >&2
+          exit 1
+        }
+      exec node "$node_cli" "$command" --root "$PWD" --kit-root "$KIT_ROOT" "$@"
+    fi
     exec sh "$KIT_ROOT/scripts/setup-agent-stack.sh" "$command" \
       --root "$PWD" --kit-root "$KIT_ROOT" "$@"
     ;;

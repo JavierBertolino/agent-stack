@@ -85,6 +85,26 @@ jobs:
           (cd "$T" && PATH="$P/bin:$PATH" astack check)
           (cd "$T" && PATH="$P/bin:$PATH" astack doctor)
 
+  node-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint -w agent-stack
+      - name: Typecheck
+        run: npm run typecheck -w agent-stack
+      - name: Test
+        run: npm test -w agent-stack
+      - name: Pack dry run
+        run: npm pack --dry-run -w agent-stack
+
   check-macos:
     runs-on: macos-latest
     steps:

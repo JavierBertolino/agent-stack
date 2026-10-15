@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "description": "Pins CI-installed tooling so workflows cannot drift underneath a commit. Dev-only: never shipped in the installed tree.",
+  "workspaces": [
+    "packages/cli"
+  ],
   "dependencies": {
     "@fission-ai/openspec": "1.14.1"
   }

@@ -1,0 +1,42 @@
+{
+  "name": "agent-stack",
+  "version": "0.1.4",
+  "description": "Project-aware delivery workflow for Codex, Claude Code, Cursor, and OpenCode.",
+  "type": "module",
+  "bin": {
+    "astack": "./dist/bin.js",
+    "agent-stack": "./dist/bin.js"
+  },
+  "exports": {
+    ".": "./dist/plan.js",
+    "./catalog": "./dist/catalog.js"
+  },
+  "files": [
+    "dist/bin.js",
+    "dist/catalog.js",
+    "dist/plan.js",
+    "kit",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/plan.test.js",
+    "prepack": "npm run build && node scripts/stage-kit.mjs",
+    "postpack": "node scripts/stage-kit.mjs --clean"
+  },
+  "dependencies": {
+    "@clack/prompts": "0.11.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "22.19.1",
+    "eslint": "9.39.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.2"
+  }
+}

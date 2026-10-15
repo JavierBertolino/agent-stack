@@ -20,6 +20,8 @@ python3 "$KIT_ROOT/scripts/build-release.sh" --kit-root "$KIT_ROOT" --dist "$DIS
 for artifact in astack.tar.gz astack.tar.gz.sha256 checksums.txt install.sh VERSION; do
   [ -f "$DIST/$artifact" ] || { printf 'FAIL release artifact missing: %s\n' "$artifact" >&2; FAIL=1; }
 done
+tar -tzf "$DIST/astack.tar.gz" | grep -qx 'cli/dist/bin.js' \
+  || { printf 'FAIL release archive is missing cli/dist/bin.js\n' >&2; FAIL=1; }
 
 sha256_hex() {
   if command -v sha256sum >/dev/null 2>&1; then

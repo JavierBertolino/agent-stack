@@ -20,8 +20,51 @@ python3 "$KIT_ROOT/scripts/build-release.sh" --kit-root "$KIT_ROOT" --dist "$DIS
 for artifact in astack.tar.gz astack.tar.gz.sha256 checksums.txt install.sh VERSION; do
   [ -f "$DIST/$artifact" ] || { printf 'FAIL release artifact missing: %s\n' "$artifact" >&2; FAIL=1; }
 done
-(cd "$DIST" && sha256sum -c astack.tar.gz.sha256 >/dev/null 2>&1) \
+
+sha256_hex() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  else
+    printf 'no sha256 tool\n' >&2
+    return 1
+  fi
+}
+
+# Portable checksum: 64 hex digits, two spaces, then the file name.
+# Both sha256sum -c and shasum -a 256 -c accept that line.
+sha256_check() {
+  sumfile=$1
+  line=$(awk 'NR == 1 { print; exit }' "$sumfile")
+  printf '%s\n' "$line" | grep -E '^[0-9a-f]{64}  [^ *].+$' >/dev/null \
+    || { printf 'FAIL checksum line is not the portable two-space form: %s\n' "$line" >&2; return 1; }
+  want=$(printf '%s\n' "$line" | awk '{ print $1 }')
+  name=$(printf '%s\n' "$line" | awk '{ print $2 }')
+  got=$(sha256_hex "$name") || return 1
+  [ "$got" = "$want" ] || { printf 'FAIL checksum mismatch for %s\n' "$name" >&2; return 1; }
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum -c "$sumfile" >/dev/null 2>&1
+  else
+    shasum -a 256 -c "$sumfile" >/dev/null 2>&1
+  fi
+}
+
+(cd "$DIST" && sha256_check astack.tar.gz.sha256) \
   || { printf 'FAIL release checksum invalid\n' >&2; FAIL=1; }
+
+# macOS ships shasum and not sha256sum. The same file must verify there.
+SHA_ONLY=$WORK/sha-only
+mkdir -p "$SHA_ONLY"
+for tool in shasum awk grep; do
+  src=$(command -v "$tool" 2>/dev/null || true)
+  [ -n "$src" ] || continue
+  ln -sf "$src" "$SHA_ONLY/$tool"
+done
+if [ -x "$SHA_ONLY/shasum" ]; then
+  (cd "$DIST" && PATH="$SHA_ONLY" sha256_check astack.tar.gz.sha256) \
+    || { printf 'FAIL release checksum invalid without sha256sum\n' >&2; FAIL=1; }
+fi
 
 # Public install from the release artifact (no checkout needed at install time).
 ASTACK_RELEASE_BASE=$DIST sh "$KIT_ROOT/install.sh" --prefix="$P" >"$WORK/install.log" 2>&1 \
@@ -74,7 +117,7 @@ mkdir -p "$NEWTREE"
 cp -r "$KIT_ROOT/scripts" "$KIT_ROOT/.agent-stack" "$NEWTREE/"
 printf '0.2.0\n' > "$NEWTREE/VERSION"
 tar -czf "$NEWDIST/astack.tar.gz" -C "$NEWTREE" scripts .agent-stack VERSION
-(cd "$NEWDIST" && sha256sum astack.tar.gz | awk '{ print $1 "  astack.tar.gz" }' > astack.tar.gz.sha256)
+(cd "$NEWDIST" && printf '%s  astack.tar.gz\n' "$(sha256_hex astack.tar.gz)" > astack.tar.gz.sha256)
 printf '0.2.0\n' > "$NEWDIST/VERSION"
 ASTACK_RELEASE_BASE=$NEWDIST PATH="$P/bin:$PATH" sh "$P/share/astack/current/scripts/update-agent-stack.sh" --check >"$WORK/check2.log" 2>&1 \
   || { printf 'FAIL update --check with newer release\n' >&2; FAIL=1; }

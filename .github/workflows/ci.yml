@@ -84,3 +84,32 @@ jobs:
           (cd "$T" && PATH="$P/bin:$PATH" astack init --platforms opencode --mcp none)
           (cd "$T" && PATH="$P/bin:$PATH" astack check)
           (cd "$T" && PATH="$P/bin:$PATH" astack doctor)
+
+  check-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+      - name: Install OpenSpec
+        run: npm ci
+      - name: Shell syntax
+        run: |
+          sh -n scripts/setup-agent-stack.sh
+          sh -n setup.sh
+          sh -n scripts/doctor.sh
+          sh -n scripts/upgrade-agent-stack.sh
+          sh -n scripts/update-agent-stack.sh
+          sh -n scripts/astack
+          sh -n scripts/agent-stack
+          sh -n install.sh
+          sh -n scripts/sync-agent-mirrors.sh
+          for t in tests/test-*.sh tests/run.sh; do sh -n "$t"; done
+      - name: Fixture and installer tests
+        run: sh tests/run.sh --kit-root "$PWD"

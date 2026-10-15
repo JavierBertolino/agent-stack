@@ -36,8 +36,8 @@ different marker is one pending update in `--check`; applying the upgrade
 records the current kit version. `doctor.sh` reports a missing marker or a
 version mismatch and points to `astack upgrade`.
 
-After upgrading, run `setup-agent-stack.sh sync` to re-render platform
-mirrors from the new sources, then `check` and `doctor.sh`.
+After upgrading, run `astack sync` to re-render platform
+mirrors from the new sources, then `astack check` and `astack doctor`.
 
 ## Config
 

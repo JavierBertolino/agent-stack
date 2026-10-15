@@ -52,5 +52,8 @@ astack init
 astack doctor
 ```
 
+`astack uninstall` removes generated files. It asks first, or accepts
+`--yes`. Project guides (`UX_AGENTS.md`, `UI_AGENTS.md`) stay.
+
 `agent-stack` remains as an unadvertised backwards-compatibility alias;
 all documentation uses `astack`.

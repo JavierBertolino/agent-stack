@@ -20,9 +20,7 @@ used by the Agent Stack installer.
   `scripts/upgrade-agent-stack.sh` can three-way merge revised defaults
   without overwriting project customizations.
 
-Run `install.sh --path=/absolute/path/to/project` from the kit repository, or run
-`scripts/setup-agent-stack.sh init --kit-root /path/to/agent-stack` from a
-project root. The setup is idempotent and does not overwrite existing
+Run `astack init` from a project root. The setup is idempotent and does not overwrite existing
 human-owned files. Interactively it walks through platforms, MCP integrations,
 the specs repository, QA, and optionally model review. Selections use Space
 to choose/toggle and Enter to confirm: `gum` when available, otherwise a
@@ -57,19 +55,19 @@ removing existing entries.
 
 Useful commands:
 
-- `scripts/setup-agent-stack.sh sync` renders missing or previously-managed
-  platform files.
-- `scripts/setup-agent-stack.sh check` fails when generated files drift.
-- `scripts/setup-agent-stack.sh adopt` imports existing OpenCode prompts before
-  the first `init` when no neutral role sources exist.
-- `scripts/setup-agent-stack.sh prune` removes only stale files recorded in the
-  manifest and leaves changed files in place.
+- `astack sync` renders missing or previously-managed platform files.
+- `astack check` fails when generated files drift.
+- `astack adopt` imports existing OpenCode prompts before the first `init`
+  when no neutral role sources exist.
+- `astack prune` removes generated files for platforms that are disabled and
+  leaves changed files in place.
+- `astack uninstall` removes generated files for every platform after
+  confirmation, or with `--yes`. It leaves the project guides in place.
 - `astack worktree audit` reports merged worktrees eligible for guarded
   cleanup; `astack worktree cleanup --branch <branch>` removes one verified
   worktree and its local branch after the active session relocates.
-- `scripts/setup-agent-stack.sh auth jev` stores `TYPESAFE_API_KEY` for the
-  web-qa Jev helper in user-level config (never in the repo). `scripts/astack`
-  wraps every command (`astack sync`, `astack auth jev`, ...).
+- `astack auth jev` stores the Jev API key for the web-qa helper in
+  user-level config (never in the repo).
 - When OpenCode runs inside Herdr, the resolver opens sibling panes on demand
   for delegated roles and keeps the main resolver pane visible.
 

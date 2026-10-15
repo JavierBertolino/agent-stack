@@ -1,10 +1,23 @@
 # Installation
 
+## npm
+
+Node.js 18 or newer:
+
+```sh
+npx agent-stack init
+npm install -g agent-stack
+```
+
+`npx agent-stack init` asks for coding agents and integrations, then the shell renderer writes the project files. See [Node CLI](node-cli.md) for what is still in shell.
+
 ## One-line install
 
 ```sh
 curl -fsSL https://github.com/JavierBertolino/agent-stack/releases/latest/download/install.sh | sh
 ```
+
+The curl installer checks for Node.js 18, downloads the release archive, and installs `astack`. If Node.js is missing, it stops and tells you how to install it.
 
 The installer:
 

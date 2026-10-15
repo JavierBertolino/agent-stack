@@ -103,6 +103,25 @@ strip_v() {
   esac
 }
 
+# The checksum line must be 64 hex digits, two spaces, and astack.tar.gz.
+# macOS shasum -c exits 0 when the digest is the wrong length. GNU sha256sum -c
+# exits 1. Compare the digest here so both tools reject a short line.
+verify_archive_sha256() {
+  archive=$1
+  sumfile=$2
+  line=$(awk 'NR == 1 { print; exit }' "$sumfile") || return 1
+  printf '%s\n' "$line" | grep -Eq '^[0-9a-f]{64}  astack\.tar\.gz$' || return 1
+  want=$(printf '%s\n' "$line" | awk '{ print $1 }')
+  if command -v sha256sum >/dev/null 2>&1; then
+    got=$(sha256sum "$archive" | awk '{ print $1 }')
+  elif command -v shasum >/dev/null 2>&1; then
+    got=$(shasum -a 256 "$archive" | awk '{ print $1 }')
+  else
+    return 1
+  fi
+  [ "$got" = "$want" ]
+}
+
 # install_versioned SOURCE_DIR VERSION PREFIX
 install_versioned() {
   source_dir=$1
@@ -255,13 +274,8 @@ case "$MODE" in
         -o "$WORK/astack.tar.gz.sha256" || path_error "checksum download failed for $TAG"
     fi
     printf 'Verifying checksum...\n'
-    (cd "$WORK" && {
-      if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum -c astack.tar.gz.sha256 >/dev/null 2>&1
-      else
-        shasum -a 256 -c astack.tar.gz.sha256 >/dev/null 2>&1
-      fi
-    }) || path_error 'checksum verification failed; aborting install'
+    verify_archive_sha256 "$WORK/astack.tar.gz" "$WORK/astack.tar.gz.sha256" \
+      || path_error 'checksum verification failed; aborting install'
     printf 'Installing...\n'
     mkdir -p "$WORK/kit"
     tar -xzf "$WORK/astack.tar.gz" -C "$WORK/kit" || path_error 'could not extract the release archive'

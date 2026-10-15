@@ -87,6 +87,26 @@ if ASTACK_RELEASE_BASE=$BAD sh "$KIT_ROOT/install.sh" --prefix="$WORK/badprefix"
   printf 'FAIL corrupt checksum must abort install\n' >&2; FAIL=1
 fi
 
+# macOS shasum -c exits 0 for a short digest. A sha256sum that does the same
+# for -c must still abort.
+STUB=$WORK/sha-stub
+mkdir -p "$STUB"
+cat > "$STUB/sha256sum" <<'EOF'
+#!/bin/sh
+if [ "$1" = "-c" ]; then
+  exit 0
+fi
+if [ -x /usr/bin/sha256sum ]; then
+  exec /usr/bin/sha256sum "$@"
+fi
+exec shasum -a 256 "$@"
+EOF
+chmod +x "$STUB/sha256sum"
+if PATH="$STUB:$PATH" ASTACK_RELEASE_BASE=$BAD sh "$KIT_ROOT/install.sh" --prefix="$WORK/badprefix-stub" >/dev/null 2>&1; then
+  printf 'FAIL corrupt checksum must abort when sha256sum -c is a no-op\n' >&2
+  FAIL=1
+fi
+
 # Init records the kit version and points at `astack auth jev` when Jev is
 # absent. Force that state: hermetic XDG_CONFIG_HOME and no key variables, so
 # the check passes on machines where the developer has configured Jev.

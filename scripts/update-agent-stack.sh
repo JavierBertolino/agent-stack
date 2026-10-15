@@ -41,6 +41,25 @@ done
 
 die() { printf '%s\n' "update-agent-stack.sh: $*" >&2; exit 1; }
 
+# The checksum line must be 64 hex digits, two spaces, and astack.tar.gz.
+# macOS shasum -c exits 0 when the digest is the wrong length. GNU sha256sum -c
+# exits 1. Compare the digest here so both tools reject a short line.
+verify_archive_sha256() {
+  archive=$1
+  sumfile=$2
+  line=$(awk 'NR == 1 { print; exit }' "$sumfile") || return 1
+  printf '%s\n' "$line" | grep -Eq '^[0-9a-f]{64}  astack\.tar\.gz$' || return 1
+  want=$(printf '%s\n' "$line" | awk '{ print $1 }')
+  if command -v sha256sum >/dev/null 2>&1; then
+    got=$(sha256sum "$archive" | awk '{ print $1 }')
+  elif command -v shasum >/dev/null 2>&1; then
+    got=$(shasum -a 256 "$archive" | awk '{ print $1 }')
+  else
+    return 1
+  fi
+  [ "$got" = "$want" ]
+}
+
 kit_version() {
   if [ -f "$KIT_ROOT/VERSION" ]; then
     awk 'NR == 1 { print $1; exit }' "$KIT_ROOT/VERSION"
@@ -145,13 +164,8 @@ else
 fi
 
 printf 'Verifying checksum...\n'
-(cd "$WORK" && {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c astack.tar.gz.sha256 >/dev/null 2>&1
-  else
-    shasum -a 256 -c astack.tar.gz.sha256 >/dev/null 2>&1
-  fi
-}) || die 'checksum verification failed; aborting update'
+verify_archive_sha256 "$WORK/astack.tar.gz" "$WORK/astack.tar.gz.sha256" \
+  || die 'checksum verification failed; aborting update'
 
 printf 'Installing...\n'
 mkdir -p "$BASE/versions"

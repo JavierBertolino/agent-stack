@@ -79,6 +79,7 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Release installs and `astack update` reject a checksum line that is not 64 hex digits. macOS `shasum -c` exits 0 for a short line.
 - `astack upgrade --check` now reports project kit-version drift as a pending
   update even when all managed source files already match the installed kit.
 

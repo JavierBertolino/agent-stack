@@ -48,7 +48,8 @@ Usage:
                                 Remove verified merged worktrees and local branches.
   astack update [--check]     Update the installed Agent Stack CLI and kit.
   astack upgrade [--check]    Upgrade the current project to the installed kit.
-  astack prune                Remove only safe, stale generated files.
+  astack prune                Remove generated files for disabled platforms.
+  astack uninstall [--yes]    Remove generated files for every platform.
   astack run-state ...        Validated run state (see run-state --help).
   astack validate ...         Validate contract JSON (see validate --help).
   astack --version            Print the installed kit version.
@@ -108,7 +109,7 @@ case "$command" in
   worktree)
     exec sh "$KIT_ROOT/scripts/worktree-cleanup.sh" "$@"
     ;;
-  init|sync|check|adopt|prune)
+  init|sync|check|adopt|prune|uninstall)
     exec sh "$KIT_ROOT/scripts/setup-agent-stack.sh" "$command" \
       --root "$PWD" --kit-root "$KIT_ROOT" "$@"
     ;;

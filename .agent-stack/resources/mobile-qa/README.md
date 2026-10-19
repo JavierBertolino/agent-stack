@@ -2,7 +2,7 @@
 
 Companion scripts for the standalone `mobile-qa` agent (Maestro MCP +
 device/emulator). Copied to the consuming project as `scripts/mobile-qa/`
-by `setup-agent-stack.sh` (`init`/`sync` create missing files only).
+by `astack init` and `astack sync` (those commands create missing files only).
 
 - `questions-mobile.ts` — typed atomic question library (functional / view /
   business + verdict/domain/severity) for use with the shared Jev caller at

@@ -28,6 +28,13 @@ SKIP_MODELS=0
 PERSIST_SELECTION=0
 CONFLICTS=0
 CREATED_COUNT=0
+UPDATED_COUNT=0
+SIDE_EFFECTS=0
+VERBOSE=0
+ASSUME_YES=0
+FORCE=0
+CHANGE_LOG=
+JEV_EMPTY_SKIPS=0
 
 # Per-platform enable flags (0 = skip, 1 = render). Resolved later from config
 # defaults, CLI flags, or the interactive multiselect menu.
@@ -73,19 +80,22 @@ ARCHIVE_STAGE=after-merge
 usage() {
   cat <<'EOF'
 Usage:
-  setup-agent-stack.sh [init|sync|check|adopt|prune|auth] [options]
+  astack init [options]
+  astack sync [options]
+  astack check [options]
+  astack adopt [options]
+  astack prune [options]
+  astack uninstall [options]
+  astack auth jev [--validate-only] [--provider=typesafe|vercel|gateway]
 
 Commands:
   init       Create missing project guides, config, and generated agents.
   sync       Generate missing or previously-managed platform files.
   check      Check files without changing anything.
   adopt      Create neutral role sources from existing OpenCode agents.
-  prune      Remove only safe, stale generated files.
-  auth jev [--validate-only] [--provider=typesafe|vercel|gateway]
-                               Configure the Jev QA provider (user-level, never in repo).
-
-  astack is the canonical command: astack init, astack sync, astack check,
-  astack doctor, astack auth jev, astack update, astack upgrade, ...
+  prune      Remove generated files for platforms that are disabled.
+  uninstall  Remove generated files for every platform.
+  auth jev   Configure the Jev QA provider (user-level, never in the repo).
 
 Options:
   --root PATH                 Target project root. Defaults to the current directory.
@@ -95,12 +105,12 @@ Options:
                               opencode, claude, codex, cursor.
   --select                    Force the interactive platform multiselect.
   --mcp LIST                  MCP integrations: none, linear, trello, maestro,
-                               both, or comma-separated combos
-                               (e.g. linear,maestro).
+                              both, or a comma-separated combination
+                              (for example linear,maestro).
   --specs-repository OWNER/REPO
-                               Specs publication mirror (implies mirror mode).
-  --specs-base-branch BRANCH    Specs repository base branch.
-  --specs-mode MODE             Publication policy: local or mirror.
+                              Specs publication mirror (implies mirror mode).
+  --specs-base-branch BRANCH  Specs repository base branch.
+  --specs-mode MODE           Publication policy: local or mirror.
   --configure-models          Walk through model and thinking prompts.
   --skip-models               Keep harness defaults; never prompt for models.
   --claude-only               Only render/check Claude mirrors.
@@ -109,6 +119,9 @@ Options:
   --skip-codex                Do not render/check Codex files.
   --skip-cursor               Do not render/check Cursor agents.
   --install-codex-bridge      Add the managed guidance block to AGENTS.md.
+  --verbose                   List every created or updated file.
+  --yes                       Accept confirmations (uninstall, non-git init).
+  --force                     Continue when the target is not a git repository.
   -h, --help                  Show this help.
 
 Platforms: running interactively (init/sync) with no platform flag shows a
@@ -133,12 +146,38 @@ EOF
 }
 
 die() {
-  printf '%s\n' "setup-agent-stack.sh: $*" >&2
+  printf '%s\n' "astack: $*" >&2
   exit 1
 }
 
-note_created() {
-  CREATED_COUNT=$((CREATED_COUNT + 1))
+record_change() {
+  kind=$1
+  path=$2
+  if [ -z "$CHANGE_LOG" ]; then
+    CHANGE_LOG=$(mktemp "${TMPDIR:-/tmp}/astack-changes.XXXXXX")
+  fi
+  rel=$path
+  case "$rel" in
+    "$ROOT"/*) rel=${rel#"$ROOT"/} ;;
+  esac
+  area=other
+  case "$rel" in
+    .opencode/*|opencode.jsonc) area=opencode ;;
+    .claude/*|.mcp.json) area=claude ;;
+    .codex/*|.agents/*) area=codex ;;
+    .cursor/*) area=cursor ;;
+    .agent-stack/*) area=kit ;;
+    UX_AGENTS.md|UI_AGENTS.md|AGENTS.md) area=guides ;;
+    scripts/*) area=qa ;;
+  esac
+  printf '%s %s\n' "$area" "$kind" >> "$CHANGE_LOG"
+  case "$kind" in
+    created) CREATED_COUNT=$((CREATED_COUNT + 1)) ;;
+    updated) UPDATED_COUNT=$((UPDATED_COUNT + 1)) ;;
+  esac
+  if [ "$VERBOSE" = 1 ]; then
+    printf '%s %s\n' "$kind" "$path"
+  fi
 }
 
 abspath_dir() {
@@ -156,7 +195,7 @@ copy_if_missing() {
   [ -f "$source_path" ] || die "missing kit file: $source_path"
   ensure_dir "$(dirname -- "$target_path")"
   cp "$source_path" "$target_path"
-  note_created; printf 'created %s\n' "$target_path"
+  record_change created "$target_path"
 }
 
 file_hash() {
@@ -288,7 +327,7 @@ install_generated() {
       ensure_dir "$(dirname -- "$destination")"
       mv "$temporary" "$destination"
       record_manifest "$relative" "$expected_hash"
-      printf 'updated %s\n' "$destination"
+      record_change updated "$destination"
       return 0
     fi
 
@@ -301,7 +340,7 @@ install_generated() {
   ensure_dir "$(dirname -- "$destination")"
   mv "$temporary" "$destination"
   record_manifest "$relative" "$expected_hash"
-  note_created; printf 'created %s\n' "$destination"
+  record_change created "$destination"
 }
 
 check_generated() {
@@ -344,7 +383,7 @@ enable_platform() {
     claude|claude-code) ENABLE_CLAUDE=1 ;;
     codex) ENABLE_CODEX=1 ;;
     cursor) ENABLE_CURSOR=1 ;;
-    *) die "unknown platform: $1 (use opencode, claude, codex, cursor)" ;;
+    *) die "unknown platform: $1 (valid: opencode, claude, codex, cursor)" ;;
   esac
 }
 
@@ -850,56 +889,55 @@ EOF
   PERSIST_SELECTION=1
 }
 
-apply_mcp_selection() {
-  # Legacy single values keep exclusive semantics; comma-separated combos
-  # (e.g. linear,maestro) are additive on top of current config.
+mcp_token_valid() {
   case "$1" in
-    none)
-      MCP_LINEAR_ENABLED=0
-      MCP_TRELLO_ENABLED=0
-      MCP_MAESTRO_ENABLED=0
-      return 0
-      ;;
-    linear)
-      MCP_LINEAR_ENABLED=1
-      MCP_TRELLO_ENABLED=0
-      return 0
-      ;;
-    trello)
-      MCP_LINEAR_ENABLED=0
-      MCP_TRELLO_ENABLED=1
-      return 0
-      ;;
+    none|linear|trello|maestro|both) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+apply_mcp_token() {
+  case "$1" in
+    linear) MCP_LINEAR_ENABLED=1 ;;
+    trello) MCP_TRELLO_ENABLED=1 ;;
+    maestro) MCP_MAESTRO_ENABLED=1 ;;
     both)
       MCP_LINEAR_ENABLED=1
       MCP_TRELLO_ENABLED=1
-      return 0
-      ;;
-    maestro)
-      MCP_MAESTRO_ENABLED=1
-      return 0
       ;;
   esac
+}
+
+# One parser for a single id and a comma list. `none` clears every managed
+# server, then every other token adds. `both` is linear and trello. Token
+# order does not matter, and a token never turns a different server off.
+apply_mcp_selection() {
+  selection=$1
+  reset=0
+  adds=
   oldIFS=$IFS
   IFS=','
-  for token in $1; do
-    case "$token" in
-      none)
-        MCP_LINEAR_ENABLED=0
-        MCP_TRELLO_ENABLED=0
-        MCP_MAESTRO_ENABLED=0
-        ;;
-      linear) MCP_LINEAR_ENABLED=1 ;;
-      trello) MCP_TRELLO_ENABLED=1 ;;
-      maestro) MCP_MAESTRO_ENABLED=1 ;;
-      both)
-        MCP_LINEAR_ENABLED=1
-        MCP_TRELLO_ENABLED=1
-        ;;
-      *) die "unknown MCP selection: $token (use none, linear, trello, maestro, both, or comma-separated combos)" ;;
-    esac
+  for token in $selection; do
+    token=$(printf '%s' "$token" | tr -d '[:space:]')
+    [ -n "$token" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, maestro, both)'
+    if ! mcp_token_valid "$token"; then
+      die "unknown MCP selection: $token (valid: none, linear, trello, maestro, both)"
+    fi
+    if [ "$token" = none ]; then
+      reset=1
+    else
+      adds="$adds $token"
+    fi
   done
   IFS=$oldIFS
+  if [ "$reset" = 1 ]; then
+    MCP_LINEAR_ENABLED=0
+    MCP_TRELLO_ENABLED=0
+    MCP_MAESTRO_ENABLED=0
+  fi
+  for token in $adds; do
+    apply_mcp_token "$token"
+  done
 }
 
 select_mcp_interactive() {
@@ -1082,7 +1120,7 @@ configure_jev_interactive() {
       *) return 0 ;;
     esac
   else
-    choose_single 'Set up Jev QA now?' 1 \
+    choose_single 'Set up Jev QA now?' 2 \
       'Configure Jev now' \
       'Configure later'
     if [ "$SELECTOR_INDEX" = 2 ]; then
@@ -1092,6 +1130,7 @@ configure_jev_interactive() {
   fi
 
   select_jev_provider 1
+  JEV_EMPTY_SKIPS=1
   if [ "$JEV_MENU_CHOICE" = 4 ]; then
     printf '\n%s\n' 'OpenRouter exposes Jev, but Agent Stack does not yet have a verified'
     printf '%s\n' 'System One-compatible transport for this route.'
@@ -1124,14 +1163,17 @@ resolve_platforms() {
     oldIFS=$IFS
     IFS=','
     for p in $PLATFORMS_ARG; do
+      p=$(printf '%s' "$p" | tr -d '[:space:]')
       enable_platform "$p"
     done
     IFS=$oldIFS
+    PERSIST_SELECTION=1
     return 0
   fi
 
   if [ "$CLAUDE_ONLY" = 1 ]; then
     ENABLE_OPENCODE=0; ENABLE_CLAUDE=1; ENABLE_CODEX=0; ENABLE_CURSOR=0
+    PERSIST_SELECTION=1
     return 0
   fi
 
@@ -1140,13 +1182,30 @@ resolve_platforms() {
     [ "$SKIP_CLAUDE" = 1 ] && ENABLE_CLAUDE=0
     [ "$SKIP_CODEX" = 1 ] && ENABLE_CODEX=0
     [ "$SKIP_CURSOR" = 1 ] && ENABLE_CURSOR=0
+    PERSIST_SELECTION=1
     return 0
   fi
 
   if [ "$INTERACTIVE_SELECT" = 1 ] || { [ -t 0 ] && { [ "$COMMAND" = init ] || [ "$COMMAND" = sync ]; }; }; then
     select_platforms_interactive
+    return 0
   fi
 
+  if { [ "$COMMAND" = init ] || [ "$COMMAND" = sync ]; } && [ ! -t 0 ]; then
+    chosen=
+    [ "$ENABLE_OPENCODE" = 1 ] && chosen=opencode
+    if [ "$ENABLE_CLAUDE" = 1 ]; then
+      if [ -n "$chosen" ]; then chosen="$chosen, claude"; else chosen=claude; fi
+    fi
+    if [ "$ENABLE_CODEX" = 1 ]; then
+      if [ -n "$chosen" ]; then chosen="$chosen, codex"; else chosen=codex; fi
+    fi
+    if [ "$ENABLE_CURSOR" = 1 ]; then
+      if [ -n "$chosen" ]; then chosen="$chosen, cursor"; else chosen=cursor; fi
+    fi
+    printf 'Non-interactive %s is using %s.\n' "$COMMAND" "$chosen"
+    printf 'Pass --platforms to choose a different set.\n'
+  fi
 }
 
 model_key_for() {
@@ -1708,7 +1767,7 @@ render_config() {
   output=$1
   max_threads=$(get_config CODEX_MAX_CONCURRENT_THREADS 4)
   {
-    printf '%s\n' '# Project-local Codex configuration generated by setup-agent-stack.sh.'
+    printf '%s\n' '# Project-local Codex configuration generated by astack.'
     printf '%s\n' '# This file does not contain credentials or global settings.'
     printf '%s\n' '' '[agents]'
     printf '%s\n' 'enabled = true' "max_concurrent_threads_per_session = $max_threads"
@@ -2702,7 +2761,7 @@ TEMPLATE_CODEX_README_EOF
 
 write_embedded_defaults() {
   cat > "$1" <<'DEFAULTS_EOF'
-# Agent stack defaults. Values are read as KEY=VALUE by setup-agent-stack.sh.
+# Agent stack defaults. Values are read as KEY=VALUE by astack.
 AGENT_STACK_VERSION=0.1.4
 MAX_CORRECTIVE_ROUNDS=3
 TIMEBOX_MINUTES=25
@@ -2817,7 +2876,7 @@ ensure_role_sources() {
       copy_if_missing "$source_role" "$target_role"
     elif [ ! -f "$target_role" ]; then
       write_role_source "$role" "$target_role"
-      note_created; printf 'created %s\n' "$target_role"
+        record_change created "$target_role"
     fi
   done
   ROLE_DIR=$ROOT/.agent-stack/roles
@@ -2854,13 +2913,14 @@ into prompts, specs, or reports.
 6. `astack jev ask` — ask Jev a typed question during web-qa verification.
 7. `astack update` — fetch a newer kit release; a human approves the install replacement.
 8. `astack upgrade` — three-way merge revised kit defaults into this project; prompts before touching tracked files.
-9. `astack prune` — remove only stale files recorded in the manifest; prompts before impact.
-10. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
-11. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
-12. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
-13. `astack validate` — validate contract JSON against the kit schemas.
-14. `astack --version` — print the installed kit version.
-15. `astack --help` — usage summary for every subcommand.
+9. `astack prune` — remove generated files for platforms that are disabled. Changed files stay.
+10. `astack uninstall` — remove generated files for every platform. Refuses unless you confirm or pass `--yes`. Project guides stay.
+11. `astack worktree audit` — read-only report of worktrees eligible for safe cleanup.
+12. `astack worktree cleanup` — remove only safe worktrees whose exact PR head is merged; never deletes the remote branch.
+13. `astack run-state` — validated delivery-run state: init, lock, transition, record, resume, validate.
+14. `astack validate` — validate contract JSON against the kit schemas.
+15. `astack --version` — print the installed kit version.
+16. `astack --help` — usage summary for every subcommand.
 
 ## Evidence
 
@@ -3447,19 +3507,19 @@ ensure_skills() {
       if [ ! -e "$target_skill" ]; then
         ensure_dir "$(dirname -- "$target_skill")"
         cp "$source_skill" "$target_skill"
-        note_created; printf 'created %s\n' "$target_skill"
+        record_change created "$target_skill"
       fi
     elif [ ! -f "$target_skill" ]; then
       ensure_dir "$(dirname -- "$target_skill")"
       write_skill_source "$skill" "$target_skill"
-      note_created; printf 'created %s\n' "$target_skill"
+      record_change created "$target_skill"
     fi
   done
   if [ -f "$KIT_ROOT/.agent-stack/skills/manifest.json" ]; then
     copy_if_missing "$KIT_ROOT/.agent-stack/skills/manifest.json" "$ROOT/.agent-stack/skills/manifest.json"
   elif [ ! -f "$ROOT/.agent-stack/skills/manifest.json" ]; then
     write_skills_manifest "$ROOT/.agent-stack/skills/manifest.json"
-    note_created; printf 'created %s\n' "$ROOT/.agent-stack/skills/manifest.json"
+    record_change created "$ROOT/.agent-stack/skills/manifest.json"
   fi
   for contract in handoff.schema.json report.schema.json run-state.schema.json event.schema.json; do
     if [ -f "$KIT_ROOT/.agent-stack/contracts/$contract" ]; then
@@ -3615,7 +3675,14 @@ jev_prompt_secret() {
   IFS= read -r entered || true
   stty echo 2>/dev/null || true
   printf '\n'
-  [ -n "$entered" ] || die 'no value entered'
+  if [ -z "$entered" ]; then
+    if [ "$JEV_EMPTY_SKIPS" = 1 ]; then
+      JEV_SECRET_VALUE=
+      printf '%s\n' 'No API key entered. Skipping Jev setup.'
+      return 1
+    fi
+    die 'no value entered'
+  fi
   JEV_SECRET_VALUE=$entered
 }
 
@@ -3652,7 +3719,7 @@ auth_jev_provider() {
   case "$provider" in
     typesafe)
       printf '\nTypeSafe direct (https://api.typesafe.ai/v1/systemone)\n'
-      jev_prompt_secret 'TypeSafe API key' TYPESAFE_API_KEY
+      jev_prompt_secret 'TypeSafe API key' TYPESAFE_API_KEY || return 1
       key=$JEV_SECRET_VALUE
       printf 'Validating credentials...\n'
       jev_validate_typesafe "$key" 'https://api.typesafe.ai/v1/models'
@@ -3663,7 +3730,7 @@ auth_jev_provider() {
       ;;
     vercel)
       printf '\nVercel AI Gateway (Jev model typesafe-ai/jev-latest)\n'
-      jev_prompt_secret 'Vercel AI Gateway API key' AI_GATEWAY_API_KEY
+      jev_prompt_secret 'Vercel AI Gateway API key' AI_GATEWAY_API_KEY || return 1
       key=$JEV_SECRET_VALUE
       printf 'Validating credentials...\n'
       jev_validate_typesafe "$key" "${JEV_GATEWAY_URL:-https://ai-gateway.vercel.sh}/v1/models"
@@ -3684,7 +3751,7 @@ auth_jev_provider() {
         [ -n "$gateway_url" ] || die 'no URL entered'
       fi
       JEV_GATEWAY_URL=$gateway_url
-      jev_prompt_secret 'Gateway API key' JEV_GATEWAY_API_KEY
+      jev_prompt_secret 'Gateway API key' JEV_GATEWAY_API_KEY || return 1
       key=$JEV_SECRET_VALUE
       if [ -z "${JEV_MODEL:-}" ] || [ "$JEV_MODEL" = jev-latest ]; then
         if [ -t 0 ]; then
@@ -3773,7 +3840,7 @@ ensure_config() {
     copy_if_missing "$KIT_ROOT/.agent-stack/defaults.conf" "$ROOT/.agent-stack/config.conf"
   elif [ ! -f "$ROOT/.agent-stack/config.conf" ]; then
     write_embedded_defaults "$ROOT/.agent-stack/config.conf"
-    note_created; printf 'created %s\n' "$ROOT/.agent-stack/config.conf"
+    record_change created "$ROOT/.agent-stack/config.conf"
   fi
 }
 
@@ -3785,14 +3852,14 @@ ensure_scaffolds() {
     copy_if_missing "$KIT_ROOT/.agent-stack/templates/UX_AGENTS.md" "$ROOT/UX_AGENTS.md"
   elif [ ! -f "$ROOT/UX_AGENTS.md" ]; then
     write_embedded_ux_agents "$ROOT/UX_AGENTS.md"
-    note_created; printf 'created %s\n' "$ROOT/UX_AGENTS.md"
+    record_change created "$ROOT/UX_AGENTS.md"
   fi
 
   if [ -f "$KIT_ROOT/.agent-stack/templates/UI_AGENTS.md" ]; then
     copy_if_missing "$KIT_ROOT/.agent-stack/templates/UI_AGENTS.md" "$ROOT/UI_AGENTS.md"
   elif [ ! -f "$ROOT/UI_AGENTS.md" ]; then
     write_embedded_ui_agents "$ROOT/UI_AGENTS.md"
-    note_created; printf 'created %s\n' "$ROOT/UI_AGENTS.md"
+    record_change created "$ROOT/UI_AGENTS.md"
   fi
 
   if [ -f "$KIT_ROOT/.agent-stack/README.md" ]; then
@@ -3901,14 +3968,32 @@ merge_mcp_json() {
   server_name=$3
   payload=$4
   seed=${5:-}
-  command -v node >/dev/null 2>&1 || die 'node is required to merge MCP config'
-  node - "$file" "$root_key" "$server_name" "$payload" "$seed" <<'NODE_EOF'
+  mcp_json_edit merge "$file" "$root_key" "$server_name" "$payload" "$seed"
+}
+
+remove_mcp_json() {
+  file=$1
+  root_key=$2
+  server_name=$3
+  [ -f "$file" ] || return 0
+  mcp_json_edit remove "$file" "$root_key" "$server_name" '' ''
+}
+
+mcp_json_edit() {
+  action=$1
+  file=$2
+  root_key=$3
+  server_name=$4
+  payload=${5:-}
+  seed=${6:-}
+  command -v node >/dev/null 2>&1 || die 'node is required to update MCP config'
+  output=$(node - "$action" "$file" "$root_key" "$server_name" "$payload" "$seed" <<'NODE_EOF'
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const [file, rootKey, serverName, serverConfigJson, seedJson] = process.argv.slice(2);
-if (!file || !rootKey || !serverName || !serverConfigJson) {
-  console.error('usage: mcp-merge <file> <rootKey> <serverName> <serverConfigJson> [seedJson]');
+const [action, file, rootKey, serverName, serverConfigJson, seedJson] = process.argv.slice(2);
+if (!action || !file || !rootKey || !serverName) {
+  console.error('usage: mcp-edit merge|remove <file> <rootKey> <serverName> [serverConfigJson] [seedJson]');
   process.exit(2);
 }
 // Strip JSONC comments and trailing commas without touching string literals.
@@ -3954,6 +4039,28 @@ function sanitizeJsonc(raw) {
   }
   return out;
 }
+if (action === 'remove') {
+  if (!fs.existsSync(file)) process.exit(0);
+  let data;
+  try {
+    data = JSON.parse(sanitizeJsonc(fs.readFileSync(file, 'utf8')));
+  } catch (err) {
+    console.error('astack: could not parse ' + file + '; left it unchanged');
+    process.exit(1);
+  }
+  if (!data[rootKey] || !Object.prototype.hasOwnProperty.call(data[rootKey], serverName)) {
+    process.exit(0);
+  }
+  delete data[rootKey][serverName];
+  if (Object.keys(data[rootKey]).length === 0) delete data[rootKey];
+  fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
+  console.log('removed ' + serverName + ' from ' + file);
+  process.exit(0);
+}
+if (!serverConfigJson) {
+  console.error('usage: mcp-edit merge <file> <rootKey> <serverName> <serverConfigJson> [seedJson]');
+  process.exit(2);
+}
 let data = seedJson ? JSON.parse(seedJson) : {};
 if (fs.existsSync(file)) {
   try {
@@ -3968,6 +4075,13 @@ fs.mkdirSync(path.dirname(file), { recursive: true });
 fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
 console.log('merged ' + serverName + ' into ' + file);
 NODE_EOF
+  ) || die 'could not update MCP config'
+  if [ -n "$output" ]; then
+    printf '%s\n' "$output"
+  fi
+  case "$output" in
+    *'removed '*) SIDE_EFFECTS=$((SIDE_EFFECTS + 1)) ;;
+  esac
 }
 
 ensure_mcp_server() {
@@ -4033,16 +4147,92 @@ ensure_maestro_mcp() {
   # Codex MCP is rendered into .codex/config.toml by render_config (TOML).
 }
 
+remove_mcp_toml() {
+  file=$1
+  name=$2
+  [ -f "$file" ] || return 0
+  header="[mcp_servers.$name]"
+  if ! awk -v header="$header" 'index($0, header) == 1 { found=1 } END { exit(found ? 0 : 1) }' "$file"; then
+    return 0
+  fi
+  temporary=$(mktemp "$file.XXXXXX")
+  awk -v header="$header" '
+    $0 == header { skip = 1; next }
+    skip && /^\[/ { skip = 0 }
+    skip { next }
+    { print }
+  ' "$file" > "$temporary"
+  mv "$temporary" "$file"
+  printf 'removed %s from %s\n' "$name" "$file"
+  SIDE_EFFECTS=$((SIDE_EFFECTS + 1))
+}
+
+drop_managed_mcp() {
+  name=$1
+  remove_mcp_json "$ROOT/opencode.jsonc" mcp "$name"
+  remove_mcp_json "$ROOT/.mcp.json" mcpServers "$name"
+  remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$name"
+  # Codex writes this file through render_config while the platform is
+  # enabled. Editing it while Codex is disabled changes the manifest hash,
+  # so prune keeps the file and the next enable treats it as a conflict.
+  if [ "$ENABLE_CODEX" = 1 ]; then
+    remove_mcp_toml "$ROOT/.codex/config.toml" "$name"
+  fi
+}
+
 ensure_mcp_config() {
   if [ "$MCP_LINEAR_ENABLED" = 1 ]; then
     ensure_mcp_server linear
+  else
+    drop_managed_mcp "$MCP_LINEAR_NAME"
   fi
   if [ "$MCP_TRELLO_ENABLED" = 1 ]; then
     ensure_mcp_server trello
+  else
+    drop_managed_mcp "$MCP_TRELLO_NAME"
   fi
   if [ "$MCP_MAESTRO_ENABLED" = 1 ]; then
     ensure_maestro_mcp
+  else
+    drop_managed_mcp "$MCP_MAESTRO_NAME"
   fi
+  if [ "$ENABLE_OPENCODE" != 1 ]; then
+    drop_platform_mcp opencode
+  fi
+  if [ "$ENABLE_CLAUDE" != 1 ]; then
+    drop_platform_mcp claude
+  fi
+  if [ "$ENABLE_CURSOR" != 1 ]; then
+    drop_platform_mcp cursor
+  fi
+  if [ "$ENABLE_CODEX" != 1 ]; then
+    drop_platform_mcp codex
+  fi
+}
+
+drop_platform_mcp() {
+  platform=$1
+  case "$platform" in
+    opencode)
+      remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_LINEAR_NAME"
+      remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_TRELLO_NAME"
+      remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_MAESTRO_NAME"
+      ;;
+    claude)
+      remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_LINEAR_NAME"
+      remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_TRELLO_NAME"
+      remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_MAESTRO_NAME"
+      ;;
+    cursor)
+      remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_LINEAR_NAME"
+      remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_TRELLO_NAME"
+      remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_MAESTRO_NAME"
+      ;;
+    codex)
+      # render_config owns this file while Codex is enabled. While Codex is
+      # disabled, prune deletes an unchanged copy. Do not edit it here.
+      ;;
+  esac
 }
 
 install_codex_bridge() {
@@ -4062,7 +4252,7 @@ EOF
 
   if [ ! -f "$ROOT/AGENTS.md" ]; then
     printf '%s\n' '# AGENTS.md' '' "$bridge_text" > "$ROOT/AGENTS.md"
-    note_created; printf 'created %s\n' "$ROOT/AGENTS.md"
+    record_change created "$ROOT/AGENTS.md"
     return 0
   fi
 
@@ -4076,7 +4266,7 @@ EOF
     printf '\n%s\n' "$bridge_text"
   } > "$temporary"
   mv "$temporary" "$ROOT/AGENTS.md"
-  printf 'updated %s\n' "$ROOT/AGENTS.md"
+  record_change updated "$ROOT/AGENTS.md"
 }
 
 adopt_roles() {
@@ -4122,7 +4312,8 @@ print_jev_status() {
 report_stale_skill_roots() {
   [ -f "$MANIFEST_FILE" ] || return 0
   stale_roots=""
-  while IFS='|' read -r relative _hash; do
+  changed_roots=""
+  while IFS='|' read -r relative expected_hash; do
     case "$relative" in
       .opencode/skills/*) enabled=$ENABLE_OPENCODE ;;
       .claude/skills/*) enabled=$ENABLE_CLAUDE ;;
@@ -4137,42 +4328,260 @@ report_stale_skill_roots() {
       *" $skill_root "*) ;;
       *) stale_roots="$stale_roots $skill_root" ;;
     esac
+    if [ -f "$ROOT/$relative" ] && [ "$(file_hash "$ROOT/$relative")" != "${expected_hash:-}" ]; then
+      case " $changed_roots " in
+        *" $skill_root "*) ;;
+        *) changed_roots="$changed_roots $skill_root" ;;
+      esac
+    fi
   done < "$MANIFEST_FILE"
   for skill_root in $stale_roots; do
-    printf 'stale %s (host disabled; removable with: astack prune && astack sync)\n' \
-      "$ROOT/$skill_root" >&2
+    case " $changed_roots " in
+      *" $skill_root "*)
+        printf 'stale %s (host disabled; changed files stay, astack prune removes unchanged copies)\n' \
+          "$ROOT/$skill_root" >&2
+        ;;
+      *)
+        printf 'stale %s (host disabled; removable with: astack prune)\n' \
+          "$ROOT/$skill_root" >&2
+        ;;
+    esac
     CONFLICTS=$((CONFLICTS + 1))
   done
 }
 
+manifest_entry_enabled() {
+  relative=$1
+  case "$relative" in
+    .opencode/*) [ "$ENABLE_OPENCODE" = 1 ] ;;
+    .claude/*) [ "$ENABLE_CLAUDE" = 1 ] ;;
+    .codex/*|.agents/*) [ "$ENABLE_CODEX" = 1 ] ;;
+    .cursor/*) [ "$ENABLE_CURSOR" = 1 ] ;;
+    *) return 0 ;;
+  esac
+}
+
+rm_empty_parents() {
+  dir=$1
+  while [ -n "$dir" ] && [ "$dir" != "$ROOT" ] && [ "$dir" != / ] && [ -d "$dir" ]; do
+    rmdir "$dir" 2>/dev/null || return 0
+    dir=$(dirname "$dir")
+  done
+}
+
 prune_generated() {
+  # Prune follows the saved config. One-shot --platforms and --skip-* flags
+  # must not delete a platform the config still marks enabled.
+  ENABLE_OPENCODE=$(get_config ENABLE_OPENCODE 1)
+  ENABLE_CLAUDE=$(get_config ENABLE_CLAUDE 1)
+  ENABLE_CODEX=$(get_config ENABLE_CODEX 1)
+  ENABLE_CURSOR=$(get_config ENABLE_CURSOR 1)
   [ -f "$MANIFEST_FILE" ] || return 0
   temporary=$(mktemp "$MANIFEST_FILE.XXXXXX")
   : > "$temporary"
 
   while IFS='|' read -r relative expected_hash; do
-    case "$relative" in
-      .opencode/agents/resolver.md|.opencode/agents/designer.md|.opencode/agents/design-qa.md|.opencode/agents/developer.md|.opencode/agents/web-qa.md|.opencode/agents/mobile-qa.md|.claude/agents/resolver.md|.claude/agents/designer.md|.claude/agents/design-qa.md|.claude/agents/developer.md|.claude/agents/web-qa.md|.claude/agents/mobile-qa.md|.codex/agents/resolver.toml|.codex/agents/designer.toml|.codex/agents/design-qa.toml|.codex/agents/developer.toml|.codex/agents/web-qa.toml|.codex/agents/mobile-qa.toml|.codex/config.toml|.codex/README.md|.cursor/agents/resolver.md|.cursor/agents/designer.md|.cursor/agents/design-qa.md|.cursor/agents/developer.md|.cursor/agents/web-qa.md|.cursor/agents/mobile-qa.md)
-        printf '%s\n' "$relative|$expected_hash" >> "$temporary"
-        ;;
-      *)
-        current=$ROOT/$relative
-        if [ -f "$current" ] && [ "$(file_hash "$current")" = "$expected_hash" ]; then
-          rm -f "$current"
-          printf 'pruned %s\n' "$current"
-        else
-          printf 'preserved changed stale file %s\n' "$current" >&2
-        fi
-        ;;
-    esac
+    [ -n "$relative" ] || continue
+    if manifest_entry_enabled "$relative"; then
+      printf '%s\n' "$relative|$expected_hash" >> "$temporary"
+      continue
+    fi
+    current=$ROOT/$relative
+    if [ -f "$current" ] && [ "$(file_hash "$current")" = "$expected_hash" ]; then
+      rm -f "$current"
+      rm_empty_parents "$(dirname "$current")"
+      printf 'pruned %s\n' "$current"
+    elif [ -e "$current" ]; then
+      printf 'preserved changed stale file %s\n' "$current" >&2
+      printf '%s\n' "$relative|$expected_hash" >> "$temporary"
+    fi
   done < "$MANIFEST_FILE"
 
   mv "$temporary" "$MANIFEST_FILE"
 }
 
+confirm_or_yes() {
+  prompt=$1
+  if [ "$ASSUME_YES" = 1 ]; then
+    return 0
+  fi
+  if [ ! -t 0 ]; then
+    return 1
+  fi
+  printf '%s [y/N]: ' "$prompt" >&2
+  IFS= read -r answer || return 1
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+uninstall_generated() {
+  if ! confirm_or_yes "Remove generated Agent Stack files under $ROOT?"; then
+    die 'uninstall cancelled; re-run with --yes to remove generated files'
+  fi
+  resolve_mcp
+  if [ -f "$MANIFEST_FILE" ]; then
+    temporary=$(mktemp "$MANIFEST_FILE.XXXXXX")
+    : > "$temporary"
+    while IFS='|' read -r relative expected_hash; do
+      [ -n "$relative" ] || continue
+      current=$ROOT/$relative
+      if [ -f "$current" ] && [ "$(file_hash "$current")" = "$expected_hash" ]; then
+        rm -f "$current"
+        rm_empty_parents "$(dirname "$current")"
+        printf 'removed %s\n' "$current"
+      elif [ -e "$current" ]; then
+        printf 'preserved changed file %s\n' "$current" >&2
+        printf '%s\n' "$relative|$expected_hash" >> "$temporary"
+      fi
+    done < "$MANIFEST_FILE"
+    mv "$temporary" "$MANIFEST_FILE"
+  fi
+  drop_managed_mcp "$MCP_LINEAR_NAME"
+  drop_managed_mcp "$MCP_TRELLO_NAME"
+  drop_managed_mcp "$MCP_MAESTRO_NAME"
+  # A preserved Codex file is not rewritten by render_config. Strip managed
+  # servers from it even when Codex is disabled in config.
+  remove_mcp_toml "$ROOT/.codex/config.toml" "$MCP_LINEAR_NAME"
+  remove_mcp_toml "$ROOT/.codex/config.toml" "$MCP_TRELLO_NAME"
+  remove_mcp_toml "$ROOT/.codex/config.toml" "$MCP_MAESTRO_NAME"
+  for pair in \
+    "resources/web-qa/ask-jev.ts|scripts/qa/ask-jev.ts" \
+    "resources/web-qa/questions.ts|scripts/qa/questions.ts" \
+    "resources/web-qa/README.md|scripts/qa/README.md" \
+    "resources/mobile-qa/questions-mobile.ts|scripts/mobile-qa/questions-mobile.ts" \
+    "resources/mobile-qa/README.md|scripts/mobile-qa/README.md" \
+    "resources/jev/action-selection.ts|scripts/jev/action-selection.ts" \
+    "resources/jev/validate-action-selection.ts|scripts/jev/validate-action-selection.ts"
+  do
+    source_file=$KIT_ROOT/.agent-stack/${pair%%|*}
+    dest_file=$ROOT/${pair#*|}
+    [ -f "$source_file" ] && [ -f "$dest_file" ] || continue
+    if [ "$(file_hash "$source_file")" = "$(file_hash "$dest_file")" ]; then
+      rm -f "$dest_file"
+      rm_empty_parents "$(dirname "$dest_file")"
+      printf 'removed %s\n' "$dest_file"
+    else
+      printf 'preserved changed file %s\n' "$dest_file" >&2
+    fi
+  done
+  printf 'Uninstalled generated files under %s.\n' "$ROOT"
+  printf 'Left UX_AGENTS.md, UI_AGENTS.md, and .agent-stack/ in place.\n'
+}
+
+print_next_steps() {
+  step=1
+  printf '\nNext:\n'
+  printf '  %s. Edit UX_AGENTS.md and UI_AGENTS.md for this project.\n' "$step"
+  step=$((step + 1))
+  if ! command -v openspec >/dev/null 2>&1; then
+    printf '  %s. Install OpenSpec: npm i -g @fission-ai/openspec\n' "$step"
+    step=$((step + 1))
+  fi
+  printf '  %s. Run astack doctor.\n' "$step"
+  step=$((step + 1))
+  if [ "$JEV_CONFIGURED_NOW" != 1 ] && ! jev_is_configured; then
+    printf '  %s. Configure Jev later with astack auth jev.\n' "$step"
+  fi
+}
+
+print_install_summary() {
+  [ "$COMMAND" = init ] || [ "$COMMAND" = sync ] || return 0
+  printf '\n'
+  if [ "$CREATED_COUNT" -eq 0 ] && [ "$UPDATED_COUNT" -eq 0 ] && [ "$SIDE_EFFECTS" -eq 0 ]; then
+    printf 'Already up to date.\n'
+  elif [ "$CREATED_COUNT" -eq 0 ] && [ "$UPDATED_COUNT" -eq 0 ]; then
+    printf 'Updated MCP configuration.\n'
+  else
+    printf 'Created %s, updated %s.\n' "$CREATED_COUNT" "$UPDATED_COUNT"
+    if [ -n "${CHANGE_LOG:-}" ] && [ -f "$CHANGE_LOG" ]; then
+      awk '
+        { counts[$1 " " $2]++ }
+        END {
+          n = split("guides kit opencode claude codex cursor qa other", order, " ")
+          labels["guides"] = "Project guides"
+          labels["kit"] = "Kit files"
+          labels["opencode"] = "OpenCode"
+          labels["claude"] = "Claude"
+          labels["codex"] = "Codex"
+          labels["cursor"] = "Cursor"
+          labels["qa"] = "QA helpers"
+          labels["other"] = "Other"
+          for (i = 1; i <= n; i++) {
+            area = order[i]
+            created = counts[area " created"] + 0
+            updated = counts[area " updated"] + 0
+            if (created + updated == 0) continue
+            printf "  %s: %d created, %d updated\n", labels[area], created, updated
+          }
+        }
+      ' "$CHANGE_LOG"
+    fi
+  fi
+  if [ "$CONFLICTS" -gt 0 ]; then
+    printf 'Stopped with %s conflict(s).\n' "$CONFLICTS"
+  fi
+  if [ "$COMMAND" = init ]; then
+    print_next_steps
+  fi
+}
+
+validate_flags_before_write() {
+  if [ -n "$PLATFORMS_ARG" ]; then
+    oldIFS=$IFS
+    IFS=','
+    for platform_token in $PLATFORMS_ARG; do
+      platform_token=$(printf '%s' "$platform_token" | tr -d '[:space:]')
+      [ -n "$platform_token" ] || die 'unknown platform: (empty) (valid: opencode, claude, codex, cursor)'
+      case "$platform_token" in
+        opencode|claude|claude-code|codex|cursor) ;;
+        *) die "unknown platform: $platform_token (valid: opencode, claude, codex, cursor)" ;;
+      esac
+    done
+    IFS=$oldIFS
+  fi
+  if [ "$EXPLICIT_MCP" = 1 ]; then
+    [ -n "$MCP_ARG" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, maestro, both)'
+    oldIFS=$IFS
+    IFS=','
+    for mcp_token in $MCP_ARG; do
+      mcp_token=$(printf '%s' "$mcp_token" | tr -d '[:space:]')
+      [ -n "$mcp_token" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, maestro, both)'
+      mcp_token_valid "$mcp_token" || die "unknown MCP selection: $mcp_token (valid: none, linear, trello, maestro, both)"
+    done
+    IFS=$oldIFS
+  fi
+  if [ -n "$SPECS_MODE_ARG" ]; then
+    case "$SPECS_MODE_ARG" in
+      local|mirror) ;;
+      *) die "unknown specs mode: $SPECS_MODE_ARG (valid: local, mirror)" ;;
+    esac
+  fi
+}
+
+warn_unless_git_repo() {
+  [ "$COMMAND" = init ] || [ "$COMMAND" = sync ] || return 0
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+  printf 'warning: %s is not a git repository.\n' "$ROOT" >&2
+  if [ "$FORCE" = 1 ] || [ "$ASSUME_YES" = 1 ]; then
+    return 0
+  fi
+  if [ -t 0 ] && [ -t 2 ]; then
+    printf 'Continue without a git repository? [y/N]: ' >&2
+    IFS= read -r answer || die 'aborted'
+    case "$answer" in
+      y|Y|yes|YES) return 0 ;;
+      *) die 'refused to continue outside a git repository (pass --force to continue)' ;;
+    esac
+  fi
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    init|sync|check|adopt|prune|auth)
+    init|sync|check|adopt|prune|uninstall|auth)
       COMMAND=$1
       ;;
     jev)
@@ -4257,6 +4666,15 @@ while [ "$#" -gt 0 ]; do
     --install-codex-bridge)
       INSTALL_CODEX_BRIDGE=1
       ;;
+    --verbose)
+      VERBOSE=1
+      ;;
+    --yes)
+      ASSUME_YES=1
+      ;;
+    --force)
+      FORCE=1
+      ;;
     --check)
       COMMAND=check
       ;;
@@ -4282,15 +4700,18 @@ if [ "$CONFIGURE_MODELS" = 1 ] && [ "$SKIP_MODELS" = 1 ]; then
   die '--configure-models and --skip-models are mutually exclusive'
 fi
 
+validate_flags_before_write
+
 if [ "$COMMAND" = auth ]; then
-  [ "$AUTH_PROVIDER" = jev ] || die 'usage: setup-agent-stack.sh auth jev [--validate-only] [--provider=typesafe|vercel|gateway]'
+  [ "$AUTH_PROVIDER" = jev ] || die 'usage: astack auth jev [--validate-only] [--provider=typesafe|vercel|gateway]'
   # shellcheck disable=SC2086
   auth_jev $AUTH_ARGS
   exit 0
 fi
 
-trap 'trap_code=$?; if [ "$trap_code" -ne 0 ]; then if [ "$CREATED_COUNT" -gt 0 ]; then printf "%s\n" "setup-agent-stack.sh: $COMMAND did not finish (exit $trap_code) after creating $CREATED_COUNT file(s) listed above; re-run the same command to resume (installation is idempotent)" >&2; else printf "%s\n" "setup-agent-stack.sh: $COMMAND did not finish (exit $trap_code) before creating any files" >&2; fi; fi' EXIT
+trap 'trap_code=$?; if [ "$trap_code" -ne 0 ]; then if [ "$CREATED_COUNT" -gt 0 ]; then if [ "$VERBOSE" = 1 ]; then printf "%s\n" "astack: $COMMAND did not finish (exit $trap_code) after creating $CREATED_COUNT file(s) listed above. Re-run the same command to resume." >&2; else printf "%s\n" "astack: $COMMAND did not finish (exit $trap_code) after creating $CREATED_COUNT file(s). Re-run the same command to resume." >&2; fi; else printf "%s\n" "astack: $COMMAND did not finish (exit $trap_code) before creating any files" >&2; fi; fi' EXIT
 
+warn_unless_git_repo
 resolve_platforms
 
 case "$COMMAND" in
@@ -4313,6 +4734,7 @@ case "$COMMAND" in
     record_kit_version
     governance_status
     print_jev_status
+    print_install_summary
     ;;
   sync)
     ensure_config
@@ -4333,6 +4755,7 @@ case "$COMMAND" in
     ensure_mcp_config
     record_sources
     governance_status
+    print_install_summary
     ;;
   check)
     ROLE_DIR=$ROOT/.agent-stack/roles
@@ -4352,7 +4775,13 @@ case "$COMMAND" in
     adopt_roles
     ;;
   prune)
+    if [ "$EXPLICIT_PLATFORM" = 1 ]; then
+      die 'prune uses the platforms saved in .agent-stack/config.conf. Run astack init --platforms to change them'
+    fi
     prune_generated
+    ;;
+  uninstall)
+    uninstall_generated
     ;;
 esac
 

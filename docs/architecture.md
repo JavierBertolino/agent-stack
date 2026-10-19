@@ -15,7 +15,7 @@ agent-stack/
 ├── scripts/
 │   ├── astack                 # canonical dispatcher
 │   ├── agent-stack            # backwards-compat alias (unadvertised)
-│   ├── setup-agent-stack.sh   # init / sync / check / adopt / prune / auth
+│   ├── setup-agent-stack.sh   # init / sync / check / adopt / prune / uninstall / auth
 │   ├── doctor.sh              # diagnostics
 │   ├── upgrade-agent-stack.sh # project three-way merge
 │   ├── update-agent-stack.sh  # installed kit updates
@@ -30,7 +30,8 @@ agent-stack/
 Neutral role sources are rendered per platform (frontmatter, tool
 permissions, sandbox modes). Generated files are hashed into
 `.agent-stack/generated.manifest`; `astack check` reports drift instead of
-silently repairing it; `astack prune` removes only unchanged stale files.
+silently repairing it; `astack prune` removes unchanged generated files for
+disabled platforms; `astack uninstall` removes those files for every platform.
 
 ## Run state
 

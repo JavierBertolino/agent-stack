@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-10-22
+
 ### Added
 
 - Jira integration through Atlassian's remote MCP server: `--mcp jira` and the

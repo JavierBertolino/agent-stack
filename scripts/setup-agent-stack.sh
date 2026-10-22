@@ -2784,7 +2784,7 @@ TEMPLATE_CODEX_README_EOF
 write_embedded_defaults() {
   cat > "$1" <<'DEFAULTS_EOF'
 # Agent stack defaults. Values are read as KEY=VALUE by astack.
-AGENT_STACK_VERSION=0.1.4
+AGENT_STACK_VERSION=0.2.0
 MAX_CORRECTIVE_ROUNDS=3
 TIMEBOX_MINUTES=25
 

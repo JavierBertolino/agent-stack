@@ -23,6 +23,11 @@ follow [Semantic Versioning](https://semver.org/).
 - Non-interactive `astack init` without `--platforms` prints the platforms
   it is about to use. A target that is not a git repository gets a warning,
   and an interactive terminal must confirm or pass `--force`.
+- `scripts/qa/pw-run.sh`, installed with the web-qa resources: runs a browser
+  command (browser MCP server or Playwright run) in its own memory-capped
+  `systemd-run` scope, so a browser OOM kills the browser instead of the
+  terminal session hosting the agent. The web-qa role now requires browser
+  processes to stay headless and go through the wrapper when it is present.
 - `astack-ops` skill: one usage moment per installed CLI subcommand
   (`init`, `sync`, `check`, `doctor`, `auth jev`, `jev ask`, `update`,
   `upgrade`, `prune`, `run-state`, `validate`, `--version`, `--help`),

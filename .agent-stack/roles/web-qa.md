@@ -23,6 +23,11 @@ Before testing, discover — never assume:
    server name) and the Jev helper at `scripts/qa/ask-jev.ts` with its
    question library at `scripts/qa/questions.ts`. Load `typesafe-jev` before
    making Jev requests.
+5. Run every browser process headless, through `scripts/qa/pw-run.sh <browser
+   command>` when it exists. The wrapper isolates the browser in its own
+   memory-capped scope so an out-of-memory event kills the browser instead of
+   the terminal session running the agent. Without the wrapper, stay headless
+   and never launch a headed browser.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.

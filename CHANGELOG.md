@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Jira integration through Atlassian's remote MCP server: `--mcp jira` and the
+  interactive integrations menu register it on OpenCode, Claude, Cursor, and
+  Codex, with `MCP_JIRA_ENABLED`/`MCP_JIRA_NAME`/`MCP_JIRA_URL` defaults and a
+  `doctor` report line.
 - `astack uninstall` removes generated files after confirmation or `--yes`.
   `--force` does not skip that confirmation. Unchanged QA helper copies under
   `scripts/qa`, `scripts/mobile-qa`, and `scripts/jev` are removed. It leaves

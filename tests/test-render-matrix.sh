@@ -63,13 +63,47 @@ expect "$T/scripts/jev/action-selection.ts" 'validateActionSelection' 'shared Je
 expect "$T/scripts/jev/validate-action-selection.ts" 'fixed at 0.75' 'shared Jev validation gate installed'
 # Maestro MCP (opt-in local stdio) registers on every platform.
 M=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-maestro.XXXXXX")
-sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$M" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp linear,maestro --specs-repository OWNER/specs >/dev/null 2>&1
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$M" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp linear,jira,maestro --specs-repository OWNER/specs >/dev/null 2>&1
+expect "$M/opencode.jsonc" '"jira"' 'opencode jira registered'
+expect "$M/opencode.jsonc" 'mcp.atlassian.com/v2/mcp' 'opencode jira uses Atlassian remote MCP'
+expect "$M/.mcp.json" '"jira"' 'claude jira registered'
+expect "$M/.cursor/mcp.json" '"jira"' 'cursor jira registered'
+expect "$M/.codex/config.toml" 'mcp_servers.jira' 'codex jira registered'
 expect "$M/opencode.jsonc" '"maestro"' 'opencode maestro registered'
 expect "$M/opencode.jsonc" '"type": "local"' 'opencode maestro is local stdio'
 expect "$M/.mcp.json" '"maestro"' 'claude maestro registered'
 expect "$M/.cursor/mcp.json" '"maestro"' 'cursor maestro registered'
 expect "$M/.codex/config.toml" 'mcp_servers.maestro' 'codex maestro registered'
 rm -rf "$M"
+# Jira: single token on every platform, custom name/URL from config.conf,
+# `both` staying additive, the doctor report line, and the documented
+# persistence of a registered entry after the integration is disabled.
+J=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-jira.XXXXXX")
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$J" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp jira >/dev/null 2>&1
+expect "$J/opencode.jsonc" '"jira"' 'opencode jira registered from a single token'
+expect "$J/.mcp.json" '"jira"' 'claude jira registered from a single token'
+expect "$J/.codex/config.toml" 'mcp_servers.jira' 'codex jira registered from a single token'
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$J" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp both >/dev/null 2>&1
+expect "$J/.mcp.json" '"linear"' 'both registers linear'
+expect "$J/.mcp.json" '"jira"' 'both does not clear an enabled jira'
+awk '
+  /^MCP_JIRA_ENABLED=/ { print "MCP_JIRA_ENABLED=1"; next }
+  /^MCP_JIRA_NAME=/ { print "MCP_JIRA_NAME=atlassian"; next }
+  /^MCP_JIRA_URL=/ { print "MCP_JIRA_URL=https://mcp.example.test/v2/mcp"; next }
+  { print }
+' "$J/.agent-stack/config.conf" >"$J/config.conf.new"
+mv "$J/config.conf.new" "$J/.agent-stack/config.conf"
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$J" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp jira >/dev/null 2>&1
+expect "$J/.mcp.json" '"atlassian"' 'custom MCP_JIRA_NAME is registered'
+expect "$J/.mcp.json" 'mcp.example.test' 'custom MCP_JIRA_URL is registered'
+sh "$KIT_ROOT/scripts/doctor.sh" --root "$J" --kit-root "$KIT_ROOT" >"$J/doctor.log" 2>&1 || true
+expect "$J/doctor.log" 'Jira configured' 'doctor reports jira configured'
+sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$J" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp none >/dev/null 2>&1
+if grep -q '"atlassian"' "$J/.mcp.json" 2>/dev/null; then
+  printf 'FAIL render disabling jira left the managed entry behind\n' >&2
+  FAIL=1
+fi
+rm -rf "$J"
 # Mandatory skill mirrors resolve for every enabled platform.
 for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev; do
   for mirror in ".opencode/skills/$skill/SKILL.md" ".claude/skills/$skill/SKILL.md" ".agents/skills/$skill/SKILL.md" ".cursor/skills/$skill/SKILL.md"; do

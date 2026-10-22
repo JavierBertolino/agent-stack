@@ -63,7 +63,7 @@ astack init
 The wizard walks through five prompts:
 
 1. **Coding agents** (multi-select) — Codex, Claude Code, Cursor, OpenCode.
-2. **Integrations** (multi-select) — Linear, Trello, Maestro, or none.
+2. **Integrations** (multi-select) — Linear, Trello, Jira, Maestro, or none.
 3. **Specs** (single choice) — Agent Stack uses OpenSpec to create and
    manage implementation specifications. Keep specs in the repository
    (default), or mirror finalized specs to another GitHub repository.
@@ -135,11 +135,12 @@ Agent Stack-specific configuration, see [docs/jev.md](docs/jev.md).
 
 ## Integrations
 
-Linear, Trello, and Maestro are all opt-in and can be combined freely
+Linear, Trello, Jira, and Maestro are all opt-in and can be combined freely
 (or skipped entirely). OAuth and credentials remain managed by the target
-tool and are never written by this kit. Start with the [Linear start guide](https://linear.app/docs/start-guide)
-or [Trello getting-started guide](https://www.trello.com/guide), then see
-[docs/integrations.md](docs/integrations.md) for Agent Stack configuration.
+tool and are never written by this kit. Start with the [Linear start guide](https://linear.app/docs/start-guide),
+the [Trello getting-started guide](https://www.trello.com/guide), or Atlassian's
+[remote MCP setup guide](https://support.atlassian.com/atlassian-ai-gateway/docs/get-started-with-the-atlassian-remote-mcp-server/),
+then see [docs/integrations.md](docs/integrations.md) for Agent Stack configuration.
 
 ## Configuration
 

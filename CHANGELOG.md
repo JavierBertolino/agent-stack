@@ -15,9 +15,14 @@ follow [Semantic Versioning](https://semver.org/).
   branches to include when more than the default branch had merges.
   Promotions (`dev` → `main`) are not counted as features; every feature
   gets a stage (`released`, `staged`, `partially released`, `hotfix`,
-  `unclear`, `reverted`) backed by a named git check, and PRs sharing an
-  issue key or OpenSpec change are grouped into one feature across
-  repositories. It writes `reports/rundown/<slug>.md` for agents, with
+  `unclear`, `reverted`) backed by a named git check, with `main` treated
+  as production and `dev` as staging unless stated otherwise. PRs sharing
+  an issue key or OpenSpec change are grouped into one feature across
+  repositories, and a connected tracker is cross-checked against the code
+  (issues done without a merged PR, merged work without an issue, statuses
+  that disagree with the stage) without ever being written to. Test cases
+  are written per feature rather than per repository, and cases that
+  change data are assigned to staging. It writes `reports/rundown/<slug>.md` for agents, with
   `RD-<n>` manual test cases tagged by surface and environment, and a
   self-contained `reports/rundown/<slug>.html` for people. Registered in
   the installer, doctor, upgrade, tests, manifest, and docs.

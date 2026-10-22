@@ -21,7 +21,8 @@ expect "$SKILL" 'reports/rundown/<slug>.html' 'skill names the human copy'
 # Field labels the QA roles filter on exist in the Markdown format.
 for label in '- Surface: web' '- Environment:' '### RD-1' '- Steps:' '- Preconditions:' \
              '- Entry:' '## Manual test cases' '## How QA agents use this file' \
-             '## Features' '### F-1' '- Stage:' '## Promotions' '## Reverted'; do
+             '## Features' '### F-1' '- Stage:' '## Promotions' '## Reverted' \
+             '## Tracker cross-check' 'Covers:' '- Tracker:' 'Mutates data:'; do
   expect "$SKILL" "$label" "format label"
 done
 
@@ -37,6 +38,20 @@ for method in '`ancestry`' '`patch`' '`reference`' '`unclear`' '`partially relea
   expect "$SKILL" "$method" "stage detection"
 done
 expect "$SKILL" 'A stage that no method confirms is `unclear`, never `released`.' 'unclear guardrail'
+
+# Tracker cross-check: every finding kind is defined, and the tracker is
+# never written to.
+for kind in '`done, not merged`' '`merged, no issue`' '`status behind`' \
+            '`status ahead`' '`parts missing`'; do
+  expect "$SKILL" "$kind" "tracker finding"
+done
+expect "$SKILL" 'never write to the issue tracker' 'tracker read-only guardrail'
+
+# Environments: bases map to production/staging, and production stays
+# read-only for QA.
+expect "$SKILL" '`main`/`master` →' 'environment mapping'
+expect "$SKILL" 'Production cases are read-only' 'production read-only for QA'
+expect "$SKILL" 'One case per feature and client surface' 'one case per feature'
 
 # Read-only on inspected repositories; the HTML stays self-contained.
 expect "$SKILL" 'Never checkout, reset, stash, commit, push, or edit files' 'read-only guardrail'

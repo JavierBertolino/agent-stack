@@ -39,9 +39,14 @@ include. With several base branches it separates promotions from new work
 and gives every feature a stage: `released`, `staged`, `partially
 released`, `hotfix` (flagged when missing from an earlier branch),
 `unclear`, or `reverted`. Each stage names the git check that decided it.
-PRs that share an issue key or OpenSpec change are grouped into one
-feature, across repositories. It is read-only on every repository and
-writes two files from the same evidence: `reports/rundown/<slug>.md` for
+`main` is treated as production and `dev` as staging unless the user says
+otherwise. PRs that share an issue key or OpenSpec change are grouped into
+one feature, across repositories. When a tracker (Linear, Jira, Trello) is
+connected, the rundown cross-checks it against the code: issues done with
+no merged PR, merged work with no issue, and statuses that disagree with
+the stage are reported as findings and never fixed. Test cases are written
+per feature, not per repository, and cases that change data run in staging
+only. It is read-only on every repository and writes two files from the same evidence: `reports/rundown/<slug>.md` for
 agents and `reports/rundown/<slug>.html` for humans. The Markdown carries
 `RD-<n>` manual test cases tagged by surface and environment; `web-qa`
 runs the `Surface: web` cases and `mobile-qa` the `Surface: mobile` cases,

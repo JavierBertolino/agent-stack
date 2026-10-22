@@ -6,6 +6,30 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `rundown` skill: `/rundown <window> [into <branches>]` (for example
+  `last 7 days into main,dev`) reviews what merged in that window in the
+  current repository, or in the repositories below the current directory
+  after asking which to include. Without `into`, it asks which base
+  branches to include when more than the default branch had merges.
+  Promotions (`dev` → `main`) are not counted as features; every feature
+  gets a stage (`released`, `staged`, `partially released`, `hotfix`,
+  `unclear`, `reverted`) backed by a named git check, with `main` treated
+  as production and `dev` as staging unless stated otherwise. PRs sharing
+  an issue key or OpenSpec change are grouped into one feature across
+  repositories, and a connected tracker is cross-checked against the code
+  (issues done without a merged PR, merged work without an issue, statuses
+  that disagree with the stage) without ever being written to. Test cases
+  are written per feature rather than per repository, and cases that
+  change data are assigned to staging. It writes `reports/rundown/<slug>.md` for agents, with
+  `RD-<n>` manual test cases tagged by surface and environment, and a
+  self-contained `reports/rundown/<slug>.html` for people. Registered in
+  the installer, doctor, upgrade, tests, manifest, and docs.
+- `web-qa` and `mobile-qa` accept a rundown as input: they run the
+  `Surface: web` or `Surface: mobile` cases in order and report a verdict
+  per case id.
+
 ## [0.2.0] — 2026-10-22
 
 ### Added

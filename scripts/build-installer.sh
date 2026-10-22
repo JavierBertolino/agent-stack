@@ -29,7 +29,7 @@ KIT_LINE_TO = 'KIT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)'
 SKILLS = ["project-context", "linear-workflow", "governance-bootstrap",
           "openspec-workflow", "ux-design", "implementation",
           "ui-review", "git-delivery", "astack-ops",
-          "typesafe-jev"]
+          "typesafe-jev", "rundown"]
 
 SKILL_MARKERS = {
     "project-context": "SKILL_PROJECT_CONTEXT_EOF",
@@ -42,6 +42,7 @@ SKILL_MARKERS = {
     "git-delivery": "SKILL_GIT_DELIVERY_EOF",
     "astack-ops": "SKILL_ASTACK_OPS_EOF",
     "typesafe-jev": "SKILL_TYPESAFE_JEV_EOF",
+    "rundown": "SKILL_RUNDOWN_EOF",
 }
 
 ROLE_MARKERS = {

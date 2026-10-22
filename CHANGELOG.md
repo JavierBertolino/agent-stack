@@ -12,6 +12,7 @@ follow [Semantic Versioning](https://semver.org/).
   interactive integrations menu register it on OpenCode, Claude, Cursor, and
   Codex, with `MCP_JIRA_ENABLED`/`MCP_JIRA_NAME`/`MCP_JIRA_URL` defaults and a
   `doctor` report line.
+- Node front door in `packages/cli`, published as `agent-stack` (`npx agent-stack init`, Node.js 18 or newer). It parses flags, validates them, and prompts for coding agents and integrations with `@clack/prompts`. The shell scripts still render and write files. Jira is in the integrations table and is not sent to the shell yet. See `docs/node-cli.md`.
 - `astack uninstall` removes generated files after confirmation or `--yes`.
   `--force` does not skip that confirmation. Unchanged QA helper copies under
   `scripts/qa`, `scripts/mobile-qa`, and `scripts/jev` are removed. It leaves

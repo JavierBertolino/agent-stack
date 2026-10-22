@@ -39,21 +39,59 @@ def sha256(path):
     return digest.hexdigest()
 
 
+CLI_PACKAGES = ("@clack/prompts", "@clack/core", "picocolors", "sisteransi")
+
+
+def skip_junk(tarinfo):
+    name = tarinfo.name
+    if "/__pycache__/" in name or name.endswith(".pyc"):
+        return None
+    return tarinfo
+
+
+def stage_cli(kit, dest):
+    """Compile the Node front door and vendor its runtime dependencies."""
+    subprocess.run(
+        ["npm", "run", "build", "-w", "agent-stack"],
+        cwd=str(kit),
+        check=True,
+    )
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(kit / "packages" / "cli" / "dist", dest / "dist")
+    (dest / "package.json").write_text('{"type":"module","private":true}\n')
+    modules = dest / "node_modules"
+    root_modules = kit / "node_modules"
+    for name in CLI_PACKAGES:
+        source = root_modules / name
+        if not source.is_dir():
+            raise SystemExit("build error: missing %s (run npm ci)" % source)
+        target = modules / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
+
+
 def build(kit, dist, skip_smoke):
     version = (kit / "VERSION").read_text().split()[0]
     dist.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix="astack-cli-stage."))
 
     tarball = dist / "astack.tar.gz"
-    with tarfile.open(tarball, "w:gz", format=tarfile.PAX_FORMAT) as archive:
-        for name in KIT_DIRS + KIT_FILES:
-            source = kit / name
-            if not source.exists():
-                raise SystemExit("build error: missing %s" % source)
-            archive.add(source, arcname=name)
-        for name in ROOT_FILES:
-            source = kit / name
-            if source.exists():
-                archive.add(source, arcname=name)
+    try:
+        stage_cli(kit, staging / "cli")
+        with tarfile.open(tarball, "w:gz", format=tarfile.PAX_FORMAT) as archive:
+            for name in KIT_DIRS + KIT_FILES:
+                source = kit / name
+                if not source.exists():
+                    raise SystemExit("build error: missing %s" % source)
+                archive.add(source, arcname=name, filter=skip_junk)
+            archive.add(staging / "cli", arcname="cli", filter=skip_junk)
+            for name in ROOT_FILES:
+                source = kit / name
+                if source.exists():
+                    archive.add(source, arcname=name)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
     digest = sha256(tarball)
     (dist / "astack.tar.gz.sha256").write_text("%s  astack.tar.gz\n" % digest)
@@ -80,6 +118,8 @@ def smoke(kit, dist, version):
             archive.extractall(tmp / "kit")
 
         extracted = tmp / "kit"
+        if not (extracted / "cli" / "dist" / "bin.js").is_file():
+            raise SystemExit("smoke error: cli/dist/bin.js missing from the archive")
         for script in ["setup-agent-stack.sh", "doctor.sh",
                        "upgrade-agent-stack.sh", "update-agent-stack.sh",
                        "worktree-cleanup.sh", "astack"]:

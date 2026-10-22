@@ -24,6 +24,21 @@ Agent Stack also includes browser and mobile QA powered by TypeSafe Jev.
 
 ## Install
 
+From npm, in the project you want to set up:
+
+```sh
+npx agent-stack init
+```
+
+Or install the command:
+
+```sh
+npm install -g agent-stack
+astack init
+```
+
+The curl installer also works. It needs Node.js 18 or newer, then installs the `astack` command:
+
 ```sh
 curl -fsSL https://github.com/JavierBertolino/agent-stack/releases/latest/download/install.sh | sh
 ```
@@ -71,6 +86,8 @@ The wizard walks through five prompts:
 5. **Models** (optional) — every role inherits the active harness model by
    default. Review models and thinking only when asked; large discovered
    catalogs are search-first.
+
+`npx agent-stack init` asks the coding agents and integrations questions. Specs, QA, and models stay at the defaults in that list. Run `scripts/setup-agent-stack.sh init` when you want those three prompts in the terminal. `docs/node-cli.md` lists what is still in the shell.
 
 Then verify everything:
 

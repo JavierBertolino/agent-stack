@@ -11,10 +11,8 @@ astack init --mcp none
 Accepted values: `none`, `linear`, `trello`, `jira`, `maestro`, `both`, or
 comma-separated combos (e.g. `linear,jira,maestro`). Tokens are additive: each
 one enables its integration and leaves the others as configured, while `none`
-clears all of them. To disable a single integration, set `MCP_*_ENABLED=0` in
-`.agent-stack/config.conf` and re-run `astack sync`. Registration is
-additive only: `init` writes the server entry but never deletes one, so remove
-a disabled entry from the platform config by hand.
+clears all of them. Disabling a managed integration removes its server entry
+from the platform config on the next `astack init` or `astack sync`.
 
 ## Linear
 

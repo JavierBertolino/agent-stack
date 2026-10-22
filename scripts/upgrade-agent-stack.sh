@@ -281,6 +281,6 @@ fi
 printf '\n%s\n' 'No local modifications were overwritten.'
 printf '\n%s\n' 'Project upgraded successfully.'
 if [ "$UPDATED" -gt 0 ]; then
-  printf 'next: run setup-agent-stack.sh sync --root "%s" --kit-root "%s" to re-render platform mirrors\n' "$ROOT" "$KIT_ROOT"
+  printf 'next: run astack sync to re-render platform mirrors\n'
 fi
 exit 0

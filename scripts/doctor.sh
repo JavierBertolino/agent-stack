@@ -96,7 +96,7 @@ for cmd in git node python3 gh openspec; do
         ;;
       openspec)
         fail "command openspec missing (specify/apply stages blocked)"
-        remediate "install openspec: https://github.com/Fission-AI/OpenSpec"
+        remediate "npm i -g @fission-ai/openspec"
         ;;
       *) fail "command $cmd missing" ;;
     esac

@@ -21,10 +21,21 @@ list_hashes() {
     [ -e "$root/$candidate" ] && paths="$paths $candidate"
   done
   # shellcheck disable=SC2086
-  (cd "$root" && find $paths -type f \
-    ! -name '*.log' ! -name '.models.*' ! -name '.skill.*' ! -name '.opencode.*' \
-    ! -name '.claude.*' ! -name '.codex.*' ! -name '.cursor.*' ! -name '.agents.*' \
-    -exec sha256sum {} + 2>/dev/null | sort -k2 >"$out")
+  (
+    cd "$root" || exit 1
+    # shellcheck disable=SC2086
+    find $paths -type f \
+      ! -name '*.log' ! -name '.models.*' ! -name '.skill.*' ! -name '.opencode.*' \
+      ! -name '.claude.*' ! -name '.codex.*' ! -name '.cursor.*' ! -name '.agents.*' \
+      -print
+  ) | while IFS= read -r rel; do
+    if command -v sha256sum >/dev/null 2>&1; then
+      hash=$(sha256sum "$root/$rel" | awk '{ print $1 }')
+    else
+      hash=$(shasum -a 256 "$root/$rel" | awk '{ print $1 }')
+    fi
+    printf '%s  %s\n' "$hash" "$rel"
+  done | sort -k2 >"$out"
 }
 list_hashes "$A" "$A.hashes"
 list_hashes "$B" "$B.hashes"

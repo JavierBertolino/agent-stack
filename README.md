@@ -67,7 +67,7 @@ The wizard walks through five prompts:
 3. **Specs** (single choice) — Agent Stack uses OpenSpec to create and
    manage implementation specifications. Keep specs in the repository
    (default), or mirror finalized specs to another GitHub repository.
-4. **QA** — configure TypeSafe Jev now, or later with `astack auth jev`.
+4. **QA** — defaults to configure later. Set up TypeSafe Jev now, or later with `astack auth jev`. An empty API key skips setup.
 5. **Models** (optional) — every role inherits the active harness model by
    default. Review models and thinking only when asked; large discovered
    catalogs are search-first.
@@ -170,7 +170,8 @@ astack worktree audit                         # dry-run safe merged-worktree cle
 astack worktree cleanup --branch <branch>     # remove one verified merged worktree
 astack update        # update the installed CLI and kit
 astack upgrade       # upgrade the current project to the installed kit
-astack prune         # remove only safe, stale generated files
+astack prune         # remove generated files for disabled platforms
+astack uninstall --yes # remove generated files; keeps project guides
 astack --version
 astack --help
 ```

@@ -12,6 +12,16 @@ follow [Semantic Versioning](https://semver.org/).
   interactive integrations menu register it on OpenCode, Claude, Cursor, and
   Codex, with `MCP_JIRA_ENABLED`/`MCP_JIRA_NAME`/`MCP_JIRA_URL` defaults and a
   `doctor` report line.
+- `astack uninstall` removes generated files after confirmation or `--yes`.
+  `--force` does not skip that confirmation. Unchanged QA helper copies under
+  `scripts/qa`, `scripts/mobile-qa`, and `scripts/jev` are removed. It leaves
+  `UX_AGENTS.md`, `UI_AGENTS.md`, and `.agent-stack/` in place.
+- `astack init` prints a grouped created/updated summary and numbered next
+  steps. `--verbose` prints each file. When `openspec` is missing, the next
+  steps include `npm i -g @fission-ai/openspec`.
+- Non-interactive `astack init` without `--platforms` prints the platforms
+  it is about to use. A target that is not a git repository gets a warning,
+  and an interactive terminal must confirm or pass `--force`.
 - `astack-ops` skill: one usage moment per installed CLI subcommand
   (`init`, `sync`, `check`, `doctor`, `auth jev`, `jev ask`, `update`,
   `upgrade`, `prune`, `run-state`, `validate`, `--version`, `--help`),
@@ -35,10 +45,21 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- `--mcp` tokens are additive for every integration: a token enables its
-  integration and leaves the rest as configured, and only `none` clears them
-  all. Previously single tokens were exclusive while comma-separated combos
-  were not, and `both` cleared Jira.
+- `astack prune` deletes generated files only for disabled platforms.
+  It reads the platforms saved in config and refuses `--platforms` and
+  `--skip-*`. Skill mirrors for a platform that is still enabled stay, so
+  `astack check` passes. Disabling Codex leaves `.codex/config.toml` unchanged
+  until prune deletes an unmodified copy.
+- Explicit `--platforms` and `--mcp` are stored in `.agent-stack/config.conf`
+  on init and sync. Disabled managed MCP servers are removed from
+  `opencode.jsonc`, `.mcp.json`, `.cursor/mcp.json`, and `.codex/config.toml`.
+- `--mcp` uses one parser. `none` clears the set, every other token adds,
+  and `both` means Linear and Trello. Token order does not matter.
+- Unknown `--platforms` and `--mcp` values exit 1 and list the valid ids
+  before any file is written.
+- The QA wizard step defaults to configure later. An empty API key skips
+  Jev setup.
+- Command help and error lines say `astack <command>`.
 - Resolver prompt reduced from 18,412 B to 13,636 B (−25.9%): run-state
   command detail lives in `linear-workflow`, the readiness-gate detail in
   `openspec-workflow`, §5.2–§5.4 folded into one pointer paragraph, and §7
@@ -62,6 +83,7 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Release installs and `astack update` reject a checksum line that is not 64 hex digits. macOS `shasum -c` exits 0 for a short line.
 - `astack upgrade --check` now reports project kit-version drift as a pending
   update even when all managed source files already match the installed kit.
 

@@ -99,7 +99,10 @@ expect "$J/.mcp.json" 'mcp.example.test' 'custom MCP_JIRA_URL is registered'
 sh "$KIT_ROOT/scripts/doctor.sh" --root "$J" --kit-root "$KIT_ROOT" >"$J/doctor.log" 2>&1 || true
 expect "$J/doctor.log" 'Jira configured' 'doctor reports jira configured'
 sh "$KIT_ROOT/scripts/setup-agent-stack.sh" init --root "$J" --kit-root "$KIT_ROOT" --platforms opencode,claude,codex,cursor --mcp none >/dev/null 2>&1
-expect "$J/.mcp.json" '"atlassian"' 'disabling jira keeps the registered entry'
+if grep -q '"atlassian"' "$J/.mcp.json" 2>/dev/null; then
+  printf 'FAIL render disabling jira left the managed entry behind\n' >&2
+  FAIL=1
+fi
 rm -rf "$J"
 # Mandatory skill mirrors resolve for every enabled platform.
 for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev; do

@@ -108,7 +108,7 @@ if grep -q '"atlassian"' "$J/.mcp.json" 2>/dev/null; then
 fi
 rm -rf "$J"
 # Mandatory skill mirrors resolve for every enabled platform.
-for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev; do
+for skill in project-context linear-workflow governance-bootstrap openspec-workflow ux-design implementation ui-review git-delivery astack-ops typesafe-jev rundown; do
   for mirror in ".opencode/skills/$skill/SKILL.md" ".claude/skills/$skill/SKILL.md" ".agents/skills/$skill/SKILL.md" ".cursor/skills/$skill/SKILL.md"; do
     cmp -s "$T/.agent-stack/skills/$skill/SKILL.md" "$T/$mirror" \
       || { printf 'FAIL render mirror %s\n' "$mirror" >&2; FAIL=1; }

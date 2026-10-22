@@ -18,6 +18,7 @@ Installing a skill never implicitly authorizes the actions it describes.
 | git-delivery | Resolver | Safe worktrees, specification publication, implementation PRs, post-merge cleanup, cross-links |
 | astack-ops | Resolver, Developer, QA | Installed astack CLI subcommands, usage moments, and --help flag authority |
 | typesafe-jev | Web QA, Mobile QA | Bounded action recommendations, fail-closed validation, separate evaluation |
+| rundown | User, Resolver (output read by Web QA, Mobile QA) | Time-window delivery rundown: agent Markdown with manual test cases, human HTML summary |
 
 Canonical sources live in `.agent-stack/skills/<name>/SKILL.md` with an
 Agent Skills `name`/`description` frontmatter matching the directory name.
@@ -30,6 +31,15 @@ on demand from the skill, keeping role prompts small (see
 `resolver-prompt-layout`). `astack-ops` is the CLI map — one usage moment
 per `astack` subcommand, deferring to `astack <command> --help` for every
 flag instead of duplicating the usage tables.
+
+`rundown` summarizes what shipped in a time window (`/rundown last 7 days`)
+across the current repository, or across the repositories below the current
+directory after asking which to include. It is read-only on every
+repository and writes two files from the same evidence:
+`reports/rundown/<slug>.md` for agents and `reports/rundown/<slug>.html`
+for humans. The Markdown carries `RD-<n>` manual test cases tagged by
+surface; `web-qa` runs the `Surface: web` cases and `mobile-qa` the
+`Surface: mobile` cases, reporting a verdict per case id.
 
 ## Selection and evidence
 

@@ -118,8 +118,13 @@ platforms: OpenCode, Claude Code, Codex, and Cursor.
 
 Canonical skills (`project-context`, `linear-workflow`,
 `governance-bootstrap`, `openspec-workflow`, `ux-design`, `implementation`,
-`ui-review`, `git-delivery`, `typesafe-jev`) are mirrored per platform and
-verified by `astack check` and `astack doctor`.
+`ui-review`, `git-delivery`, `typesafe-jev`, `rundown`) are mirrored per
+platform and verified by `astack check` and `astack doctor`.
+
+`/rundown last 7 days` summarizes what shipped in that window across the
+current repository (or several, after asking). It writes an agent-facing
+Markdown file with manual test cases that `web-qa` and `mobile-qa` run, and
+a self-contained HTML page that explains the work to people.
 
 ## OpenSpec
 

@@ -9,6 +9,10 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/agent-stack-test-public.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
 VERSION=$(awk 'NR == 1 { print $1; exit }' "$KIT_ROOT/VERSION")
+# The fake "newer release" below must stay above the kit version, or the
+# update checks compare a release against itself and pass vacuously.
+NEXT=$(printf '%s\n' "$VERSION" | awk -F. '{ printf "%s.%s.%d\n", $1, $2, $3 + 1 }')
+[ "$NEXT" != "$VERSION" ] || { printf 'FAIL NEXT version equals VERSION\n' >&2; exit 1; }
 DIST=$WORK/dist
 P=$WORK/prefix
 T=$WORK/project
@@ -133,41 +137,41 @@ grep -q "Agent Stack $VERSION is current" "$WORK/check.log" \
 # Fake a newer release and update to it.
 NEWDIST=$WORK/newdist
 mkdir -p "$NEWDIST"
-printf '0.2.0\n' > "$WORK/newversion"
+printf '%s\n' "$NEXT" > "$WORK/newversion"
 NEWTREE=$WORK/newtree
 mkdir -p "$NEWTREE"
 cp -r "$KIT_ROOT/scripts" "$KIT_ROOT/.agent-stack" "$NEWTREE/"
-printf '0.2.0\n' > "$NEWTREE/VERSION"
+printf '%s\n' "$NEXT" > "$NEWTREE/VERSION"
 tar -czf "$NEWDIST/astack.tar.gz" -C "$NEWTREE" scripts .agent-stack VERSION
 (cd "$NEWDIST" && printf '%s  astack.tar.gz\n' "$(sha256_hex astack.tar.gz)" > astack.tar.gz.sha256)
-printf '0.2.0\n' > "$NEWDIST/VERSION"
+printf '%s\n' "$NEXT" > "$NEWDIST/VERSION"
 ASTACK_RELEASE_BASE=$NEWDIST PATH="$P/bin:$PATH" sh "$P/share/astack/current/scripts/update-agent-stack.sh" --check >"$WORK/check2.log" 2>&1 \
   || { printf 'FAIL update --check with newer release\n' >&2; FAIL=1; }
-grep -q 'Agent Stack 0.2.0 is available' "$WORK/check2.log" \
-  || { printf 'FAIL update --check must report 0.2.0 available\n' >&2; FAIL=1; }
+grep -q "Agent Stack $NEXT is available" "$WORK/check2.log" \
+  || { printf 'FAIL update --check must report \$NEXT available\n' >&2; FAIL=1; }
 grep -q "Current version: $VERSION" "$WORK/check2.log" \
   || { printf 'FAIL update --check must print the current version\n' >&2; FAIL=1; }
 ASTACK_RELEASE_BASE=$NEWDIST PATH="$P/bin:$PATH" sh "$P/share/astack/current/scripts/update-agent-stack.sh" >"$WORK/update.log" 2>&1 \
-  || { printf 'FAIL update to 0.2.0\n' >&2; FAIL=1; }
-grep -q 'Agent Stack updated to 0.2.0' "$WORK/update.log" \
+  || { printf 'FAIL update to \$NEXT\n' >&2; FAIL=1; }
+grep -q "Agent Stack updated to $NEXT" "$WORK/update.log" \
   || { printf 'FAIL update success message\n' >&2; FAIL=1; }
-[ "$("$P/bin/astack" --version)" = "0.2.0" ] \
+[ "$("$P/bin/astack" --version)" = "$NEXT" ] \
   || { printf 'FAIL version after update\n' >&2; FAIL=1; }
 [ -d "$P/share/astack/versions/$VERSION" ] \
   || { printf 'FAIL previous version must be retained for rollback\n' >&2; FAIL=1; }
-[ "$(readlink "$P/share/astack/current")" = "versions/0.2.0" ] \
-  || { printf 'FAIL current symlink must point at 0.2.0\n' >&2; FAIL=1; }
+[ "$(readlink "$P/share/astack/current")" = "versions/$NEXT" ] \
+  || { printf 'FAIL current symlink must point at \$NEXT\n' >&2; FAIL=1; }
 
 # The project still records the old version; upgrade migrates it.
 [ "$(cat "$T/.agent-stack/.kit-version")" = "$VERSION" ] \
   || { printf 'FAIL project keeps its init version until upgrade\n' >&2; FAIL=1; }
 (cd "$T" && PATH="$P/bin:$PATH" astack upgrade >"$WORK/upgrade.log" 2>&1) \
   || { printf 'FAIL astack upgrade\n' >&2; FAIL=1; }
-grep -q "$VERSION → 0.2.0" "$WORK/upgrade.log" \
+grep -q "$VERSION → $NEXT" "$WORK/upgrade.log" \
   || { printf 'FAIL upgrade must show old → new\n' >&2; FAIL=1; }
 grep -q 'Project upgraded successfully' "$WORK/upgrade.log" \
   || { printf 'FAIL upgrade success message\n' >&2; FAIL=1; }
-[ "$(cat "$T/.agent-stack/.kit-version")" = "0.2.0" ] \
+[ "$(cat "$T/.agent-stack/.kit-version")" = "$NEXT" ] \
   || { printf 'FAIL .kit-version must advance on upgrade\n' >&2; FAIL=1; }
 
 unset ASTACK_HOME ASTACK_RELEASE_BASE

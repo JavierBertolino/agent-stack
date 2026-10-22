@@ -1,6 +1,6 @@
 {
   "name": "agent-stack",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Project-aware delivery workflow for Codex, Claude Code, Cursor, and OpenCode.",
   "type": "module",
   "bin": {

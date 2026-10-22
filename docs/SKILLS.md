@@ -32,14 +32,20 @@ on demand from the skill, keeping role prompts small (see
 per `astack` subcommand, deferring to `astack <command> --help` for every
 flag instead of duplicating the usage tables.
 
-`rundown` summarizes what shipped in a time window (`/rundown last 7 days`)
-across the current repository, or across the repositories below the current
-directory after asking which to include. It is read-only on every
-repository and writes two files from the same evidence:
-`reports/rundown/<slug>.md` for agents and `reports/rundown/<slug>.html`
-for humans. The Markdown carries `RD-<n>` manual test cases tagged by
-surface; `web-qa` runs the `Surface: web` cases and `mobile-qa` the
-`Surface: mobile` cases, reporting a verdict per case id.
+`rundown` summarizes which features shipped in a time window
+(`/rundown last 7 days into main,dev`) across the current repository, or
+across the repositories below the current directory after asking which to
+include. With several base branches it separates promotions from new work
+and gives every feature a stage: `released`, `staged`, `partially
+released`, `hotfix` (flagged when missing from an earlier branch),
+`unclear`, or `reverted`. Each stage names the git check that decided it.
+PRs that share an issue key or OpenSpec change are grouped into one
+feature, across repositories. It is read-only on every repository and
+writes two files from the same evidence: `reports/rundown/<slug>.md` for
+agents and `reports/rundown/<slug>.html` for humans. The Markdown carries
+`RD-<n>` manual test cases tagged by surface and environment; `web-qa`
+runs the `Surface: web` cases and `mobile-qa` the `Surface: mobile` cases,
+reporting a verdict per case id.
 
 ## Selection and evidence
 

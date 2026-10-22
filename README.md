@@ -121,10 +121,12 @@ Canonical skills (`project-context`, `linear-workflow`,
 `ui-review`, `git-delivery`, `typesafe-jev`, `rundown`) are mirrored per
 platform and verified by `astack check` and `astack doctor`.
 
-`/rundown last 7 days` summarizes what shipped in that window across the
-current repository (or several, after asking). It writes an agent-facing
-Markdown file with manual test cases that `web-qa` and `mobile-qa` run, and
-a self-contained HTML page that explains the work to people.
+`/rundown last 7 days into main,dev` summarizes which features shipped in
+that window across the current repository (or several, after asking), and
+whether each one is released or still waiting on `dev`. It writes an
+agent-facing Markdown file with manual test cases that `web-qa` and
+`mobile-qa` run, and a self-contained HTML page that explains the work to
+people.
 
 ## OpenSpec
 

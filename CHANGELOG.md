@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Jira integration through Atlassian's remote MCP server: `--mcp jira` and the
+  interactive integrations menu register it on OpenCode, Claude, Cursor, and
+  Codex, with `MCP_JIRA_ENABLED`/`MCP_JIRA_NAME`/`MCP_JIRA_URL` defaults and a
+  `doctor` report line.
 - `astack-ops` skill: one usage moment per installed CLI subcommand
   (`init`, `sync`, `check`, `doctor`, `auth jev`, `jev ask`, `update`,
   `upgrade`, `prune`, `run-state`, `validate`, `--version`, `--help`),
@@ -31,6 +35,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `--mcp` tokens are additive for every integration: a token enables its
+  integration and leaves the rest as configured, and only `none` clears them
+  all. Previously single tokens were exclusive while comma-separated combos
+  were not, and `both` cleared Jira.
 - Resolver prompt reduced from 18,412 B to 13,636 B (−25.9%): run-state
   command detail lives in `linear-workflow`, the readiness-gate detail in
   `openspec-workflow`, §5.2–§5.4 folded into one pointer paragraph, and §7

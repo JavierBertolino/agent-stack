@@ -851,45 +851,9 @@ EOF
 }
 
 apply_mcp_selection() {
-  # Legacy single values keep exclusive semantics; comma-separated combos
-  # (e.g. linear,maestro) are additive on top of current config.
-  case "$1" in
-    none)
-      MCP_LINEAR_ENABLED=0
-      MCP_TRELLO_ENABLED=0
-      MCP_JIRA_ENABLED=0
-      MCP_MAESTRO_ENABLED=0
-      return 0
-      ;;
-    linear)
-      MCP_LINEAR_ENABLED=1
-      MCP_TRELLO_ENABLED=0
-      MCP_JIRA_ENABLED=0
-      return 0
-      ;;
-    trello)
-      MCP_LINEAR_ENABLED=0
-      MCP_TRELLO_ENABLED=1
-      MCP_JIRA_ENABLED=0
-      return 0
-      ;;
-    jira)
-      MCP_LINEAR_ENABLED=0
-      MCP_TRELLO_ENABLED=0
-      MCP_JIRA_ENABLED=1
-      return 0
-      ;;
-    both)
-      MCP_LINEAR_ENABLED=1
-      MCP_TRELLO_ENABLED=1
-      MCP_JIRA_ENABLED=0
-      return 0
-      ;;
-    maestro)
-      MCP_MAESTRO_ENABLED=1
-      return 0
-      ;;
-  esac
+  # Every token enables its integration and leaves the others as configured;
+  # only `none` clears them all. Set MCP_*_ENABLED=0 in config.conf to turn a
+  # single integration off, or re-run init without --mcp.
   oldIFS=$IFS
   IFS=','
   for token in $1; do
@@ -907,7 +871,6 @@ apply_mcp_selection() {
       both)
         MCP_LINEAR_ENABLED=1
         MCP_TRELLO_ENABLED=1
-        MCP_JIRA_ENABLED=0
         ;;
       *) die "unknown MCP selection: $token (use none, linear, trello, jira, maestro, both, or comma-separated combos)" ;;
     esac

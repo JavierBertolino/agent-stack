@@ -2436,6 +2436,11 @@ Before testing, discover — never assume:
    server name) and the Jev helper at `scripts/qa/ask-jev.ts` with its
    question library at `scripts/qa/questions.ts`. Load `typesafe-jev` before
    making Jev requests.
+5. Run every browser process headless, through `scripts/qa/pw-run.sh <browser
+   command>` when it exists. The wrapper isolates the browser in its own
+   memory-capped scope so an out-of-memory event kills the browser instead of
+   the terminal session running the agent. Without the wrapper, stay headless
+   and never launch a headed browser.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.
@@ -3614,7 +3619,7 @@ record_sources() {
   # Record kit base hashes for three-way upgrades. Add-missing only;
   # scripts/upgrade-agent-stack.sh owns updates. Never overwrites entries.
   manifest=$ROOT/.agent-stack/sources.manifest
-  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/astack-ops/SKILL.md skills/typesafe-jev/SKILL.md resources/web-qa/questions.ts resources/web-qa/README.md resources/mobile-qa/questions-mobile.ts resources/mobile-qa/README.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
+  for relative in roles/resolver.md roles/designer.md roles/design-qa.md roles/developer.md roles/web-qa.md roles/mobile-qa.md skills/project-context/SKILL.md skills/linear-workflow/SKILL.md skills/governance-bootstrap/SKILL.md skills/openspec-workflow/SKILL.md skills/ux-design/SKILL.md skills/implementation/SKILL.md skills/ui-review/SKILL.md skills/git-delivery/SKILL.md skills/astack-ops/SKILL.md skills/typesafe-jev/SKILL.md resources/web-qa/questions.ts resources/web-qa/README.md resources/web-qa/pw-run.sh resources/mobile-qa/questions-mobile.ts resources/mobile-qa/README.md skills/manifest.json contracts/handoff.schema.json contracts/report.schema.json contracts/run-state.schema.json contracts/event.schema.json; do
     kit_file=$KIT_ROOT/.agent-stack/$relative
     [ -f "$kit_file" ] || continue
     if [ -f "$manifest" ] && awk -F'|' -v wanted="$relative" '$1 == wanted { found=1; exit } END { exit(found ? 0 : 1) }' "$manifest"; then
@@ -3627,11 +3632,12 @@ record_sources() {
 
 ensure_webqa_resources() {
   ensure_dir "$ROOT/scripts/qa"
-  for f in ask-jev.ts questions.ts README.md; do
+  for f in ask-jev.ts questions.ts pw-run.sh README.md; do
     source_file=$KIT_ROOT/.agent-stack/resources/web-qa/$f
     [ -f "$source_file" ] || continue
     copy_if_missing "$source_file" "$ROOT/scripts/qa/$f"
   done
+  [ -f "$ROOT/scripts/qa/pw-run.sh" ] && chmod +x "$ROOT/scripts/qa/pw-run.sh"
 }
 
 ensure_mobileqa_resources() {

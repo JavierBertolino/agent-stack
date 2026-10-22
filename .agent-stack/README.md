@@ -8,8 +8,9 @@ used by the Agent Stack installer.
 - `skills/` contains canonical skill sources plus `manifest.json` (versions).
 - `contracts/` contains the versioned handoff and report JSON schemas.
 - `context/` (project-local) holds bootstrap provenance when produced.
-- `resources/web-qa/` contains the Jev helper (`ask-jev.ts`) and question
-  library (`questions.ts`) copied to the project as `scripts/qa/`.
+- `resources/web-qa/` contains the Jev helper (`ask-jev.ts`), question
+  library (`questions.ts`), and browser scope wrapper (`pw-run.sh`) copied to
+  the project as `scripts/qa/`.
 - `resources/mobile-qa/` contains the mobile question library
   (`questions-mobile.ts`) copied to the project as `scripts/mobile-qa/`.
 - `generated.manifest` records hashes for files managed by the renderer.

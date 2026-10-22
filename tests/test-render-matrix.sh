@@ -58,6 +58,9 @@ expect "$T/.codex/agents/mobile-qa.toml" 'sandbox_mode = "workspace-write"' 'cod
 expect "$T/.claude/agents/mobile-qa.md" '^name: mobile-qa$' 'claude mobile-qa name'
 # QA resources are installed.
 expect "$T/scripts/qa/ask-jev.ts" 'TYPESAFE_API_KEY' 'qa jev helper installed'
+expect "$T/scripts/qa/pw-run.sh" 'systemd-run' 'qa pw-run wrapper installed'
+[ -x "$T/scripts/qa/pw-run.sh" ] || { printf 'FAIL render pw-run wrapper not executable\n' >&2; FAIL=1; }
+expect "$T/.opencode/agents/web-qa.md" 'pw-run.sh' 'web-qa role names the pw-run wrapper'
 expect "$T/scripts/mobile-qa/questions-mobile.ts" 'buildMobileQuestions' 'mobile-qa questions installed'
 expect "$T/scripts/jev/action-selection.ts" 'validateActionSelection' 'shared Jev action-selection module installed'
 expect "$T/scripts/jev/validate-action-selection.ts" 'fixed at 0.75' 'shared Jev validation gate installed'

@@ -17,6 +17,18 @@ missing files only; existing project files are preserved).
     with the System One payload)
   - `openrouter`: preview only — exits with setup guidance until its
     System One-compatible transport is verified
+- `pw-run.sh` — runs a browser command (browser MCP server or Playwright
+  test run) in its own `systemd-run` scope with `MemoryHigh`/`MemoryMax`/
+  `MemorySwapMax`, so systemd-oomd kills the browser instead of the terminal
+  session that hosts the agent. Passes stdio and exit codes through
+  unchanged; execs the command directly where `systemd-run` is unavailable
+  (macOS, containers, CI). Tune with `PW_MEMORY_HIGH`, `PW_MEMORY_MAX`,
+  `PW_SWAP_MAX`, `PW_SCOPE_SLICE`, or set `PW_SCOPE=0` to bypass:
+
+  ```sh
+  scripts/qa/pw-run.sh npx playwright test
+  scripts/qa/pw-run.sh npx -y @playwright/mcp@latest --headless
+  ```
 - `questions.ts` — typed atomic question library (functional / view /
   business + verdict/domain/severity). Business checks are
   project-agnostic (business rules, side effects, state transitions,

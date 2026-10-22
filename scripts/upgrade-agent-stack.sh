@@ -224,6 +224,7 @@ for skill in project-context linear-workflow governance-bootstrap openspec-workf
 done
 upgrade_project_resource resources/web-qa/questions.ts scripts/qa/questions.ts
 upgrade_project_resource resources/web-qa/README.md scripts/qa/README.md
+upgrade_project_resource resources/web-qa/pw-run.sh scripts/qa/pw-run.sh
 upgrade_project_resource resources/mobile-qa/questions-mobile.ts scripts/mobile-qa/questions-mobile.ts
 upgrade_project_resource resources/mobile-qa/README.md scripts/mobile-qa/README.md
 for resource in jev/action-selection.ts jev/validate-action-selection.ts; do

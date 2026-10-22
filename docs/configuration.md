@@ -14,11 +14,12 @@ file to configure behavior. The installer never overwrites it.
 ```ini
 MCP_LINEAR_ENABLED=0
 MCP_TRELLO_ENABLED=0
+MCP_JIRA_ENABLED=0
 MCP_MAESTRO_ENABLED=0
 ```
 
-All integrations are opt-in and combinable (Linear + Maestro, Trello +
-Maestro, all, or none). `MCP_*_NAME`, `MCP_*_URL`, and
+All integrations are opt-in and combinable (for example Linear + Jira or
+Trello + Maestro). `MCP_*_NAME`, `MCP_*_URL`, and
 `MCP_MAESTRO_COMMAND` tune registration. OAuth and credentials stay
 managed by the target tool.
 

@@ -29,15 +29,16 @@ expect_flags() {
   root=$1
   linear=$2
   trello=$3
-  maestro=$4
-  label=$5
-  got=$(printf '%s%s%s' "$(flag "$root" MCP_LINEAR_ENABLED)" "$(flag "$root" MCP_TRELLO_ENABLED)" "$(flag "$root" MCP_MAESTRO_ENABLED)")
-  want="${linear}${trello}${maestro}"
-  [ "$got" = "$want" ] || fail "$label: flags linear,trello,maestro=$got want $want"
+  jira=$4
+  maestro=$5
+  label=$6
+  got=$(printf '%s%s%s%s' "$(flag "$root" MCP_LINEAR_ENABLED)" "$(flag "$root" MCP_TRELLO_ENABLED)" "$(flag "$root" MCP_JIRA_ENABLED)" "$(flag "$root" MCP_MAESTRO_ENABLED)")
+  want="${linear}${trello}${jira}${maestro}"
+  [ "$got" = "$want" ] || fail "$label: flags linear,trello,jira,maestro=$got want $want"
 }
 
 # Unknown values must exit 1 and create nothing.
-for args in "--platforms nope --mcp none" "--platforms opencode --mcp jira" "--platforms opencode --mcp linear,nope"; do
+for args in "--platforms nope --mcp none" "--platforms opencode --mcp confluence" "--platforms opencode --mcp linear,nope"; do
   # shellcheck disable=SC2086
   empty=$(mktemp -d "$WORK/empty.XXXXXX")
   if setup init --root "$empty" $args >"$empty/out.log" 2>&1; then
@@ -57,32 +58,32 @@ B=$WORK/b
 mkdir -p "$A" "$B"
 setup init --root "$A" --platforms opencode --mcp 'linear,none,maestro' >/dev/null 2>&1
 setup init --root "$B" --platforms opencode --mcp 'none,maestro,linear' >/dev/null 2>&1
-expect_flags "$A" 1 0 1 'linear,none,maestro'
-expect_flags "$B" 1 0 1 'none,maestro,linear'
+expect_flags "$A" 1 0 0 1 'linear,none,maestro'
+expect_flags "$B" 1 0 0 1 'none,maestro,linear'
 
 C=$WORK/c
 D=$WORK/d
 mkdir -p "$C" "$D"
 setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp 'both,maestro' >/dev/null 2>&1
 setup init --root "$D" --platforms opencode,claude,codex,cursor --mcp 'maestro,both' >/dev/null 2>&1
-expect_flags "$C" 1 1 1 'both,maestro'
-expect_flags "$D" 1 1 1 'maestro,both'
+expect_flags "$C" 1 1 0 1 'both,maestro'
+expect_flags "$D" 1 1 0 1 'maestro,both'
 
 # A later single token adds. It does not turn servers off.
 setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp linear >/dev/null 2>&1
-expect_flags "$C" 1 1 1 'linear adds and keeps trello and maestro'
+expect_flags "$C" 1 1 0 1 'linear adds and keeps trello and maestro'
 
 # none resets, then a following re-init can add one server back.
 setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp none >/dev/null 2>&1
-expect_flags "$C" 0 0 0 'none resets'
-for needle in 'mcp.linear.app' 'mcp.trello.com' 'maestro'; do
+expect_flags "$C" 0 0 0 0 'none resets'
+for needle in 'mcp.linear.app' 'mcp.trello.com' 'mcp.atlassian.com' 'maestro'; do
   if grep -R -q "$needle" "$C/.mcp.json" "$C/.cursor/mcp.json" "$C/opencode.jsonc" "$C/.codex/config.toml" 2>/dev/null; then
     fail "none left $needle in a host MCP file"
   fi
 done
 
 setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp trello >/dev/null 2>&1
-expect_flags "$C" 0 1 0 'trello after none'
+expect_flags "$C" 0 1 0 0 'trello after none'
 grep -q 'mcp.trello.com' "$C/.mcp.json" || fail 'trello missing from .mcp.json'
 grep -q 'mcp.trello.com' "$C/.cursor/mcp.json" || fail 'trello missing from .cursor/mcp.json'
 grep -q 'mcp.trello.com' "$C/opencode.jsonc" || fail 'trello missing from opencode.jsonc'
@@ -90,6 +91,23 @@ grep -q 'mcp.trello.com' "$C/.codex/config.toml" || fail 'trello missing from .c
 if grep -q 'mcp.linear.app' "$C/.mcp.json" "$C/opencode.jsonc" "$C/.cursor/mcp.json" "$C/.codex/config.toml"; then
   fail 'linear remained after it was disabled'
 fi
+
+# Jira joins the same parser: a single token registers the Atlassian server,
+# `both` leaves it enabled, and `none` removes it again.
+setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp jira >/dev/null 2>&1
+expect_flags "$C" 0 1 1 0 'jira adds to trello'
+for host in "$C/opencode.jsonc" "$C/.mcp.json" "$C/.cursor/mcp.json" "$C/.codex/config.toml"; do
+  grep -q 'mcp.atlassian.com' "$host" || fail "jira missing from $host"
+done
+setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp both >/dev/null 2>&1
+expect_flags "$C" 1 1 1 0 'both keeps jira enabled'
+setup init --root "$C" --platforms opencode,claude,codex,cursor --mcp none >/dev/null 2>&1
+expect_flags "$C" 0 0 0 0 'none clears jira'
+for host in "$C/opencode.jsonc" "$C/.mcp.json" "$C/.cursor/mcp.json" "$C/.codex/config.toml"; do
+  if grep -q 'mcp.atlassian.com' "$host" 2>/dev/null; then
+    fail "none left the jira server in $host"
+  fi
+done
 
 # Re-init --platforms persists even when --mcp is omitted, same as the wizard.
 P=$WORK/platforms

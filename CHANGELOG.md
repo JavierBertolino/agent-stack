@@ -30,6 +30,14 @@ follow [Semantic Versioning](https://semver.org/).
   `Surface: web` or `Surface: mobile` cases in order and report a verdict
   per case id.
 
+### Fixed
+
+- `scripts/qa/pw-run.sh` no longer runs a browser uncapped when the caller
+  scrubs its environment. Agent daemons such as the Codex app-server spawn
+  MCP servers without `DBUS_SESSION_BUS_ADDRESS` or `XDG_RUNTIME_DIR`; the
+  wrapper now derives both from the uid, and warns on stderr if no user bus
+  exists instead of silently falling back to a plain exec.
+
 ## [0.2.0] — 2026-10-22
 
 ### Added

@@ -21,9 +21,13 @@ missing files only; existing project files are preserved).
   test run) in its own `systemd-run` scope with `MemoryHigh`/`MemoryMax`/
   `MemorySwapMax`, so systemd-oomd kills the browser instead of the terminal
   session that hosts the agent. Passes stdio and exit codes through
-  unchanged; execs the command directly where `systemd-run` is unavailable
-  (macOS, containers, CI). Tune with `PW_MEMORY_HIGH`, `PW_MEMORY_MAX`,
-  `PW_SWAP_MAX`, `PW_SCOPE_SLICE`, or set `PW_SCOPE=0` to bypass:
+  unchanged. It derives `XDG_RUNTIME_DIR` and the user bus from the uid when
+  a caller scrubbed the environment (agent daemons such as the Codex
+  app-server spawn MCP servers without them), and it warns on stderr rather
+  than silently running uncapped when no user bus exists. It execs the
+  command directly where `systemd-run` is unavailable (macOS, containers,
+  CI). Tune with `PW_MEMORY_HIGH`, `PW_MEMORY_MAX`, `PW_SWAP_MAX`,
+  `PW_SCOPE_SLICE`, or set `PW_SCOPE=0` to bypass:
 
   ```sh
   scripts/qa/pw-run.sh npx playwright test

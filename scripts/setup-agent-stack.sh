@@ -69,6 +69,16 @@ JEV_CONFIGURED_LATER=0
 MCP_MAESTRO_ENABLED=0
 MCP_MAESTRO_NAME=maestro
 MCP_MAESTRO_COMMAND=maestro
+
+# Playwright MCP for the web-qa agent. Local stdio server launched through the
+# project's scripts/qa/pw-run.sh, so the browser keeps its memory cap and the
+# Chromium sandbox. The version is pinned: a build older than playwright 1.64
+# ignores PLAYWRIGHT_MCP_SANDBOX, and its bundled Chromium predates the
+# security fixes that matter. Opt-in because the host may already provide a
+# browser MCP.
+MCP_PLAYWRIGHT_ENABLED=0
+MCP_PLAYWRIGHT_NAME=playwright
+MCP_PLAYWRIGHT_VERSION=0.0.84
 # Spec publication policy (resolved from config, flags, or wizard).
 SPECS_MODE=local
 SPECS_REPOSITORY=
@@ -105,8 +115,8 @@ Options:
                               opencode, claude, codex, cursor.
   --select                    Force the interactive platform multiselect.
   --mcp LIST                  MCP integrations: none, linear, trello, maestro,
-                              both, or a comma-separated combination
-                              (for example linear,maestro).
+                              playwright, both, or a comma-separated
+                              combination (for example linear,maestro).
   --specs-repository OWNER/REPO
                               Specs publication mirror (implies mirror mode).
   --specs-base-branch BRANCH  Specs repository base branch.
@@ -891,7 +901,7 @@ EOF
 
 mcp_token_valid() {
   case "$1" in
-    none|linear|trello|jira|maestro|both) return 0 ;;
+    none|linear|trello|jira|maestro|playwright|both) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -902,6 +912,7 @@ apply_mcp_token() {
     trello) MCP_TRELLO_ENABLED=1 ;;
     jira) MCP_JIRA_ENABLED=1 ;;
     maestro) MCP_MAESTRO_ENABLED=1 ;;
+    playwright) MCP_PLAYWRIGHT_ENABLED=1 ;;
     both)
       MCP_LINEAR_ENABLED=1
       MCP_TRELLO_ENABLED=1
@@ -920,9 +931,9 @@ apply_mcp_selection() {
   IFS=','
   for token in $selection; do
     token=$(printf '%s' "$token" | tr -d '[:space:]')
-    [ -n "$token" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, jira, maestro, both)'
+    [ -n "$token" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, jira, maestro, playwright, both)'
     if ! mcp_token_valid "$token"; then
-      die "unknown MCP selection: $token (valid: none, linear, trello, jira, maestro, both)"
+      die "unknown MCP selection: $token (valid: none, linear, trello, jira, maestro, playwright, both)"
     fi
     if [ "$token" = none ]; then
       reset=1
@@ -936,6 +947,7 @@ apply_mcp_selection() {
     MCP_TRELLO_ENABLED=0
     MCP_JIRA_ENABLED=0
     MCP_MAESTRO_ENABLED=0
+    MCP_PLAYWRIGHT_ENABLED=0
   fi
   for token in $adds; do
     apply_mcp_token "$token"
@@ -947,6 +959,7 @@ select_mcp_interactive() {
   trello=$MCP_TRELLO_ENABLED
   jira=$MCP_JIRA_ENABLED
   maestro=$MCP_MAESTRO_ENABLED
+  playwright=$MCP_PLAYWRIGHT_ENABLED
 
   wizard_step 'Configure Agent Stack for this project.'
 
@@ -958,20 +971,24 @@ select_mcp_interactive() {
   [ "$trello" = 1 ] && selector_initial=$(csv_add "$selector_initial" 2)
   [ "$jira" = 1 ] && selector_initial=$(csv_add "$selector_initial" 3)
   [ "$maestro" = 1 ] && selector_initial=$(csv_add "$selector_initial" 4)
+  [ "$playwright" = 1 ] && selector_initial=$(csv_add "$selector_initial" 5)
 
   choose_multi 'Choose MCP integrations' "$selector_initial" \
-    'Linear' 'Trello' 'Jira (Atlassian)' 'Maestro (local: mobile-qa)'
+    'Linear' 'Trello' 'Jira (Atlassian)' 'Maestro (local: mobile-qa)' \
+    'Playwright (local: web-qa)'
 
   linear=0
   trello=0
   jira=0
   maestro=0
+  playwright=0
   while IFS= read -r integration; do
     case "$integration" in
       Linear) linear=1 ;;
       Trello) trello=1 ;;
       'Jira (Atlassian)') jira=1 ;;
       'Maestro (local: mobile-qa)') maestro=1 ;;
+      'Playwright (local: web-qa)') playwright=1 ;;
     esac
   done <<EOF
 $SELECTOR_VALUES
@@ -981,6 +998,7 @@ EOF
   MCP_TRELLO_ENABLED=$trello
   MCP_JIRA_ENABLED=$jira
   MCP_MAESTRO_ENABLED=$maestro
+  MCP_PLAYWRIGHT_ENABLED=$playwright
   PERSIST_SELECTION=1
 }
 
@@ -997,6 +1015,9 @@ resolve_mcp() {
   MCP_MAESTRO_ENABLED=$(get_config MCP_MAESTRO_ENABLED 0)
   MCP_MAESTRO_NAME=$(get_config MCP_MAESTRO_NAME maestro)
   MCP_MAESTRO_COMMAND=$(get_config MCP_MAESTRO_COMMAND maestro)
+  MCP_PLAYWRIGHT_ENABLED=$(get_config MCP_PLAYWRIGHT_ENABLED 0)
+  MCP_PLAYWRIGHT_NAME=$(get_config MCP_PLAYWRIGHT_NAME playwright)
+  MCP_PLAYWRIGHT_VERSION=$(get_config MCP_PLAYWRIGHT_VERSION 0.0.84)
 
   if [ -n "$MCP_ARG" ]; then
     apply_mcp_selection "$MCP_ARG"
@@ -1630,6 +1651,9 @@ persist_selection() {
   set_config MCP_MAESTRO_ENABLED "$MCP_MAESTRO_ENABLED"
   set_config MCP_MAESTRO_NAME "$MCP_MAESTRO_NAME"
   set_config MCP_MAESTRO_COMMAND "$MCP_MAESTRO_COMMAND"
+  set_config MCP_PLAYWRIGHT_ENABLED "$MCP_PLAYWRIGHT_ENABLED"
+  set_config MCP_PLAYWRIGHT_NAME "$MCP_PLAYWRIGHT_NAME"
+  set_config MCP_PLAYWRIGHT_VERSION "$MCP_PLAYWRIGHT_VERSION"
   set_config SPECS_MODE "$SPECS_MODE"
   set_config SPECS_REPOSITORY "$SPECS_REPOSITORY"
   set_config SPECS_REPOSITORY_BASE_BRANCH "$SPECS_REPOSITORY_BASE_BRANCH"
@@ -1800,6 +1824,12 @@ render_config() {
       printf '%s\n' '' "[mcp_servers.$MCP_MAESTRO_NAME]"
       printf '%s\n' "command = \"$MCP_MAESTRO_COMMAND\""
       printf '%s\n' 'args = ["mcp"]'
+    fi
+    if [ "$MCP_PLAYWRIGHT_ENABLED" = 1 ]; then
+      printf '%s\n' '' "[mcp_servers.$MCP_PLAYWRIGHT_NAME]"
+      printf 'command = "%s"\n' "$ROOT/scripts/qa/pw-run.sh"
+      printf 'args = ["npx", "-y", "@playwright/mcp@%s", "--headless"]\n' \
+        "$MCP_PLAYWRIGHT_VERSION"
     fi
   } > "$output"
 }
@@ -2439,8 +2469,9 @@ Before testing, discover — never assume:
 5. Run every browser process headless, through `scripts/qa/pw-run.sh <browser
    command>` when it exists. The wrapper isolates the browser in its own
    memory-capped scope so an out-of-memory event kills the browser instead of
-   the terminal session running the agent. Without the wrapper, stay headless
-   and never launch a headed browser.
+   the terminal session running the agent. It also starts the browser MCP with
+   the Chromium sandbox on; never browse third-party pages with `PW_SANDBOX=0`.
+   Without the wrapper, stay headless and never launch a headed browser.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.
@@ -4599,6 +4630,36 @@ ensure_maestro_mcp() {
   # Codex MCP is rendered into .codex/config.toml by render_config (TOML).
 }
 
+ensure_playwright_mcp() {
+  # Local stdio server, launched through the project wrapper so every browser
+  # keeps its memory cap and the Chromium sandbox. The version is pinned:
+  # MCP builds below playwright 1.64 ignore PLAYWRIGHT_MCP_SANDBOX.
+  name=$MCP_PLAYWRIGHT_NAME
+  wrapper=$ROOT/scripts/qa/pw-run.sh
+  args="\"npx\",\"-y\",\"@playwright/mcp@$MCP_PLAYWRIGHT_VERSION\",\"--headless\""
+
+  if [ "$ENABLE_OPENCODE" -eq 1 ]; then
+    merge_mcp_json \
+      "$ROOT/opencode.jsonc" "mcp" "$name" \
+      "{\"type\":\"local\",\"command\":\"$wrapper\",\"args\":[$args],\"enabled\":true}" \
+      "{\"\$schema\":\"https://opencode.ai/config.json\"}"
+  fi
+
+  if [ "$ENABLE_CLAUDE" -eq 1 ]; then
+    merge_mcp_json \
+      "$ROOT/.mcp.json" "mcpServers" "$name" \
+      "{\"command\":\"$wrapper\",\"args\":[$args]}"
+  fi
+
+  if [ "$ENABLE_CURSOR" -eq 1 ]; then
+    merge_mcp_json \
+      "$ROOT/.cursor/mcp.json" "mcpServers" "$name" \
+      "{\"command\":\"$wrapper\",\"args\":[$args]}"
+  fi
+
+  # Codex MCP is rendered into .codex/config.toml by render_config (TOML).
+}
+
 remove_mcp_toml() {
   file=$1
   name=$2
@@ -4653,6 +4714,11 @@ ensure_mcp_config() {
   else
     drop_managed_mcp "$MCP_MAESTRO_NAME"
   fi
+  if [ "$MCP_PLAYWRIGHT_ENABLED" = 1 ]; then
+    ensure_playwright_mcp
+  else
+    drop_managed_mcp "$MCP_PLAYWRIGHT_NAME"
+  fi
   if [ "$ENABLE_OPENCODE" != 1 ]; then
     drop_platform_mcp opencode
   fi
@@ -4674,16 +4740,19 @@ drop_platform_mcp() {
       remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_LINEAR_NAME"
       remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_TRELLO_NAME"
       remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_MAESTRO_NAME"
+      remove_mcp_json "$ROOT/opencode.jsonc" mcp "$MCP_PLAYWRIGHT_NAME"
       ;;
     claude)
       remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_LINEAR_NAME"
       remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_TRELLO_NAME"
       remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_MAESTRO_NAME"
+      remove_mcp_json "$ROOT/.mcp.json" mcpServers "$MCP_PLAYWRIGHT_NAME"
       ;;
     cursor)
       remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_LINEAR_NAME"
       remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_TRELLO_NAME"
       remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_MAESTRO_NAME"
+      remove_mcp_json "$ROOT/.cursor/mcp.json" mcpServers "$MCP_PLAYWRIGHT_NAME"
       ;;
     codex)
       # render_config owns this file while Codex is enabled. While Codex is
@@ -4999,13 +5068,13 @@ validate_flags_before_write() {
     IFS=$oldIFS
   fi
   if [ "$EXPLICIT_MCP" = 1 ]; then
-    [ -n "$MCP_ARG" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, maestro, both)'
+    [ -n "$MCP_ARG" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, jira, maestro, playwright, both)'
     oldIFS=$IFS
     IFS=','
     for mcp_token in $MCP_ARG; do
       mcp_token=$(printf '%s' "$mcp_token" | tr -d '[:space:]')
-      [ -n "$mcp_token" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, maestro, both)'
-      mcp_token_valid "$mcp_token" || die "unknown MCP selection: $mcp_token (valid: none, linear, trello, maestro, both)"
+      [ -n "$mcp_token" ] || die 'unknown MCP selection: (empty) (valid: none, linear, trello, jira, maestro, playwright, both)'
+      mcp_token_valid "$mcp_token" || die "unknown MCP selection: $mcp_token (valid: none, linear, trello, jira, maestro, playwright, both)"
     done
     IFS=$oldIFS
   fi

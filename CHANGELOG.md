@@ -29,6 +29,31 @@ follow [Semantic Versioning](https://semver.org/).
 - `web-qa` and `mobile-qa` accept a rundown as input: they run the
   `Surface: web` or `Surface: mobile` cases in order and report a verdict
   per case id.
+- `--mcp playwright` registers the Playwright browser MCP as a local stdio
+  server for the `web-qa` agent on OpenCode, Claude Code, Codex, and Cursor.
+  It launches through `scripts/qa/pw-run.sh`, so the browser keeps its memory
+  cap and the Chromium sandbox, and `MCP_PLAYWRIGHT_VERSION` pins the MCP build
+  (default `0.0.84`). `astack doctor` reports the pinned version, a wrapper
+  that predates the sandbox default, and the Chromium version of a
+  project-local Playwright install.
+
+### Fixed
+
+- `scripts/qa/pw-run.sh` no longer runs a browser uncapped when the caller
+  scrubs its environment. Agent daemons such as the Codex app-server spawn
+  MCP servers without `DBUS_SESSION_BUS_ADDRESS` or `XDG_RUNTIME_DIR`; the
+  wrapper now derives both from the uid, and warns on stderr if no user bus
+  exists instead of silently falling back to a plain exec.
+
+### Security
+
+- `scripts/qa/pw-run.sh` turns the Chromium sandbox on for the Playwright
+  browser MCP (`PLAYWRIGHT_MCP_SANDBOX=1`). Playwright launches Chromium with
+  `chromiumSandbox: false`, and the Chromium bundled with Playwright 1.64.1
+  (156.0.8078.4) predates the 156.0.8078.73 security release of 2026-10-27, so
+  a renderer compromise was code execution on the host. `PW_SANDBOX=0` opts
+  out where the sandbox cannot start, and `PW_BROWSER=chrome` runs the
+  installed, updated Chrome channel instead of the bundled build.
 
 ## [0.2.0] — 2026-10-22
 

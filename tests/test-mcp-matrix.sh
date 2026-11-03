@@ -32,9 +32,10 @@ expect_flags() {
   jira=$4
   maestro=$5
   label=$6
-  got=$(printf '%s%s%s%s' "$(flag "$root" MCP_LINEAR_ENABLED)" "$(flag "$root" MCP_TRELLO_ENABLED)" "$(flag "$root" MCP_JIRA_ENABLED)" "$(flag "$root" MCP_MAESTRO_ENABLED)")
-  want="${linear}${trello}${jira}${maestro}"
-  [ "$got" = "$want" ] || fail "$label: flags linear,trello,jira,maestro=$got want $want"
+  playwright=${7:-0}
+  got=$(printf '%s%s%s%s%s' "$(flag "$root" MCP_LINEAR_ENABLED)" "$(flag "$root" MCP_TRELLO_ENABLED)" "$(flag "$root" MCP_JIRA_ENABLED)" "$(flag "$root" MCP_MAESTRO_ENABLED)" "$(flag "$root" MCP_PLAYWRIGHT_ENABLED)")
+  want="${linear}${trello}${jira}${maestro}${playwright}"
+  [ "$got" = "$want" ] || fail "$label: flags linear,trello,jira,maestro,playwright=$got want $want"
 }
 
 # Unknown values must exit 1 and create nothing.
@@ -155,6 +156,30 @@ if setup init --root "$BAD" --platforms opencode --mcp none >"$BAD/bad.log" 2>&1
   fail 'unparseable opencode.jsonc must make init exit nonzero'
 fi
 grep -q 'could not parse' "$BAD/bad.log" || fail 'unparseable MCP file must say it was left unchanged'
+
+# Playwright registers a local stdio server, not a remote one: every host must
+# launch it through the project wrapper (memory cap + Chromium sandbox) and
+# through a pinned MCP version, so an older build cannot silently drop the
+# sandbox again.
+W=$WORK/playwright
+mkdir -p "$W"
+setup init --root "$W" --platforms opencode,claude,codex,cursor --mcp playwright >/dev/null 2>&1
+expect_flags "$W" 0 0 0 0 'playwright alone' 1
+for host in "$W/opencode.jsonc" "$W/.mcp.json" "$W/.cursor/mcp.json" "$W/.codex/config.toml"; do
+  grep -q 'scripts/qa/pw-run.sh' "$host" || fail "playwright does not launch through the wrapper in $host"
+  grep -q '@playwright/mcp@0.0.84' "$host" || fail "playwright version is not pinned in $host"
+done
+grep -q '"type": "local"' "$W/opencode.jsonc" || fail 'opencode playwright entry must be a local server'
+if grep -q '"type": "remote"' "$W/opencode.jsonc"; then
+  fail 'playwright must not be registered as a remote server'
+fi
+setup init --root "$W" --platforms opencode,claude,codex,cursor --mcp none >/dev/null 2>&1
+expect_flags "$W" 0 0 0 0 'none clears playwright'
+for host in "$W/opencode.jsonc" "$W/.mcp.json" "$W/.cursor/mcp.json" "$W/.codex/config.toml"; do
+  if grep -q 'playwright' "$host" 2>/dev/null; then
+    fail "none left the playwright server in $host"
+  fi
+done
 
 # doctor reports the integration state from config.
 sh "$KIT_ROOT/scripts/doctor.sh" --root "$D" --kit-root "$KIT_ROOT" >"$D/doctor.log" 2>&1 || true

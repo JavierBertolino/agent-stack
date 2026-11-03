@@ -26,8 +26,9 @@ Before testing, discover — never assume:
 5. Run every browser process headless, through `scripts/qa/pw-run.sh <browser
    command>` when it exists. The wrapper isolates the browser in its own
    memory-capped scope so an out-of-memory event kills the browser instead of
-   the terminal session running the agent. Without the wrapper, stay headless
-   and never launch a headed browser.
+   the terminal session running the agent. It also starts the browser MCP with
+   the Chromium sandbox on; never browse third-party pages with `PW_SANDBOX=0`.
+   Without the wrapper, stay headless and never launch a headed browser.
 
 If a guide, URL, or credential is missing, mark affected criteria
 `UNVERIFIED` instead of inventing project behavior.

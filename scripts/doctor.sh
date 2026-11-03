@@ -44,6 +44,19 @@ hash_file() {
   else cksum "$1" | awk '{print $1 ":" $2}'; fi
 }
 
+# Dotted numeric compare: exits 0 when $1 >= $2 ("156.0.8078.80" >= "156.0.8078.73").
+version_at_least() {
+  awk -v have="$1" -v want="$2" 'BEGIN {
+    n = split(have, h, "."); m = split(want, w, ".")
+    max = (n > m ? n : m)
+    for (i = 1; i <= max; i++) {
+      if ((h[i] + 0) > (w[i] + 0)) exit 0
+      if ((h[i] + 0) < (w[i] + 0)) exit 1
+    }
+    exit 0
+  }'
+}
+
 get_config() {
   key=$1
   fallback=$2
@@ -153,6 +166,18 @@ if [ -f "$ROOT/.agent-stack/generated.manifest" ]; then
   check_ok "generated files synchronized"
 else
   info "no generated manifest (run 'astack sync' after init)"
+fi
+
+# The installed copy is project-owned, so astack never overwrites it: an old
+# wrapper keeps the browser MCP on Playwright's sandboxed-off default.
+qa_pw=$ROOT/scripts/qa/pw-run.sh
+if [ -f "$qa_pw" ]; then
+  if grep -q 'PLAYWRIGHT_MCP_SANDBOX' "$qa_pw" 2>/dev/null; then
+    check_ok "qa pw-run sandbox default"
+  else
+    info "scripts/qa/pw-run.sh predates the Chromium sandbox default; replace it to enable the sandbox"
+    WARN=$((WARN + 1))
+  fi
 fi
 [ "$skills_ok" = 1 ] && check_ok "skills valid" || true
 check_ok "contracts valid"
@@ -324,6 +349,43 @@ if [ "$(get_config MCP_LINEAR_ENABLED 0)" = 1 ]; then check_ok "Linear configure
 if [ "$(get_config MCP_TRELLO_ENABLED 0)" = 1 ]; then check_ok "Trello configured"; else info "Trello not configured"; fi
 if [ "$(get_config MCP_JIRA_ENABLED 0)" = 1 ]; then check_ok "Jira configured"; else info "Jira not configured"; fi
 if [ "$(get_config MCP_MAESTRO_ENABLED 0)" = 1 ]; then check_ok "Maestro configured"; else info "Maestro not configured"; fi
+
+# Playwright MCP: registered locally, launched through the wrapper, pinned.
+if [ "$(get_config MCP_PLAYWRIGHT_ENABLED 0)" = 1 ]; then
+  pw_version=$(get_config MCP_PLAYWRIGHT_VERSION 0.0.84)
+  case "$pw_version" in
+    ''|latest|*latest*)
+      info "Playwright MCP version '$pw_version' is not pinned; a floating build can ship an older Chromium"
+      WARN=$((WARN + 1))
+      ;;
+    *) check_ok "Playwright MCP @playwright/mcp@$pw_version" ;;
+  esac
+  if [ -f "$ROOT/scripts/qa/pw-run.sh" ] &&
+     grep -q 'PLAYWRIGHT_MCP_SANDBOX' "$ROOT/scripts/qa/pw-run.sh" 2>/dev/null; then
+    check_ok "Playwright MCP launches through the sandboxed wrapper"
+  else
+    fail "Playwright MCP needs scripts/qa/pw-run.sh with the Chromium sandbox default"
+    remediate "replace scripts/qa/pw-run.sh with the kit copy, or run 'astack init --mcp playwright'"
+  fi
+else
+  info "Playwright MCP not configured (add it with 'astack init --mcp playwright')"
+fi
+
+# `npx playwright test` runs whatever Chromium the project's playwright
+# bundles, so read the version instead of assuming the MCP default covers it.
+pw_browsers=$ROOT/node_modules/playwright-core/browsers.json
+if [ -f "$pw_browsers" ]; then
+  pw_chromium=$(tr -d '\n\r' < "$pw_browsers" | sed -n \
+    's/.*"name"[[:space:]]*:[[:space:]]*"chromium"[^}]*"browserVersion"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p')
+  if [ -n "$pw_chromium" ]; then
+    if version_at_least "$pw_chromium" 156.0.8078.73; then
+      check_ok "playwright Chromium $pw_chromium includes the 2026-10-27 fixes"
+    else
+      info "playwright bundles Chromium $pw_chromium (older than 156.0.8078.73): keep the sandbox on, prefer PW_BROWSER=chrome, and update playwright"
+      WARN=$((WARN + 1))
+    fi
+  fi
+fi
 
 # --- Updates ---
 printf '\nUpdates\n'

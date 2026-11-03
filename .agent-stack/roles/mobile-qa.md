@@ -31,11 +31,12 @@ If a guide, device, build, or credential is missing, mark affected criteria
 ## 2. Intake
 
 The caller supplies what to test: free text, a Linear issue, or
-`app screen + task`. Clarify in one round when needed: test goal and entry
-point (fresh install vs logged-in state); dimensions (`functional`, `view`,
-`business`, default all); device / OS / build; flows to reuse (`*.yaml` in
-repo) vs explore freely; report destination (`reports/qa/<slug>.md` or
-stdout).
+`app screen + task`. For a rundown (`reports/rundown/<slug>.md`), run its
+`Surface: mobile` cases in order and report each case id. Clarify in one
+round when needed: test goal and entry point (fresh install vs logged-in
+state); dimensions (`functional`, `view`, `business`, default all); device /
+OS / build; flows to reuse (`*.yaml` in repo) vs explore freely; report
+destination (`reports/qa/<slug>.md` or stdout).
 
 ## 3. Drive (code owns the loop)
 
@@ -58,9 +59,9 @@ it never drives the device.
    Execute one Maestro action only when it returns `status: execute` and the
    current candidate id. `inspect_more` means inspect; `stop` means finish.
    Any other result means do not act; refresh, rebuild, or escalate
-   `UNVERIFIED`. The gate checks id, probability map, confidence (default
-   fixed floor 0.75), authorization, and JSON Pointer preconditions. Jev never
-   grants authorization or controls the device.
+   `UNVERIFIED`. The gate checks id, probability map, confidence (fixed
+   floor 0.75), authorization, and JSON Pointer preconditions. Jev never
+   grants authorization.
 5. One action, one observation. Record `{ action, observed }`, including
    permission/offline transitions, back behavior, and deep links; refresh
    state before asking again. Compress screens to
@@ -75,15 +76,15 @@ configured. Run: astack auth jev`) instead of judging, and selection cannot
 run. Mark affected criteria `UNVERIFIED` until Jev is configured — never
 invent verdicts without it.
 
-Selection (§3) and evaluation are separate calls. Selection recommends the
-next device action and never produces a verdict; this section judges what
-already happened. Every `astack` subcommand and its usage moment is
-catalogued in `astack-ops`. Send one `system_one` evaluation call per
-checkpoint through `scripts/qa/ask-jev.ts` (`TYPESAFE_API_KEY` comes from
-the environment; the kit never writes it) with the mobile question library
-and state `{ test_goal, expected, governance, screen, trace, device }`. Ask
-narrow atomic questions together across all selected dimensions and let code
-decide which answers apply (speculative fan-out):
+Selection (§3) and evaluation are separate calls. Selection never produces
+a verdict; this section judges what already happened. Every `astack`
+subcommand and its usage moment is catalogued in `astack-ops`. Send one
+`system_one` evaluation call per checkpoint through `scripts/qa/ask-jev.ts`
+(`TYPESAFE_API_KEY` comes from the environment; the kit never writes it)
+with the mobile question library and state
+`{ test_goal, expected, governance, screen, trace, device }`. Ask narrow
+atomic questions together across all selected dimensions and let code decide
+which answers apply (speculative fan-out):
 
 - functional `Noul`: `task_completed`, `action_had_visible_effect`,
   `error_blocked_task`, `gesture_and_back_behaved`,

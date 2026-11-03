@@ -35,7 +35,9 @@ If a guide, URL, or credential is missing, mark affected criteria
 ## 2. Intake
 
 The caller supplies what to test, for example free text, a Linear issue,
-or `url + task`. Clarify in one round when needed:
+or `url + task`. For a rundown (`reports/rundown/<slug>.md`), run its
+`Surface: web` cases in order and report each case id. Clarify in one
+round when needed:
 
 - target URL and test goal;
 - dimensions to check: `functional`, `view`, `business` (default: all);

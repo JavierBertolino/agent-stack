@@ -29,6 +29,13 @@ follow [Semantic Versioning](https://semver.org/).
 - `web-qa` and `mobile-qa` accept a rundown as input: they run the
   `Surface: web` or `Surface: mobile` cases in order and report a verdict
   per case id.
+- `--mcp playwright` registers the Playwright browser MCP as a local stdio
+  server for the `web-qa` agent on OpenCode, Claude Code, Codex, and Cursor.
+  It launches through `scripts/qa/pw-run.sh`, so the browser keeps its memory
+  cap and the Chromium sandbox, and `MCP_PLAYWRIGHT_VERSION` pins the MCP build
+  (default `0.0.84`). `astack doctor` reports the pinned version, a wrapper
+  that predates the sandbox default, and the Chromium version of a
+  project-local Playwright install.
 
 ### Fixed
 

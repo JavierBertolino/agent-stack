@@ -33,6 +33,16 @@ missing files only; existing project files are preserved).
   scripts/qa/pw-run.sh npx playwright test
   scripts/qa/pw-run.sh npx -y @playwright/mcp@latest --headless
   ```
+
+  It also turns the Chromium sandbox on for the browser MCP by exporting
+  `PLAYWRIGHT_MCP_SANDBOX=1`, because Playwright launches Chromium with
+  `chromiumSandbox: false` and the Chromium bundled with Playwright 1.64.1
+  (156.0.8078.4) predates the 156.0.8078.73 security release of 2026-10-27.
+  Set `PW_SANDBOX=0` to leave it off where the kernel or container forbids
+  the sandbox, and `PW_BROWSER=chrome` to run the installed Chrome channel
+  instead of the bundled build. Both only reach the MCP server; a Playwright
+  test run keeps its own `launchOptions`, so set `chromiumSandbox: true`
+  there yourself.
 - `questions.ts` — typed atomic question library (functional / view /
   business + verdict/domain/severity). Business checks are
   project-agnostic (business rules, side effects, state transitions,

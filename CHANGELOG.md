@@ -38,6 +38,16 @@ follow [Semantic Versioning](https://semver.org/).
   wrapper now derives both from the uid, and warns on stderr if no user bus
   exists instead of silently falling back to a plain exec.
 
+### Security
+
+- `scripts/qa/pw-run.sh` turns the Chromium sandbox on for the Playwright
+  browser MCP (`PLAYWRIGHT_MCP_SANDBOX=1`). Playwright launches Chromium with
+  `chromiumSandbox: false`, and the Chromium bundled with Playwright 1.64.1
+  (156.0.8078.4) predates the 156.0.8078.73 security release of 2026-10-27, so
+  a renderer compromise was code execution on the host. `PW_SANDBOX=0` opts
+  out where the sandbox cannot start, and `PW_BROWSER=chrome` runs the
+  installed, updated Chrome channel instead of the bundled build.
+
 ## [0.2.0] — 2026-10-22
 
 ### Added

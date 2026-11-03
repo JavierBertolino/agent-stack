@@ -154,6 +154,18 @@ if [ -f "$ROOT/.agent-stack/generated.manifest" ]; then
 else
   info "no generated manifest (run 'astack sync' after init)"
 fi
+
+# The installed copy is project-owned, so astack never overwrites it: an old
+# wrapper keeps the browser MCP on Playwright's sandboxed-off default.
+qa_pw=$ROOT/scripts/qa/pw-run.sh
+if [ -f "$qa_pw" ]; then
+  if grep -q 'PLAYWRIGHT_MCP_SANDBOX' "$qa_pw" 2>/dev/null; then
+    check_ok "qa pw-run sandbox default"
+  else
+    info "scripts/qa/pw-run.sh predates the Chromium sandbox default; replace it to enable the sandbox"
+    WARN=$((WARN + 1))
+  fi
+fi
 [ "$skills_ok" = 1 ] && check_ok "skills valid" || true
 check_ok "contracts valid"
 

@@ -19,6 +19,7 @@ scratch project, doctor). Release CI always runs the smoke test.
 
 import argparse
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
@@ -39,7 +40,32 @@ def sha256(path):
     return digest.hexdigest()
 
 
-CLI_PACKAGES = ("@clack/prompts", "@clack/core", "picocolors", "sisteransi")
+def cli_package_closure(kit):
+    """Resolve the CLI's runtime dependency closure from the installed graph.
+
+    Vendors exactly what the CLI declares under `dependencies`, walking the
+    hoisted node_modules layout so a dependency bump (for example
+    @clack/prompts 0.11 -> 1.x trading picocolors for the fast-string
+    packages) needs no edit here.
+    """
+    root_modules = kit / "node_modules"
+    closure = {}
+    queue = []
+    manifest = json.loads(
+        (kit / "packages" / "cli" / "package.json").read_text(encoding="utf-8")
+    )
+    queue.extend(str(name) for name in manifest.get("dependencies", {}))
+    while queue:
+        name = queue.pop()
+        if name in closure:
+            continue
+        source = root_modules / name
+        if not source.is_dir():
+            raise SystemExit("build error: missing %s (run npm ci)" % source)
+        dep = json.loads((source / "package.json").read_text(encoding="utf-8"))
+        closure[name] = source
+        queue.extend(str(n) for n in dep.get("dependencies", {}))
+    return {name: closure[name] for name in sorted(closure)}
 
 
 def skip_junk(tarinfo):
@@ -61,11 +87,7 @@ def stage_cli(kit, dest):
     shutil.copytree(kit / "packages" / "cli" / "dist", dest / "dist")
     (dest / "package.json").write_text('{"type":"module","private":true}\n')
     modules = dest / "node_modules"
-    root_modules = kit / "node_modules"
-    for name in CLI_PACKAGES:
-        source = root_modules / name
-        if not source.is_dir():
-            raise SystemExit("build error: missing %s (run npm ci)" % source)
+    for name, source in cli_package_closure(kit).items():
         target = modules / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, target)

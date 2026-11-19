@@ -3,394 +3,1033 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>astack watch — __ASTACK_RUN__</title>
+<link rel="icon" href="data:,">
+<title>Agent Studio — __ASTACK_RUN__</title>
 <style>
-  :root { color-scheme: light; --bg:#f7f7f5; --card:#fff; --ink:#1a1a1a;
-    --muted:#6b7280; --line:#e5e7eb; --accent:#1d4ed8; --ok:#047857;
-    --warn:#b45309; --bad:#b91c1c; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--bg); color:var(--ink); }
-  header { position:sticky; top:0; z-index:10; background:var(--card);
-    border-bottom:1px solid var(--line); padding:10px 16px;
-    display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  header .run { font-weight:700; font-family:ui-monospace,monospace; }
-  .badge { display:inline-block; padding:1px 8px; border-radius:999px;
-    font-size:12px; border:1px solid var(--line); background:#f3f4f6; }
-  .badge.phase { background:#dbeafe; border-color:#bfdbfe; font-weight:600; }
-  .badge.live { background:#dcfce7; border-color:#bbf7d0; color:var(--ok); font-weight:700; }
-  .spacer { flex:1; }
-  button { cursor:pointer; border:1px solid var(--line); background:#fff;
-    border-radius:6px; padding:4px 10px; font-size:13px; }
-  main { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px;
-    padding:16px; max-width:1400px; margin:0 auto; }
-  @media (max-width:1000px){ main{ grid-template-columns:1fr; } }
-  section.card { background:var(--card); border:1px solid var(--line);
-    border-radius:10px; padding:12px 14px; margin-bottom:16px; }
-  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em;
-    color:var(--muted); margin:0 0 8px; }
-  #pipeline { display:flex; gap:4px; flex-wrap:wrap; }
-  #pipeline span { padding:2px 8px; border-radius:6px; font-size:12px;
-    border:1px solid var(--line); background:#f9fafb; }
-  #pipeline span.done { background:#ecfdf5; border-color:#a7f3d0; }
-  #pipeline span.current { background:var(--accent); color:#fff;
-    border-color:var(--accent); font-weight:700; }
-  #feed article { border:1px solid var(--line); border-radius:8px;
-    padding:8px 10px; margin-bottom:8px; background:#fff; }
-  #feed .meta { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;
-    font-size:12px; color:var(--muted); }
-  #feed .type { font-weight:700; color:var(--ink); font-family:ui-monospace,monospace; }
-  #feed .summary { margin:4px 0 0; }
-  details { margin-top:6px; }
-  details summary { cursor:pointer; font-size:12px; color:var(--accent); }
-  pre { background:#0f172a; color:#e2e8f0; padding:10px; border-radius:6px;
-    overflow:auto; max-height:420px; font-size:12px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th,td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
-  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums;
-    font-family:ui-monospace,monospace; }
-  #bar { display:flex; height:14px; border-radius:7px; overflow:hidden;
-    background:#eef2f7; margin:8px 0; }
-  #bar div { height:100%; }
-  .note { font-size:12px; color:var(--muted); }
-  #banner { display:none; background:#fef3c7; border:1px solid #fcd34d;
-    border-radius:8px; padding:8px 12px; margin:0 16px; }
-  footer { padding:16px; max-width:1400px; margin:0 auto; }
+  :root { color-scheme:dark; --bg:#0b0f17; --panel:#121925; --line:#253046;
+    --text:#ebeff7; --muted:#97a3b8; --accent:#b7acf9; --green:#81dfbc;
+    --red:#ffa6ac; --blue:#9bc8ff; --amber:#f6cf92; }
+  * { box-sizing:border-box; }
+  html { height:100%; }
+  /* One screen: office on the left, the agent terminal on the right. */
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+  button,input,select { font:inherit; color:inherit; }
+  button,select { background:#1c2535; border:1px solid #3a465e; border-radius:6px; padding:5px 9px; cursor:pointer; font-size:12px; }
+  button:hover,select:hover { background:#2a3549; }
+  button[aria-pressed="true"] { border-color:var(--accent); background:#302c48; color:#e4ddff; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button:disabled { opacity:.5; cursor:default; }
+  input { background:#0c121c; border:1px solid #3a465e; border-radius:6px; padding:5px 9px; min-width:0; font-size:12px; }
+  header { display:flex; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid var(--line); background:#0e131d; flex:none; min-width:0; }
+  .brand { font-size:14px; font-weight:750; white-space:nowrap; display:flex; align-items:center; letter-spacing:-.3px; }
+  .brand span { display:inline-grid; place-items:center; width:22px; height:22px; margin-right:7px; border-radius:6px; background:var(--accent); color:#201b35; font-size:12px; }
+  .run-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
+  #change { margin:0; font-size:14px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:26vw; }
+  #run { font:11px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); white-space:nowrap; }
+  .sep { width:1px; height:20px; background:var(--line); flex:none; }
+  #questmap { display:flex; gap:3px; width:140px; flex:none; }
+  .phase-node { height:4px; background:#2b3548; border-radius:4px; flex:1; }
+  .phase-node.done { background:#648b84; }
+  .phase-node.current { background:var(--accent); }
+  .chip { padding:2px 8px; background:#1a2232; border:1px solid var(--line); border-radius:5px; font-size:11.5px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .chip.harness { background:#232842; color:#d4cbff; border-color:#474170; overflow:hidden; text-overflow:ellipsis; max-width:300px; }
+  #connection { color:var(--green); }
+  .spacer { flex:1; min-width:0; }
+  #runpick { max-width:220px; }
+  #banner { display:none; padding:6px 14px; border-bottom:1px solid #7a6640; color:var(--amber); background:#1d1a12; font-size:12px; flex:none; }
+  .muted,.note { color:var(--muted); }
+  .note { font-size:12px; margin:4px 0; }
+  main { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) clamp(500px,42vw,960px); gap:10px; padding:10px; }
+  .office-col { display:flex; flex-direction:column; gap:10px; min-height:0; min-width:0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; min-width:0; min-height:0; overflow:hidden; position:relative; }
+  .stage { flex:none; display:flex; flex-direction:column; }
+  .bar { display:flex; align-items:center; gap:6px; padding:6px 10px; border-bottom:1px solid var(--line); min-width:0; flex:none; }
+  .bar .label { text-transform:uppercase; letter-spacing:1.4px; color:var(--accent); font-size:10px; font-weight:700; flex:none; }
+  .bar h2 { margin:0; font-size:13px; font-weight:650; flex:none; }
+  #interaction { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#cfd6e6; font-size:12px; }
+  #office-zoom { font-size:11px; color:var(--muted); min-width:34px; text-align:center; }
+  .office-frame { position:relative; }
+  #office-viewport { overflow:auto; width:100%; aspect-ratio:1180 / 680; max-height:calc(100dvh - 250px); min-height:180px;
+    background:#1f2937; scrollbar-color:#566179 #1f2937; }
+  #office-space { position:relative; margin:0 auto; }
+  #office-world { position:relative; width:1180px; height:680px; transform-origin:0 0; }
+  #office-scene,#office-canvas { position:absolute; left:0; top:0; display:block; }
+  #office-scene { pointer-events:none; }
+  #office-canvas { cursor:crosshair; }
+  #office-bubbles { position:absolute; inset:0; pointer-events:none; z-index:10; }
+  .office-actor-hit,.office-desk-hit { position:absolute; background:transparent; box-shadow:none; border:0; padding:0; }
+  .office-actor-hit { width:50px; height:90px; border-radius:18px; z-index:3; }
+  .office-desk-hit { width:152px; height:58px; border-radius:8px; z-index:2; }
+  .office-actor-hit:hover { background:#b4a1ec12; }
+  .office-desk-hit:hover { background:#8267ab12; box-shadow:inset 0 0 0 2px #9683b5; }
+  #office-hint { position:absolute; left:10px; bottom:10px; z-index:12; max-width:calc(100% - 20px); padding:3px 9px; border-radius:6px;
+    background:#0b0f17d0; color:#d6cbff; font-size:11.5px; pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .speech { position:absolute; z-index:6; max-width:225px; width:max-content; min-width:130px; padding:9px 12px;
+    color:#f1eefb; background:#32334e; border:1px solid #8a83b8; border-radius:12px 12px 12px 3px;
+    box-shadow:0 5px 18px #0004; pointer-events:none; transform:translateX(-50%); }
+  .speech .speech-label { display:block; color:#c6bcff; font-size:10px; font-weight:700; margin-bottom:3px; }
+  .speech p { margin:0; font-size:12px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:3;
+    -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+  .speech.reply { background:#25423e; border-color:#629d8d; }
+  .speech.reply .speech-label { color:#afe6d7; }
+  #paused-overlay { display:none; position:absolute; inset:0; z-index:15; place-items:center; background:#0b0f17b8; font-size:18px; pointer-events:none; }
+  .interactions { flex:1; display:flex; flex-direction:column; min-height:110px; }
+  #log { flex:1; overflow:auto; padding:0 12px 8px; min-height:0; scrollbar-color:#4c5871 #121925; overflow-anchor:none; }
+  .interaction-entry { padding:8px 0; border-bottom:1px solid var(--line); }
+  .interaction-entry .route { color:#d6ceff; font-weight:650; font-size:12px; }
+  .interaction-entry .entry-body { margin-top:3px; font-size:12px; color:#c2ccdc; }
+  .entry-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; }
+  time { margin-left:auto; color:#8f9bb0; font:11px ui-monospace,monospace; }
+  .entry-body { font-size:12.5px; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; line-height:1.55; }
+  .entry-source { font-size:10px; color:var(--muted); margin-top:4px; }
+  details { margin-top:5px; }
+  summary { color:var(--muted); cursor:pointer; font-size:11px; }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:10px; background:#0d1420; font:11px/1.6 ui-monospace,monospace; max-height:260px; overflow:auto; }
+  .raw-copy { margin-top:6px; font-size:11px; padding:3px 8px; }
+  .verdict { font-size:10px; font-weight:700; color:var(--green); border:1px solid #497969; border-radius:4px; padding:1px 5px; }
+  .verdict.blocking { color:var(--red); border-color:#a0646b; }
+  .verdict.unverified,.verdict.partial { color:var(--amber); border-color:#8d7956; }
+  .empty { padding:22px 6px; color:var(--muted); font-size:12.5px; }
+  .empty strong { display:block; color:var(--text); margin-bottom:5px; }
+  .terminal-panel { display:flex; flex-direction:column; }
+  .terminal-panel .bar { flex-wrap:wrap; }
+  #agent-filter { display:flex; flex-wrap:wrap; padding:6px 10px 0; flex:none; }
+  #agent-filter button { padding:3px 8px; font-size:11.5px; }
+  .toolbar { display:flex; gap:6px; padding:6px 10px 8px; flex:none; }
+  #search { flex:1; }
+  #kind { font-size:12px; }
+  #event-count { padding:5px 12px; color:var(--muted); font-size:11px; border-top:1px solid var(--line); flex:none; }
+  /* Models & tokens live in a header menu instead of taking screen space. */
+  #vault { position:relative; margin:0; }
+  #vault > summary { list-style:none; font-size:12px; color:var(--text); background:#1c2535; border:1px solid #3a465e; border-radius:6px; padding:5px 9px; white-space:nowrap; }
+  #vault > summary::-webkit-details-marker { display:none; }
+  #vault[open] > summary { border-color:var(--accent); }
+  .menu-panel { position:absolute; right:0; top:calc(100% + 6px); z-index:40; width:min(760px,90vw); max-height:75vh; overflow:auto;
+    background:#121925; border:1px solid #3a465e; border-radius:10px; padding:14px 16px; box-shadow:0 18px 50px #000a; }
+  .vault-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .menu-panel h2 { margin:0 0 6px; font-size:13px; }
+  table { border-collapse:collapse; font-size:12px; width:100%; }
+  th,td { padding:6px 5px; border-bottom:1px solid var(--line); text-align:left; overflow-wrap:anywhere; }
+  td.num { text-align:right; }
+  .menu-panel .about { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.55; }
+  .menu-panel a { color:#c5baff; }
+  /* Agent terminals: rendered like the harness transcript, not a log table. */
+  .terminal-panel .panel-heading { padding-bottom:10px; align-items:flex-start; }
+  .term-actions { display:flex; gap:6px; flex:none; }
+  .term-actions button { font-size:12px; padding:6px 9px; }
+  #transcript-source { max-width:640px; }
+  #transcript-source.live { color:#b9e8d6; }
+  #agent-filter { gap:4px; }
+  .agent-tab { display:inline-flex; align-items:center; gap:6px; }
+  .agent-tab .tab-dot { width:7px; height:7px; border-radius:50%; background:var(--agent,#8792a6); opacity:.4; flex:none; }
+  .agent-tab.live .tab-dot { opacity:1; animation:livedot 1.4s ease-in-out infinite; }
+  .agent-tab .tab-count { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+  .agent-tab .tab-count:empty { display:none; }
+  .agent-tab.quiet { color:#8b96aa; }
+  @keyframes livedot { 50% { opacity:.35; } }
+  #console.terminal { background:#0a0e15; color:#d6ddea; font:12.5px/1.62 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    padding:10px 14px 16px; flex:1; min-height:0; overflow:auto; scrollbar-color:#4c5871 #0a0e15; overflow-anchor:none; border-top:1px solid var(--line); }
+  .terminal .activity { border:0; padding:3px 0 5px; }
+  .terminal .t-line { display:flex; gap:8px; align-items:baseline; min-width:0; }
+  .terminal .t-who { flex:none; width:86px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--agent); font-weight:700; font-size:11.5px; }
+  .terminal.single .t-who { display:none; }
+  .terminal .t-glyph { flex:none; width:14px; text-align:center; color:var(--agent); }
+  .terminal .t-main { flex:1; min-width:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .terminal time { flex:none; margin-left:8px; color:#566175; font-size:10.5px; }
+  .terminal .t-body { margin-left:116px; min-width:0; }
+  .terminal.single .t-body { margin-left:22px; }
+  .terminal pre { margin:0; padding:0; background:none; border:0; font:inherit; white-space:pre-wrap; overflow-wrap:anywhere; max-height:none; overflow:visible; }
+  .terminal details pre { background:#0d1420; padding:10px; max-height:280px; overflow:auto; font-size:11px; }
+  .terminal details { margin:3px 0 0; } .terminal summary,.terminal .entry-source { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .terminal .entry-source { margin-top:2px; }
+  .t-tool .t-main b { color:#f3f6fb; }
+  .t-arg { color:#a8cdfa; }
+  .t-label { color:#8f9bb0; }
+  .t-thinking .t-glyph,.t-thought .t-glyph,.t-thinking .t-label,.t-thought .t-label { color:#c9b8ff; }
+  .t-thinking .t-label,.t-thought .t-label { font-style:italic; }
+  .t-think { color:#b9b0e6; font-style:italic; }
+  .t-dim,.t-status .t-main { color:#6c7890; }
+  .t-status .t-glyph { color:#4b566b; }
+  .t-text .t-main { color:#eef2f8; }
+  .t-prompt .t-glyph { color:#f6cf92; }
+  .t-prompt-text { color:#e6dac4; border-left:2px solid #6b5b3e; padding-left:10px !important; }
+  .t-command .t-glyph,.t-tool .t-glyph { color:#9bc8ff; }
+  .t-tool.t-failed .t-glyph,.t-error .t-glyph,.t-error .t-main,.t-err .t-pre,.t-err .t-sum { color:#ffa6ac; }
+  .t-result .t-glyph { color:#81dfbc; }
+  .t-out { display:flex; gap:8px; color:#a7b1c2; min-width:0; }
+  .t-elbow { flex:none; color:#4f5a6e; }
+  .t-out-body { flex:1; min-width:0; }
+  .t-sum { color:#8f9bb0; }
+  .terminal .t-input { margin:1px 0 0; } .terminal .t-input summary { font-size:10.5px; color:#566175; }
+  .terminal .t-input summary:hover { color:#a0aec4; }
+  .t-clamp { max-height:calc(var(--lines,8) * 1.62em); overflow:hidden; }
+  .open > .t-clamp,.open .t-clamp,.terminal.expanded .t-out .t-clamp,.terminal.expanded .t-diff.t-clamp { max-height:none; }
+  .t-out.t-collapsed .t-pre { display:none; } .t-out.t-collapsed.open .t-pre { display:block; }
+  .t-more { background:none; border:0; padding:0; margin-top:1px; color:#7f8ca3; font:inherit; font-size:11.5px; cursor:pointer; }
+  .t-more:hover { color:#c9d3e3; background:none; text-decoration:underline; }
+  .t-running { color:#f6cf92; } .t-running::after { content:" ▍"; animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  .t-diff { margin:2px 0 3px !important; }
+  .t-diff .add { color:#8fd3b6; } .t-diff .del { color:#ff9aa2; }
+  .terminal .command-text { background:#121a28; border:1px solid #243149; border-radius:6px; padding:8px 10px; margin-top:3px; }
+  .t-hidden { color:#6c7890; font-size:11px; padding:2px 0 8px; border-bottom:1px dashed #253047; margin-bottom:6px; }
+  .terminal .empty { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  @media(prefers-reduced-motion:reduce) { .t-running::after,.agent-tab.live .tab-dot { animation:none; } }
+  @media(max-width:1000px) {
+    body { height:auto; overflow:auto; }
+    main { grid-template-columns:1fr; }
+    #office-viewport { max-height:none; }
+    .terminal-panel { height:80vh; }
+    .interactions { height:300px; flex:none; }
+    header { flex-wrap:wrap; }
+    #change { max-width:60vw; }
+  }
+  @media(max-width:600px) {
+    header { gap:6px; padding:8px; } .sep { display:none; } #questmap { width:100px; }
+    main { padding:8px; gap:8px; } .vault-grid { grid-template-columns:1fr; } #runpick { max-width:150px; }
+    #console.terminal { font-size:12px; }
+    .terminal .t-who { width:62px; } .terminal .t-body { margin-left:22px; } .terminal time { display:none; }
+    .bar .label { display:none; } .bar { flex-wrap:wrap; } #interaction { flex-basis:100%; }
+  }
+  @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; } }
 </style>
 </head>
 <body>
 <header>
-  <span class="badge live">● LIVE · read-only</span>
-  <span class="run" id="run">run __ASTACK_RUN__</span>
-  <span class="badge phase" id="phase">…</span>
-  <span class="note" id="change"></span>
+  <div class="brand"><span aria-hidden="true">a</span>Agent Studio</div>
+  <div class="sep"></div>
+  <div class="run-id"><h1 id="change">Waiting for a delivery run</h1><span id="run">__ASTACK_RUN__</span></div>
+  <div id="questmap" aria-label="Delivery progress"></div>
+  <span class="chip" id="phase">—</span>
+  <span class="chip" id="clock">--:--</span>
+  <span class="chip" id="connection" role="status">Connecting…</span>
+  <span class="chip harness" id="harness" title="Host running Agent Stack">Harness…</span>
   <span class="spacer"></span>
-  <span class="note" id="tokens-total">tokens total —</span>
-  <span class="note" id="jev-model"></span>
-  <select id="runpick" title="Run to follow"><option value="">follow latest</option></select>
-  <button id="pause" type="button">Pause</button>
+  <details id="vault"><summary>Models &amp; tokens</summary>
+    <div class="menu-panel">
+      <div class="vault-grid">
+        <div><h2>Model routing</h2><table id="models"><thead><tr><th>Agent</th><th>Model</th><th>Effort</th></tr></thead><tbody></tbody></table></div>
+        <div><h2>Self-reported tokens</h2><table id="tokens"><thead><tr><th>Agent</th><th>In</th><th>Out</th><th>Total</th></tr></thead><tbody></tbody></table><p class="note">Unknown is n/a, never zero. These are not billing counters.</p></div>
+      </div>
+      <p class="about">Read-only · pause affects this page, not the agents. The agent terminal replays the harness's own local session record
+        (Claude Code transcripts, OpenCode sessions) for this project and run, with secrets redacted and long output clipped; thinking appears only when the harness stored it.
+        Agent-reported notes and report evidence are labeled separately. Office controls move characters only; they never launch agents or spend tokens.<br>
+        Characters: <a href="https://kenney.nl/assets/mini-characters" target="_blank" rel="noopener noreferrer">Kenney Mini Characters</a> · CC0 · pre-rendered locally. No external assets or scripts are loaded.</p>
+    </div>
+  </details>
+  <select id="runpick" aria-label="Run to watch"><option value="">Follow latest run</option></select>
+  <button id="pause" type="button" aria-pressed="false">Pause view</button>
+  <button id="sound" type="button" aria-pressed="false">Sound off</button>
 </header>
 <div id="banner" role="status"></div>
 <main>
-  <div>
-    <section class="card">
-      <h2>Pipeline</h2>
-      <div id="pipeline"></div>
+  <div class="office-col">
+    <section class="card stage" id="stage" aria-label="Agent office">
+      <div class="bar"><span class="label">Office</span><span id="interaction">Click a teammate to follow them; click the floor or a desk to move.</span>
+        <button type="button" id="office-tour">Tour</button><button type="button" id="office-all-home">Everyone to desks</button>
+        <button type="button" id="zoom-out" aria-label="Zoom out">−</button><span id="office-zoom">100%</span><button type="button" id="zoom-in" aria-label="Zoom in">+</button><button type="button" id="zoom-fit">Fit</button></div>
+      <div class="office-frame">
+        <div id="office-viewport"><div id="office-space"><div id="office-world">
+          <canvas id="office-scene" aria-hidden="true"></canvas>
+          <canvas id="office-canvas" tabindex="0" aria-label="Interactive office floor. Select a teammate, click the floor to walk, click a desk to visit, or use arrow keys."></canvas>
+          <div id="office-bubbles"></div>
+        </div></div></div>
+        <span id="office-hint" role="status">Select a teammate, then click the floor or a desk.</span>
+        <div id="paused-overlay">View paused · agents keep working</div>
+      </div>
     </section>
-    <section class="card">
-      <h2>Agent-to-agent feed</h2>
-      <div id="feed"><p class="note">Waiting for events…</p></div>
-    </section>
-  </div>
-  <div>
-    <section class="card">
-      <h2>Active agent</h2>
-      <div id="active"><p class="note">—</p></div>
-    </section>
-    <section class="card">
-      <h2>Models (OpenCode-first)</h2>
-      <table id="models"><thead><tr><th>Role</th><th>Model</th><th>Thinking</th></tr></thead><tbody></tbody></table>
-      <p class="note">Empty model = harness default. web-qa / mobile-qa use <code>inherit</code>: navigation follows the parent session model.</p>
-    </section>
-    <section class="card">
-      <h2>Token usage — estimated</h2>
-      <div id="bar"></div>
-      <table id="tokens"><thead><tr><th>Agent</th><th class="num">In</th><th class="num">Out</th><th class="num">Total</th></tr></thead><tbody></tbody></table>
-      <p class="note">Self-reported by each agent at <code>agent-end</code> (source: harness session stats). Estimated, not for billing. Missing rows show as n/a until the agent reports.</p>
+    <section class="card interactions" aria-labelledby="log-title">
+      <div class="bar"><h2 id="log-title">Team interactions</h2><span class="note">Handoffs, reports and what happens next</span></div>
+      <div id="log" tabindex="0" aria-label="Team interactions, chronological"></div>
     </section>
   </div>
+  <section class="card terminal-panel" aria-labelledby="console-title">
+    <div class="bar"><h2 id="console-title">Agent terminal</h2><span class="note" id="transcript-source">What each agent thinks, runs and gets back, as its harness recorded it.</span>
+      <span class="spacer"></span><button id="expand" type="button" aria-pressed="false">Expand output</button><button id="follow" type="button" aria-pressed="true">↓ Following</button></div>
+    <div id="agent-filter" aria-label="Agent terminal filter"></div>
+    <div class="toolbar"><input id="search" type="search" aria-label="Search activity" placeholder="Search commands, output, thinking…">
+      <select id="kind" aria-label="Activity type"><option value="">Everything</option><option value="thought">Thinking</option><option value="command">Commands &amp; tools</option><option value="result">Results &amp; output</option><option value="text">Messages &amp; prompts</option><option value="error">Errors</option><option value="note">Reported notes only</option></select></div>
+    <div id="console" class="terminal" tabindex="0" aria-label="Agent terminal output, chronological"></div>
+    <div id="event-count">Waiting for activity…</div>
+  </section>
 </main>
-<footer>
-  <p class="note">Secrets are never emitted. If you see an API key or credential in this view, stop the run and rotate it. Full Jev request/response bodies render collapsed — expand to teach the evaluation protocol. Watch is read-only: pausing only freezes this page.</p>
-</footer>
+<script type="application/json" id="character-atlas">__ASTACK_CHARACTERS__</script>
+<script id="office-engine">__ASTACK_OFFICE__</script>
 <script>
 (function () {
   "use strict";
-  var PHASES = ["intake","preflight","clarify","branch","specify","publish-spec",
-    "implement","review","qa","close","awaiting_merge"];
-  var COLORS = ["#1d4ed8","#047857","#7c3aed","#b45309","#0e7490","#be123c","#4d7c0f"];
-  var nextOffset = 0, paused = false, allEvents = [];
-  var serverHint = "__ASTACK_RUN__"; // pinned run id, or "latest"
-  var pinned = serverHint !== "latest";
-  var currentRun = pinned ? serverHint : null;
-  var followLatest = !pinned;
-  var knownRunIds = [];
-
-  function el(tag, text, cls) {
-    var n = document.createElement(tag);
-    if (text !== undefined && text !== null) n.textContent = text;
+  const $ = id => document.getElementById(id);
+  const el = (tag, text, cls) => {
+    const n = document.createElement(tag);
+    if (text !== undefined && text !== null) n.textContent = String(text);
     if (cls) n.className = cls;
     return n;
+  };
+  const PHASES = ["intake","preflight","clarify","branch","specify","publish-spec","implement","review","qa","close","awaiting_merge"];
+  const ROLES = ["resolver","designer","design-qa","developer","web-qa","mobile-qa","jev"];
+  const LABELS = { resolver:"Resolver", designer:"Designer", "design-qa":"Design QA", developer:"Developer", "web-qa":"Web QA", "mobile-qa":"Mobile QA", jev:"Jev",
+    run:"Run", unknown:"Unattributed", unattributed:"Unattributed", main:"Main session", subagent:"Subagent" };
+  const AGENT_COLORS = { resolver:"#c9b8ff", designer:"#f2b79f", "design-qa":"#9cc4e4", developer:"#8fd3b6", "web-qa":"#a9bcf0",
+    "mobile-qa":"#e3c48f", jev:"#bcb2ea", main:"#d7dde8", run:"#8792a6" };
+  const agentColor = id => AGENT_COLORS[id] || "#9aa6ba";
+  const GLYPHS = { thought:"✻", thinking:"✻", command:"$", tool:"●", result:"✓", output:"⎿", error:"✗", text:"●", prompt:"›", status:"─", activity:"•" };
+  const HARNESS_NAMES = { "claude-code":"Claude Code", opencode:"OpenCode" };
+  const harnessName = id => HARNESS_NAMES[id] || id || "the harness";
+  const KIND_FILTERS = {
+    thought:a => a.kind === "thought" || a.kind === "thinking",
+    command:a => a.kind === "command" || a.kind === "tool",
+    result:a => a.kind === "result" || a.kind === "output" || (a.kind === "tool" && !!a.result),
+    text:a => a.kind === "text" || a.kind === "prompt",
+    error:a => a.kind === "error" || !!(a.result && a.result.error),
+    note:a => !a.tx && a.kind !== "status",
+  };
+  const CONSOLE_LIMIT = 600, OUTPUT_PREVIEW = 8;
+  const label = id => LABELS[id] || id || "Run";
+  const parse = raw => { try { return typeof raw === "string" ? JSON.parse(raw) : raw; } catch (_) { return null; } };
+  const text = value => typeof value === "string" ? value : value == null ? "" : JSON.stringify(value, null, 2);
+  const stamp = ts => {
+    const d = new Date(ts);
+    return isNaN(d) ? "—" : d.toLocaleTimeString([], { hour12:false });
+  };
+  const fmt = n => n == null ? "n/a" : Number(n).toLocaleString("en-US");
+  const number = n => n !== "" && n != null && Number.isFinite(Number(n)) && Number(n) >= 0 ? Number(n) : null;
+  const pretty = raw => JSON.stringify(parse(raw) || raw, null, 2);
+  const serverRun = "__ASTACK_RUN__";
+  const pinned = serverRun !== "latest";
+  let runId = null, selectedRun = pinned ? serverRun : "", state = {}, meta = {};
+  let offset = 0, polling = false, generation = 0, paused = false, follow = true;
+  let selectedAgent = "", searchText = "", selectedKind = "", soundOn = false;
+  let events = [], activity = [], interactions = [], people = {}, reportedModels = {}, usage = {};
+  let firstAt = null, lastAt = null, sceneMessage = "", atlas = parse($("character-atlas").textContent);
+  let dirty = true, connected = false, office = null;
+  let txSeq = 0, txEnabled = null, txSources = [], txErrors = [], order = 0, pendingItems = [], rendered = [], consoleTotal = 0;
+  let expanded = false, consoleStale = true;
+  const calls = new Map(), agentCounts = {}, agentLiveAt = {}, lastBubbleAt = {};
+  const openDetails = new Set();
+  const terminal = () => ["awaiting_merge","dropped","blocked","done","closed"].includes(state.phase);
+  function person(id) {
+    if (!people[id]) people[id] = { status:"unreported", last:"", thought:null, command:null, updated:"", inferred:false };
+    return people[id];
   }
-  function fmt(n) {
-    if (n === undefined || n === null || n === "") return "n/a";
-    return Number(n).toLocaleString("en-US");
+  function modelOf(id) {
+    const configured = (meta.models || {})[id] || {};
+    const observed = reportedModels[id] || {};
+    let model = observed.model || configured.model || (id === "jev" ? (meta.jev || {}).model : "");
+    if (model === "inherit") {
+      const parent = (reportedModels.resolver || {}).model || ((meta.models || {}).resolver || {}).model;
+      model = parent && parent !== "inherit" ? parent + " (inherited)" : "Inherited · not reported";
+    }
+    return { model:model || "Model not reported", effort:observed.variant || observed.effort || configured.variant || "",
+      source:observed.model ? "Reported on entry" : "Project configuration" };
   }
-  function tryParse(s) {
-    try { return { ok: true, value: JSON.parse(s) }; }
-    catch (e) { return { ok: false }; }
+  let harnessSignature = "";
+  function renderHarness() {
+    const harness = meta.harness || {};
+    const name = harness.name || "Harness not reported";
+    const version = harness.version ? "astack " + harness.version : "";
+    const label = name + (version ? " · " + version : "");
+    if (JSON.stringify(harness) === harnessSignature) return;
+    harnessSignature = JSON.stringify(harness);
+    $("harness").textContent = label;
+    $("harness").title = "Host: " + name + (version ? " · " + version : "") + " · " + (harness.source || "Project configuration");
+    office?.setHarness(label);
   }
-  function pretty(detail) {
-    var p = tryParse(detail);
-    if (p.ok) return JSON.stringify(p.value, null, 2);
-    return String(detail);
+  function badge(value) {
+    return el("span", value, "verdict " + String(value).toLowerCase());
   }
-  function banner(msg) {
-    var b = document.getElementById("banner");
-    if (!msg) { b.style.display = "none"; b.textContent = ""; return; }
-    b.style.display = "block"; b.textContent = msg;
+  function rawDetails(ev, key) {
+    const det = el("details"); det.dataset.key = key; det.open = openDetails.has(key);
+    det.appendChild(el("summary", "Event details · " + ev.type));
+    det.appendChild(el("pre", pretty(ev.detail)));
+    const copy = el("button", "Copy details", "raw-copy"); copy.type = "button";
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(pretty(ev.detail)); copy.textContent = "Copied"; }
+      catch (_) { copy.textContent = "Select the text to copy"; }
+    };
+    det.appendChild(copy);
+    det.addEventListener("toggle", () => { if (det.isConnected) { if (det.open) openDetails.add(key); else openDetails.delete(key); } });
+    return det;
   }
-
-  function summarize(ev) {
-    var p = tryParse(ev.detail || "");
-    var d = p.ok ? p.value : null;
+  function track(entry) {
+    entry.order = ++order;
+    entry.at = Date.parse(entry.ts) || 0;
+    activity.push(entry); pendingItems.push(entry);
+    agentCounts[entry.agent] = (agentCounts[entry.agent] || 0) + 1;
+    ensureTab(entry.agent);
+    return entry;
+  }
+  function addActivity(agent, kind, body, ev, source, suffix) {
+    if (!text(body).trim()) return null;
+    const entry = track({ agent:agent || "run", kind, body:text(body), ts:ev.ts, ev,
+      source:source || "Agent note · self-reported", key:"activity-" + ev._offset + "-" + (suffix || activity.length) });
+    if (ROLES.includes(agent) && kind !== "status") {
+      const p = person(agent);
+      p.last = entry.body; p.updated = ev.ts;
+      if (kind === "thought") p.thought = entry;
+      if (kind === "command") p.command = entry;
+    }
+    return entry;
+  }
+  // Transcript entries come from the harness's own session record.
+  function addTranscript(e, replay) {
+    if (!e || !e.kind) return null;
+    const agent = e.agent || "run";
+    if (e.kind === "result") {
+      const call = calls.get(e.callId);
+      if (call) {
+        call.result = e; call.hay = null;
+        patchEntry(call);
+        if (e.error) feedOffice(call);
+        return call;
+      }
+      return track({ agent, kind:"output", body:e.output || "", ts:e.ts, tx:e, result:e, key:"tx-" + e.id,
+        source:harnessName(e.harness) + " · output without a recorded call" });
+    }
+    const body = e.kind === "tool" ? e.tool + " " + (e.title || "") : (e.text || "");
+    const entry = track({ agent, kind:e.kind, body, ts:e.ts, tx:e, key:"tx-" + e.id,
+      source:harnessName(e.harness) + " · session " + e.session + (e.subagent ? " · subagent " + e.subagent.slice(0, 8) : "") });
+    if (e.kind === "tool") calls.set(e.callId, entry);
+    if (ROLES.includes(agent)) {
+      const p = person(agent);
+      if (["unreported","delegated"].includes(p.status)) { p.status = "active"; p.inferred = false; p.observed = true; }
+      p.updated = e.ts;
+      if (e.kind === "tool") p.last = e.tool + "(" + (e.title || "") + ")";
+      else if (e.kind === "text" || (e.kind === "thinking" && !e.hidden)) p.last = e.text;
+      if (e.kind === "thinking" && !e.hidden) p.thought = entry;
+      if (e.kind === "tool") p.command = entry;
+    }
+    if (!replay) {
+      agentLiveAt[agent] = Date.now();
+      if (e.kind === "text" && ROLES.includes(agent) && Date.now() - (lastBubbleAt[agent] || 0) > 6000) {
+        lastBubbleAt[agent] = Date.now();
+        showBubble(agent, "Says", e.text);
+      }
+    }
+    return entry;
+  }
+  function feedOffice(a) {
+    if (!office || !ROLES.includes(a.agent)) return;
+    if (a.result && a.result.error) {
+      office.think(a.agent, (a.tx.tool || "Command") + " failed · " + ((a.result.output || "").split("\n").find(l => l.trim()) || "error"), "error");
+      return;
+    }
+    const kinds = { thinking:"thought", tool:"command", text:"text", prompt:"delegated", status:"activity", output:"result" };
+    let body = a.body;
+    if (a.kind === "thinking" && a.tx.hidden) body = "Thinking…";
+    if (a.kind === "tool") body = a.tx.tool + " · " + (a.tx.title || "");
+    if (a.kind === "prompt") body = a.tx.role === "delegation" ? "Reading the delegation prompt" : "New prompt received";
+    office.think(a.agent, body, kinds[a.kind] || a.kind);
+  }
+  function ingestTranscript(tx) {
+    const replay = txSeq === 0;
+    txEnabled = tx.enabled !== false; txSources = tx.sources || []; txErrors = tx.errors || [];
+    const latest = {};
+    // Desks show the last real action (tool, thinking, message), not session bookkeeping.
+    (tx.entries || []).forEach(e => {
+      const a = addTranscript(e, replay);
+      if (a && ["tool","thinking","text"].includes(e.kind)) latest[a.agent] = a;
+    });
+    if (typeof tx.nextSeq === "number") txSeq = tx.nextSeq;
+    Object.values(latest).forEach(feedOffice);
+    // A subagent whose session ended without an agent-end event.
+    const byAgent = {};
+    txSources.forEach(src => { (byAgent[src.agent] = byAgent[src.agent] || []).push(src); });
+    Object.entries(byAgent).forEach(([id, list]) => {
+      const p = people[id];
+      if (p && p.observed && p.status === "active" && list.every(src => src.finished)) p.status = "ended";
+    });
+    if ((tx.entries || []).length) dirty = true;
+    renderSource();
+  }
+  function addInteraction(from, to, title, body, ev, verdict) {
+    interactions.push({ from, to, title, body:text(body), ev, ts:ev.ts, verdict,
+      key:"interaction-" + ev._offset });
+    sceneMessage = label(from) + (to ? " → " + label(to) : "") + " · " + title;
+  }
+  function targetOf(d) {
+    // Old handoffs omit a recipient: phase is only a hint, not proof of execution.
+    const explicit = d && (d.to || d.targetAgent || d.recipient || d.agent);
+    if (ROLES.includes(explicit)) return explicit;
+    return ({ proposal:"designer", implement:"developer", "qa-review":"design-qa" })[(d || {}).phase] || null;
+  }
+  function ingest(ev, replay) {
+    const d = parse(ev.detail), obj = d && typeof d === "object" && !Array.isArray(d) ? d : {};
+    const at = Date.parse(ev.ts);
+    if (Number.isFinite(at)) { firstAt = firstAt == null ? at : Math.min(firstAt, at); lastAt = lastAt == null ? at : Math.max(lastAt, at); }
     switch (ev.type) {
-      case "init": return "run created";
-      case "transition": return ev.detail || "";
-      case "agent-start":
-        return (d && d.agent ? d.agent : "agent") + " started" +
-          (d && d.model ? " · " + d.model : "");
-      case "agent-end":
-        return (d && d.agent ? d.agent : "agent") + " ended" +
-          (d && d.status ? ": " + d.status : "");
+      case "agent-start": {
+        const id = obj.agent;
+        if (!id) break;
+        const p = person(id); p.status = "active"; p.inferred = false; p.updated = ev.ts;
+        reportedModels[id] = { ...reportedModels[id], ...obj };
+        addActivity(id, "status", "started" + (obj.model ? " · " + obj.model : "") + (obj.variant ? " · " + obj.variant : "") +
+          (obj.doing ? " — " + obj.doing : ""), ev, "Run event · agent-start");
+        addInteraction(id, null, "Started working", obj.doing || "Agent entry reported.", ev);
+        office?.think(id, obj.doing || "Starting the assigned task…", "start");
+        if (!replay) showBubble(id, "Status", obj.doing || "Started working on the assigned task.");
+        break;
+      }
+      case "agent-end": {
+        const id = obj.agent;
+        if (!id) break;
+        person(id).status = obj.status || "done"; person(id).inferred = false;
+        addActivity(id, "status", "finished · " + (obj.status || "done") + (obj.summary ? " — " + obj.summary : ""), ev, "Run event · agent-end");
+        addInteraction(id, id === "resolver" ? null : "resolver", "Finished · " + (obj.status || "done"), obj.summary || "", ev);
+        office?.think(id, obj.summary || "Finished · " + (obj.status || "done"),
+          obj.status === "blocked" ? "error" : "result");
+        break;
+      }
+      case "note": {
+        if (obj.agent && (obj.doing || obj.text || obj.summary || obj.command || obj.result)) {
+          const id = obj.agent, p = person(id);
+          if (obj.model) reportedModels[id] = { ...reportedModels[id], model:obj.model, variant:obj.variant || obj.effort };
+          if (["unreported","delegated"].includes(p.status)) { p.status = "active"; p.inferred = true; }
+          const kind = ({ thought:"thought", thinking:"thought", decision:"thought", command:"command",
+            result:"result", output:"result", error:"error", activity:"activity" })[obj.kind] || "activity";
+          const noteBody = obj.doing || obj.text || obj.summary || obj.command || obj.result;
+          addActivity(id, kind, noteBody, ev);
+          office?.think(id, noteBody, kind);
+          if (!replay) showBubble(id, kind === "thought" ? "Thinking summary" : kind, noteBody);
+          if (obj.result && kind !== "result") addActivity(id, "result", obj.result, ev);
+          if (obj.to) addInteraction(id, obj.to, "Message", obj.doing || obj.text, ev);
+        } else addActivity("run", "activity", ev.detail, ev, "Run note · no agent attributed");
+        break;
+      }
       case "handoff": {
-        var phase = d && d.phase ? " · phase " + d.phase : "";
-        var change = d && d.changeId ? " · " + d.changeId : "";
-        return "handoff" + change + phase + " (expand for full contract)";
+        const to = targetOf(obj);
+        if (to) {
+          person(to).status = "delegated"; person(to).inferred = true;
+          person(to).last = ((obj.artifacts || {}).acceptanceCriteria || []).join("\n") || "Delegated · awaiting agent telemetry";
+        }
+        const goals = ((obj.artifacts || {}).acceptanceCriteria || []).map(text).join("\n");
+        const plan = ((obj.verification || {}).plan || []).map(text).join("\n");
+        addInteraction("resolver", to, "Delegated · " + (obj.phase || "work"),
+          goals || plan || "Handoff recorded. Recipient not explicitly reported.", ev);
+        if (to) addActivity(to, "status", "handoff from Resolver · " + (obj.phase || "work"), ev, "Run event · handoff", "handoff");
+        if (to) office?.think(to, "Reading the handoff · " + (obj.phase || "work"), "delegated");
+        if (!replay && to) queueVisit("resolver", to, "Handoff · " + (obj.phase || "work"),
+          goals || plan || "Delegating the next task.",
+          "Delegated · awaiting activity notes.", undefined, { expect:"Reading the handoff…" });
+        break;
       }
-      case "report":
-        return "report " + (d && d.role ? d.role + ": " + (d.status || "") : "(expand)") +
-          (d && d.verdict ? " · verdict " + d.verdict : "");
+      case "report": {
+        const id = obj.agent || obj.role || "unknown";
+        const verdict = obj.verdict || (obj.status === "blocked" ? "BLOCKING" : obj.status === "done" ? "done" : obj.status || "UNVERIFIED");
+        const p = person(id);
+        p.status = verdict === "BLOCKING" || obj.status === "blocked" ? "blocked" : obj.status || "partial";
+        p.inferred = true; p.updated = ev.ts;
+        p.last = obj.results || obj.nextAction || "Report received";
+        addInteraction(id, "resolver", "Report received", obj.results || obj.nextAction || "No report summary supplied.", ev, verdict);
+        addActivity(id, "status", "report to Resolver · " + verdict, ev, "Run event · report", "report");
+        office?.think(id, obj.results || obj.nextAction || "Report received", verdict === "BLOCKING" ? "error" : "result");
+        office?.think("resolver", "Report received · " + verdict, "thought");
+        if (!replay && ROLES.includes(id) && id !== "resolver")
+          queueVisit(id, "resolver", "Report · " + verdict, obj.results || obj.nextAction || "Report submitted.",
+            "Report received · " + verdict + (obj.nextAction ? ". Next: " + obj.nextAction : ""));
+        if (obj.results) addActivity(id, verdict === "BLOCKING" ? "error" : "result", obj.results, ev, "Report summary · not live telemetry");
+        if (Array.isArray(obj.commands)) obj.commands.forEach((command, i) => {
+          if (!command || typeof command !== "object") return;
+          if (command.command) addActivity(id, "command", command.command, ev, "Report evidence · timestamp is report receipt", "cmd-" + i);
+          if (command.result) addActivity(id, "result", command.result +
+            (command.exitCode != null ? "\nExit code: " + command.exitCode : ""), ev, "Report evidence · timestamp is report receipt", "out-" + i);
+        });
+        if (Array.isArray(obj.blockers) && obj.blockers.length)
+          addActivity(id, "error", obj.blockers.map(text).join("\n"), ev, "Reported blockers");
+        if (obj.nextAction) addInteractionBody("Next: " + obj.nextAction);
+        break;
+      }
       case "jev-request": {
-        var n = d && d.questions ? Object.keys(d.questions).length : "?";
-        return "Jev request · model " + ((d && d.model) || "?") + " · " + n + " questions (expand for full body)";
+        person("jev").status = "active"; person("jev").inferred = false;
+        const from = obj.agent || "unattributed";
+        const questions = obj.questions || {};
+        const summary = Object.keys(questions).map(k => k + ": " + text(questions[k].instructions || questions[k])).join("\n");
+        addInteraction(from, "jev", "Judgement requested", summary || "No question summary supplied.", ev);
+        office?.think("jev", summary || "Called over for judgement.", "start");
+        if (!replay && ROLES.includes(from))
+          office?.call(from, "jev", "QA request", summary || "Requesting judgement.",
+            "Judgement requested · evaluating submitted evidence.", "Evaluating submitted evidence…");
+        addActivity("jev", "activity", summary || "Evaluating submitted questions.", ev, "Jev request");
+        break;
       }
-      case "jev-response": return "Jev response (expand for full verdicts)";
-      case "usage": {
-        var a = (d && d.agent) || "agent";
-        var t = d && (d.total !== undefined ? d.total : (Number(d.input || 0) + Number(d.output || 0)));
-        return "usage " + a + ": " + fmt(t) + " total" +
-          " (in " + fmt(d && d.input) + " / out " + fmt(d && d.output) + ")";
+      case "jev-response":
+        person("jev").status = "done";
+        addInteraction("jev", null, "Judgement returned", pretty(ev.detail), ev);
+        addActivity("jev", "result", pretty(ev.detail), ev, "Jev response");
+        office?.think("jev", "Judgement returned.", "result");
+        if (!replay) showBubble("jev", "Judgement", pretty(ev.detail), true);
+        break;
+      case "usage":
+        if (obj.agent) {
+          const input = number(obj.input), output = number(obj.output), explicit = number(obj.total);
+          usage[obj.agent] = { input, output, total:explicit != null ? explicit : input != null && output != null ? input + output : null };
+        }
+        break;
+      case "transition":
+        addInteraction("run", null, "Phase changed", ev.detail, ev);
+        break;
+      case "verify": case "evidence": case "code":
+        addActivity(obj.agent || "run", "result", obj.result || obj.doing || ev.detail, ev, "Recorded " + ev.type + (obj.agent ? "" : " · no agent attributed"));
+        break;
+      default:
+        // Locks, budgets and bookkeeping stay available in the run, not the main feed.
+        if (ev.parseError) addActivity("run", "error", ev.raw, ev, "Malformed event");
+    }
+    if (!replay && ["agent-start","handoff","report","jev-response"].includes(ev.type)) beep(ev.type === "report" && obj.verdict === "BLOCKING");
+    dirty = true;
+  }
+  function addInteractionBody(body) {
+    if (interactions.length) interactions[interactions.length - 1].body += "\n\n" + body;
+  }
+  function statusText(id) {
+    const p = person(id);
+    if (terminal() && ["active","delegated"].includes(p.status)) return "No end reported";
+    return ({ unreported:"No telemetry", active:p.inferred ? "Activity reported" : "Working",
+      delegated:"Delegated · awaiting notes", done:"Done", partial:"Partial", blocked:"Blocked", ended:"Session ended" })[p.status] || p.status;
+  }
+  function visibleStatus(id) { return terminal() && ["active","delegated"].includes(person(id).status) ? "partial" : person(id).status; }
+  function renderTeam() {
+    $("interaction").textContent = sceneMessage || "Click a teammate to follow them; click the floor or a desk to move.";
+    office?.select(selectedAgent);
+  }
+  function preserveScroll(box, render, autoFollow) {
+    const top = box.scrollTop;
+    render();
+    box.scrollTop = autoFollow ? box.scrollHeight : top;
+  }
+  const byTime = (a, b) => (a.at - b.at) || (a.order - b.order);
+  const haystack = a => a.hay || (a.hay = (label(a.agent) + " " + a.agent + " " + a.body + " " +
+    (a.tx && a.tx.title || "") + " " + (a.result && a.result.output || "")).toLowerCase());
+  function matches(a) {
+    return (!selectedAgent || a.agent === selectedAgent) &&
+      (!selectedKind || (KIND_FILTERS[selectedKind] || (() => true))(a)) &&
+      (!searchText || haystack(a).includes(searchText));
+  }
+  function moreButton(target, count, unit) {
+    const more = el("button", "… +" + count + " " + unit, "t-more"); more.type = "button";
+    more.onclick = () => {
+      const open = !target.classList.contains("open");
+      target.classList.toggle("open", open);
+      more.textContent = open ? "collapse" : "… +" + count + " " + unit;
+    };
+    return more;
+  }
+  function clampBlock(value, cls, lines) {
+    const wrap = el("div", null, "t-block"), pre = el("pre", value, cls + " t-clamp");
+    pre.style.setProperty("--lines", lines);
+    wrap.appendChild(pre);
+    const count = value.split("\n").length;
+    if (count > lines || value.length > lines * 110) wrap.appendChild(moreButton(wrap, Math.max(1, count - lines), count > lines ? "lines" : "more"));
+    return wrap;
+  }
+  function diffBlock(diff) {
+    const pre = el("pre", null, "t-diff t-clamp"); pre.style.setProperty("--lines", 12);
+    diff.split("\n").forEach((line, i) => {
+      if (i) pre.appendChild(document.createTextNode("\n"));
+      pre.appendChild(el("span", line, line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : ""));
+    });
+    const wrap = el("div", null, "t-block"); wrap.appendChild(pre);
+    const count = diff.split("\n").length;
+    if (count > 12) wrap.appendChild(moreButton(wrap, count - 12, "lines"));
+    return wrap;
+  }
+  function outputBlock(a) {
+    const r = a.result, box = el("div", null, "t-out" + (r && r.error ? " t-err" : ""));
+    box.appendChild(el("span", "⎿", "t-elbow"));
+    const body = el("div", null, "t-out-body"); box.appendChild(body);
+    if (!r) { body.appendChild(el("span", "running…", "t-running")); return box; }
+    const tool = (a.tx && a.tx.tool || "").toLowerCase(), out = r.output || "";
+    const lines = out ? out.split("\n") : [];
+    const full = out + (r.truncated ? "\n… clipped by watch · " + r.lines + " lines in the transcript" : "");
+    if (!out.trim()) { body.appendChild(el("span", r.error ? "Error · no output" : "(no output)", "t-sum")); return box; }
+    if (tool === "read" && !r.error) {
+      box.classList.add("t-collapsed");
+      body.appendChild(el("span", "Read " + r.lines + " lines ", "t-sum"));
+      const pre = el("pre", full, "t-pre t-clamp"); pre.style.setProperty("--lines", 40);
+      const show = el("button", "show", "t-more"); show.type = "button";
+      show.onclick = () => { const open = !box.classList.contains("open"); box.classList.toggle("open", open); show.textContent = open ? "hide" : "show"; };
+      body.appendChild(show); body.appendChild(pre);
+      return box;
+    }
+    const pre = el("pre", full, "t-pre t-clamp"); pre.style.setProperty("--lines", OUTPUT_PREVIEW);
+    body.appendChild(pre);
+    if (lines.length > OUTPUT_PREVIEW || r.truncated) body.appendChild(moreButton(body, Math.max(1, r.lines - OUTPUT_PREVIEW), "lines"));
+    return box;
+  }
+  function entryNode(a) {
+    const item = el("article", null, "activity t-" + a.kind + (a.result && a.result.error ? " t-failed" : ""));
+    item.dataset.agent = a.agent; item.dataset.kind = a.kind; item.dataset.key = a.key;
+    item.style.setProperty("--agent", agentColor(a.agent));
+    const line = el("div", null, "t-line");
+    line.appendChild(el("span", label(a.agent), "t-who agent-label"));
+    line.appendChild(el("span", GLYPHS[a.kind] || "•", "t-glyph"));
+    const main = el("div", null, "t-main"); line.appendChild(main);
+    const t = el("time", stamp(a.ts)); if (a.ts) t.dateTime = a.ts; t.title = a.source || ""; line.appendChild(t);
+    item.appendChild(line);
+    const body = el("div", null, "t-body");
+    const tx = a.tx || {};
+    switch (a.kind) {
+      case "tool":
+        main.appendChild(el("b", tx.tool));
+        if (tx.title) { main.appendChild(document.createTextNode("(")); main.appendChild(el("span", tx.title, "t-arg")); main.appendChild(document.createTextNode(")")); }
+        if (tx.diff) body.appendChild(diffBlock(tx.diff));
+        body.appendChild(outputBlock(a));
+        break;
+      case "thinking":
+        main.appendChild(el("span", "Thinking", "t-label"));
+        if (tx.hidden) main.appendChild(el("span", " · content not stored by " + harnessName(tx.harness), "t-dim"));
+        else body.appendChild(clampBlock(a.body, "t-think", 6));
+        break;
+      case "text":
+        main.textContent = a.body;
+        break;
+      case "prompt":
+        main.appendChild(el("span", tx.role === "delegation" ? "Delegation prompt" : "Prompt", "t-label"));
+        body.appendChild(clampBlock(a.body, "t-prompt-text", 4));
+        break;
+      case "status":
+        main.textContent = a.body;
+        break;
+      case "output":
+        main.appendChild(el("span", (tx.tool || "Tool") + " output", "t-label"));
+        body.appendChild(outputBlock(a));
+        break;
+      case "thought":
+        main.appendChild(el("span", "Thinking summary · reported", "t-label"));
+        body.appendChild(el("p", a.body, "entry-body"));
+        break;
+      case "command":
+        main.appendChild(el("span", "Command · reported", "t-label"));
+        body.appendChild(el("pre", a.body, "entry-body command-text"));
+        break;
+      default:
+        main.appendChild(el("span", a.kind === "result" ? "Result" : a.kind === "error" ? "Error" : "Activity", "t-label"));
+        body.appendChild(el("p", a.body, "entry-body"));
+    }
+    if (a.ev) {
+      if (a.kind !== "status") body.appendChild(el("div", a.source, "entry-source"));
+      body.appendChild(rawDetails(a.ev, a.key));
+    } else if (a.kind === "tool" && tx.input && tx.input !== "{}") {
+      const det = el("details"); det.dataset.key = a.key; det.open = openDetails.has(a.key);
+      det.className = "t-input"; det.title = a.source;
+      det.appendChild(el("summary", "input"));
+      det.appendChild(el("pre", tx.input));
+      det.addEventListener("toggle", () => { if (det.isConnected) { if (det.open) openDetails.add(a.key); else openDetails.delete(a.key); } });
+      body.appendChild(det);
+    }
+    if (body.childNodes.length) item.appendChild(body);
+    a.node = item;
+    return item;
+  }
+  function patchEntry(a) {
+    if (a.node && a.node.isConnected) {
+      const box = $("console"), stick = follow;
+      a.node.classList.toggle("t-failed", !!(a.result && a.result.error));
+      const old = a.node.querySelector(".t-out");
+      if (old) old.replaceWith(outputBlock(a));
+      if (stick) box.scrollTop = box.scrollHeight;
+    } else if (!rendered.includes(a) && matches(a)) pendingItems.push(a);
+  }
+  function updateCount() {
+    const hidden = consoleTotal - rendered.length;
+    $("event-count").textContent = consoleTotal + " matching entries" + (hidden > 0 ? " · latest " + rendered.length + " shown" : "") + " · " +
+      events.length + " run events" + (txSources.length ? " · " + txSources.length + " harness sessions" : "") + " · " + (follow ? "Following newest" : "Scroll held");
+  }
+  function renderConsole() {
+    const shown = activity.filter(matches).sort(byTime);
+    const visible = shown.slice(-CONSOLE_LIMIT);
+    $("console").classList.toggle("single", !!selectedAgent);
+    preserveScroll($("console"), () => {
+      const frag = document.createDocumentFragment();
+      if (shown.length > visible.length) frag.appendChild(el("div", (shown.length - visible.length) +
+        " earlier entries not shown · pick an agent, a type or a search to narrow", "t-hidden"));
+      visible.forEach(a => frag.appendChild(entryNode(a)));
+      if (!shown.length) {
+        const empty = el("div", null, "empty");
+        empty.appendChild(el("strong", selectedAgent ? "No matching activity from " + label(selectedAgent) : "No matching activity yet"));
+        empty.appendChild(el("span", selectedAgent && person(selectedAgent).status !== "unreported" ?
+          "This agent has lifecycle or handoff events but nothing matching here. We won't invent it." :
+          txEnabled ? "Commands, output and thinking appear here as soon as the harness records them for this run." :
+          "Commands, results and decision summaries appear here when agents emit notes or submit report evidence."));
+        frag.appendChild(empty);
       }
-      case "verify": case "code": case "evidence": case "external":
-      case "lock": case "budget": case "close": case "note":
-        return (ev.detail || "").slice(0, 160);
-      default: return (ev.detail || "").slice(0, 160);
-    }
+      $("console").replaceChildren(frag);
+    }, follow);
+    rendered = visible; consoleTotal = shown.length; pendingItems = []; consoleStale = false;
+    updateCount();
   }
-
-  function renderPipeline(phase) {
-    var box = document.getElementById("pipeline");
-    box.textContent = "";
-    var idx = PHASES.indexOf(phase);
-    PHASES.forEach(function (p, i) {
-      var s = el("span", p);
-      if (p === phase) s.className = "current";
-      else if (idx >= 0 && i < idx) s.className = "done";
-      box.appendChild(s);
+  // New entries are inserted in place instead of rebuilding the stream, so
+  // expanded output, open details and the reading position survive polling.
+  function flushActivity() {
+    const items = pendingItems; pendingItems = [];
+    const fresh = items.filter(a => matches(a) && !rendered.includes(a));
+    if (!fresh.length) { updateCount(); return; }
+    if (!rendered.length || fresh.length > 150) { renderConsole(); return; }
+    const box = $("console"), top = box.scrollTop;
+    box.querySelector(".empty")?.remove();
+    fresh.sort(byTime).forEach(a => {
+      let i = rendered.length;
+      while (i > 0 && byTime(rendered[i - 1], a) > 0) i--;
+      const n = entryNode(a);
+      if (i === rendered.length) box.appendChild(n); else box.insertBefore(n, rendered[i].node);
+      rendered.splice(i, 0, a);
     });
-    if (phase === "blocked" || phase === "dropped") {
-      var b = el("span", phase); b.className = "current"; box.appendChild(b);
-    }
+    consoleTotal += fresh.length;
+    while (rendered.length > CONSOLE_LIMIT) rendered.shift().node?.remove();
+    box.scrollTop = follow ? box.scrollHeight : top;
+    updateCount();
   }
-
-  function renderActive() {
-    var box = document.getElementById("active");
-    box.textContent = "";
-    var lastStart = null;
-    allEvents.forEach(function (ev) {
-      if (ev.type === "agent-start") {
-        var d = tryParse(ev.detail || "");
-        lastStart = { agent: (d.ok && d.value.agent) || "agent",
-          model: (d.ok && d.value.model) || "", ts: ev.ts };
-      } else if (ev.type === "agent-end" && lastStart) {
-        var e = tryParse(ev.detail || "");
-        var endAgent = (e.ok && e.value.agent) || null;
-        if (!endAgent || endAgent === lastStart.agent) lastStart = null;
+  function renderSource() {
+    const note = $("transcript-source");
+    note.classList.toggle("live", !!(txEnabled && txSources.length));
+    if (txEnabled === false) { note.textContent = "Harness transcripts are off for this viewer (--no-transcripts). Showing agent-reported notes only."; return; }
+    if (txEnabled === null) { note.textContent = "Showing agent-reported notes and run events."; return; }
+    if (!txSources.length) {
+      note.textContent = "No Claude Code or OpenCode session for this run found yet. Showing agent-reported notes until one appears." +
+        (txErrors.length ? " · " + txErrors[0] : "");
+      return;
+    }
+    const harnesses = [...new Set(txSources.map(src => harnessName(src.harness)))].join(" + ");
+    const agents = [...new Set(txSources.map(src => label(src.agent)))].join(", ");
+    note.textContent = "Live from " + harnesses + " · " + txSources.length + " session" + (txSources.length === 1 ? "" : "s") +
+      " (" + agents + ") · read-only, secrets redacted.";
+  }
+  function ensureTab(id) {
+    if (!id || $("filter-" + id)) return;
+    const b = el("button", null, "agent-tab"); b.id = "filter-" + id; b.type = "button";
+    b.style.setProperty("--agent", agentColor(id));
+    b.appendChild(el("span", "", "tab-dot")); b.appendChild(el("span", label(id), "tab-name")); b.appendChild(el("span", "", "tab-count"));
+    b.onclick = () => { selectedAgent = id; render(); };
+    $("agent-filter").appendChild(b);
+  }
+  function renderTabs() {
+    const now = Date.now();
+    $("agent-filter").querySelectorAll(".agent-tab").forEach(b => {
+      const id = b.id.slice("filter-".length);
+      if (id === "all") return;
+      const count = agentCounts[id] || 0;
+      b.querySelector(".tab-count").textContent = count ? String(count) : "";
+      b.classList.toggle("quiet", !count);
+      b.classList.toggle("live", !paused && now - (agentLiveAt[id] || 0) < 20000);
+      b.setAttribute("aria-pressed", String(id === selectedAgent));
+      if (ROLES.includes(id)) {
+        const m = modelOf(id);
+        b.title = label(id) + " · " + statusText(id) + " · " + m.model + " · effort " + (m.effort || "not reported");
       }
     });
-    if (!lastStart) { box.appendChild(el("p", "idle — no agent currently emitting", "note")); return; }
-    box.appendChild(el("div", lastStart.agent + (lastStart.model ? " · " + lastStart.model : "")));
-    box.appendChild(el("div", "since " + (lastStart.ts || "?"), "note"));
+    $("filter-all").setAttribute("aria-pressed", String(!selectedAgent));
   }
-
-  function renderModels(models) {
-    var tb = document.querySelector("#models tbody");
-    tb.textContent = "";
-    Object.keys(models || {}).forEach(function (role) {
-      var m = models[role] || {};
-      var tr = document.createElement("tr");
-      tr.appendChild(el("td", role));
-      tr.appendChild(el("td", m.model || "harness default"));
-      tr.appendChild(el("td", m.variant || "—"));
-      tb.appendChild(tr);
-    });
+  function renderLog() {
+    preserveScroll($("log"), () => {
+      const frag = document.createDocumentFragment();
+      const shown = interactions.filter(e => !selectedAgent || e.from === selectedAgent || e.to === selectedAgent);
+      shown.slice(-250).forEach(e => {
+        const item = el("article", null, "interaction-entry");
+        const head = el("div", null, "entry-head");
+        head.appendChild(el("span", label(e.from) + (e.to ? " → " + label(e.to) : ""), "route"));
+        if (e.verdict) head.appendChild(badge(e.verdict));
+        const t = el("time", stamp(e.ts)); if (e.ts) t.dateTime = e.ts; head.appendChild(t);
+        item.appendChild(head);
+        item.appendChild(el("strong", e.title, "entry-body"));
+        if (e.body) item.appendChild(el("p", e.body, "entry-body"));
+        item.appendChild(rawDetails(e.ev, e.key));
+        frag.appendChild(item);
+      });
+      if (!shown.length) frag.appendChild(el("div", "No handoffs or reports recorded for this selection yet.", "empty"));
+      $("log").replaceChildren(frag);
+    }, follow);
   }
-
-  function renderTokens() {
-    var byAgent = {};
-    allEvents.forEach(function (ev) {
-      if (ev.type !== "usage") return;
-      var p = tryParse(ev.detail || "");
-      if (!p.ok || !p.value.agent) return;
-      var u = p.value;
-      var total = u.total !== undefined ? Number(u.total) :
-        (Number(u.input || 0) + Number(u.output || 0));
-      byAgent[u.agent] = { input: Number(u.input || 0), output: Number(u.output || 0),
-        total: total, model: u.model || "" };
-    });
-    var names = Object.keys(byAgent);
-    var grand = names.reduce(function (s, n) { return s + (byAgent[n].total || 0); }, 0);
-    document.getElementById("tokens-total").textContent =
-      names.length ? "tokens total ~" + grand.toLocaleString("en-US") + " (estimated)" : "tokens total —";
-    var bar = document.getElementById("bar");
-    bar.textContent = "";
-    names.forEach(function (n, i) {
-      var seg = document.createElement("div");
-      seg.title = n + ": " + byAgent[n].total;
-      seg.style.width = grand ? (100 * byAgent[n].total / grand) + "%" : "0%";
-      seg.style.background = COLORS[i % COLORS.length];
-      bar.appendChild(seg);
-    });
-    var tb = document.querySelector("#tokens tbody");
-    tb.textContent = "";
-    if (!names.length) {
-      var tr = document.createElement("tr");
-      var td = el("td", "n/a — no agent has reported usage yet");
-      td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return;
-    }
-    names.forEach(function (n) {
-      var u = byAgent[n];
-      var r = document.createElement("tr");
-      r.appendChild(el("td", n + (u.model ? " · " + u.model : "")));
-      r.appendChild(el("td", fmt(u.input), "num"));
-      r.appendChild(el("td", fmt(u.output), "num"));
-      r.appendChild(el("td", fmt(u.total), "num"));
-      tb.appendChild(r);
+  function renderVault() {
+    const models = document.querySelector("#models tbody"), tokens = document.querySelector("#tokens tbody");
+    models.replaceChildren(); tokens.replaceChildren();
+    ROLES.forEach(id => {
+      const m = modelOf(id), tr = el("tr");
+      [label(id), m.model, m.effort || "not reported"].forEach(v => tr.appendChild(el("td", v)));
+      models.appendChild(tr);
+      const u = usage[id] || {}, row = el("tr"); row.appendChild(el("td", label(id)));
+      [u.input, u.output, u.total].forEach(n => row.appendChild(el("td", fmt(n), "num"))); tokens.appendChild(row);
     });
   }
-
-  function renderFeed() {
-    var feed = document.getElementById("feed");
-    feed.textContent = "";
-    if (!allEvents.length) {
-      feed.appendChild(el("p", "Waiting for events…", "note")); return;
-    }
-    var collapsible = { "handoff": 1, "report": 1, "jev-request": 1, "jev-response": 1 };
-    allEvents.forEach(function (ev) {
-      var a = el("article");
-      var meta = el("div", null, "meta");
-      meta.appendChild(el("span", ev.type || "?", "type"));
-      meta.appendChild(el("span", ev.phase || ""));
-      meta.appendChild(el("span", ev.ts || ""));
-      a.appendChild(meta);
-      a.appendChild(el("p", summarize(ev), "summary"));
-      if (collapsible[ev.type] || (ev.detail && ev.detail.length > 220)) {
-        var det = document.createElement("details");
-        var sum = el("summary", "full " + ev.type + " body");
-        det.appendChild(sum);
-        var pre = el("pre", pretty(ev.detail || ""));
-        det.appendChild(pre);
-        var btn = el("button", "Copy JSON");
-        btn.type = "button";
-        btn.onclick = function () {
-          var t = pretty(ev.detail || "");
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(t);
-          }
-        };
-        det.appendChild(btn);
-        a.appendChild(det);
+  function render(rebuildConsole) {
+    renderTeam();
+    if (rebuildConsole === false && !consoleStale) flushActivity(); else renderConsole();
+    renderLog(); renderVault(); renderTabs(); dirty = false;
+  }
+  function updateClock() {
+    if (firstAt == null) { $("clock").textContent = "--:--"; return; }
+    const end = terminal() ? lastAt : Date.now();
+    const seconds = Math.max(0, Math.floor((end - firstAt) / 1000));
+    $("clock").textContent = (seconds >= 3600 ? Math.floor(seconds / 3600) + ":" : "") +
+      String(Math.floor(seconds / 60) % 60).padStart(2,"0") + ":" + String(seconds % 60).padStart(2,"0");
+    $("clock").title = terminal() ? "Time between first and last recorded events" : "Time since first recorded event";
+  }
+  function renderState() {
+    $("change").textContent = state.changeId || "Waiting for a delivery run";
+    $("run").textContent = state.runId || runId || "No run yet";
+    $("phase").textContent = (state.phase || "waiting").replaceAll("_"," ");
+    $("questmap").replaceChildren();
+    const idx = PHASES.indexOf(state.phase);
+    PHASES.forEach((ph, i) => { const n = el("span", null, "phase-node" + (i === idx ? " current" : i < idx ? " done" : "")); n.title = ph; $("questmap").appendChild(n); });
+    updateClock();
+  }
+  function reset(id) {
+    runId = id; offset = 0; state = {}; events = []; activity = []; interactions = [];
+    people = {}; reportedModels = {}; usage = {}; firstAt = lastAt = null; sceneMessage = "";
+    txSeq = 0; txSources = []; txErrors = []; pendingItems = []; rendered = []; consoleTotal = 0; calls.clear(); consoleStale = true;
+    [agentCounts, agentLiveAt, lastBubbleAt].forEach(map => Object.keys(map).forEach(k => delete map[k]));
+    openDetails.clear(); dirty = true; follow = true;
+    office?.reset();
+    $("console").scrollTop = $("log").scrollTop = 0;
+    updateFollow();
+  }
+  async function api(path) {
+    const r = await fetch(path, { cache:"no-store" });
+    if (!r.ok) throw new Error(path + " · HTTP " + r.status);
+    return r.json();
+  }
+  async function poll() {
+    if (paused || polling) return;
+    polling = true;
+    const version = generation;
+    try {
+      const [nextMeta, list] = await Promise.all([api("api/meta"), api("api/runs")]);
+      if (version !== generation || paused) return;
+      const runs = list.runs || [];
+      const signature = JSON.stringify(runs.map(r => r.runId));
+      if ($("runpick").dataset.runs !== signature) {
+        $("runpick").replaceChildren(new Option("Follow latest run",""));
+        runs.forEach(r => $("runpick").appendChild(new Option(r.runId, r.runId)));
+        $("runpick").dataset.runs = signature;
       }
-      feed.appendChild(a);
-    });
-    if (!paused) feed.lastChild.scrollIntoView({ block: "nearest" });
-  }
-
-  function api(path) {
-    return fetch(path, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error(path + " " + r.status);
-      return r.json();
-    });
-  }
-
-  function renderRunPicker(runs) {
-    var sel = document.getElementById("runpick");
-    var ids = runs.map(function (r) { return r.runId; });
-    var changed = ids.length !== knownRunIds.length ||
-      ids.some(function (id, i) { return id !== knownRunIds[i]; });
-    if (!changed) return;
-    knownRunIds = ids;
-    var keep = sel.value;
-    sel.textContent = "";
-    var home = document.createElement("option");
-    home.value = ""; home.textContent = "follow latest";
-    sel.appendChild(home);
-    ids.forEach(function (id) {
-      var o = document.createElement("option");
-      o.value = id; o.textContent = id;
-      sel.appendChild(o);
-    });
-    if (ids.indexOf(keep) >= 0) sel.value = keep;
-    else sel.value = followLatest ? "" : (currentRun || "");
-  }
-
-  function poll() {
-    if (paused) return;
-    Promise.all([api("api/meta"), api("api/runs")]).then(function (parts) {
-      var meta = parts[0], runs = (parts[1] && parts[1].runs) || [];
-      renderRunPicker(runs);
-      var target;
-      if (pinned) target = meta.runId;
-      else if (followLatest || !currentRun) target = runs.length ? runs[0].runId : null;
-      else target = knownRunIds.indexOf(currentRun) >= 0 ? currentRun :
-        (runs.length ? runs[0].runId : null);
+      $("runpick").value = selectedRun;
+      if (JSON.stringify(meta) !== JSON.stringify(nextMeta)) dirty = true;
+      meta = nextMeta;
+      renderHarness();
+      const target = selectedRun || (runs[0] || {}).runId;
       if (!target) {
-        banner("waiting for first run — start a delivery run and this view follows it");
-        document.getElementById("phase").textContent = "…";
-        return null;
+        $("connection").textContent = "Waiting for run";
+        $("banner").style.display = "block"; $("banner").textContent = "Start a delivery run. The workspace will follow it automatically.";
+        if (dirty) render();
+        return;
       }
-      if (target !== currentRun) {
-        currentRun = target; nextOffset = 0; allEvents = [];
-      }
-      return Promise.all([
-        api("api/state?run=" + encodeURIComponent(target)),
-        api("api/events?run=" + encodeURIComponent(target) + "&since=" + nextOffset),
-        meta
-      ]);
-    }).then(function (parts) {
-      if (!parts) return;
-      var state = parts[0], ev = parts[1], meta = parts[2];
-      banner(null);
-      document.getElementById("phase").textContent = state.phase || "?";
-      document.getElementById("change").textContent =
-        (state.changeId ? "change " + state.changeId : "") +
-        (state.issueId ? " · issue " + state.issueId : "");
-      document.getElementById("run").textContent = "run " + (state.runId || currentRun);
-      document.getElementById("jev-model").textContent =
-        "jev " + ((meta && meta.jev && meta.jev.model) || "?");
-      renderPipeline(state.phase);
-      if (meta && meta.models) renderModels(meta.models);
-      (ev.events || []).forEach(function (e) { allEvents.push(e); });
-      nextOffset = ev.nextOffset !== undefined ? ev.nextOffset : nextOffset;
-      renderActive(); renderTokens(); renderFeed();
-    }).catch(function (err) {
-      banner("waiting for run " + (currentRun || "latest") + " — " + err.message);
-    });
+      if (target !== runId) reset(target);
+      const run = encodeURIComponent(target);
+      const [nextState, batch, tx] = await Promise.all([api("api/state?run=" + run),
+        api("api/events?run=" + run + "&since=" + offset),
+        // Older servers have no transcript endpoint; telemetry still works.
+        api("api/transcript?run=" + run + "&since=" + txSeq).catch(() => null)]);
+      if (version !== generation || paused) return;
+      if (JSON.stringify(state) !== JSON.stringify(nextState)) dirty = true;
+      state = nextState;
+      const replay = offset === 0;
+      (batch.events || []).forEach(ev => { events.push(ev); ingest(ev, replay); });
+      offset = batch.nextOffset == null ? offset : batch.nextOffset;
+      if (tx) ingestTranscript(tx); else if (txEnabled !== null) { txEnabled = null; renderSource(); }
+      $("banner").style.display = "none";
+      $("connection").textContent = terminal() ? "● Run " + (state.phase === "awaiting_merge" ? "complete" : state.phase) : "● Live · read-only";
+      connected = true;
+      renderState();
+      if (dirty || consoleStale) render(false); else flushActivity();
+    } catch (err) {
+      connected = false; $("connection").textContent = "Disconnected";
+      $("banner").style.display = "block"; $("banner").textContent = "Waiting for telemetry · " + err.message;
+    } finally { polling = false; }
   }
-
-  document.getElementById("runpick").onchange = function () {
-    followLatest = !this.value;
-    if (this.value) currentRun = null; // re-resolve to latest on next poll
+  function showBubble(id, title, body, reply) {
+    office?.say(id,title,text(body),reply);
+  }
+  function queueVisit(from, to, title, body, reply, preview, options) {
+    office?.visit(from,to,title,text(body),text(reply),preview,options);
+  }
+  function updateFollow() {
+    $("follow").textContent = follow ? "↓ Following" : "↓ Jump to latest";
+    $("follow").setAttribute("aria-pressed", String(follow));
+  }
+  {
+    const all = el("button", null, "agent-tab"); all.id = "filter-all"; all.type = "button";
+    all.appendChild(el("span", "All agents", "tab-name"));
+    all.onclick = () => { selectedAgent = ""; render(); }; $("agent-filter").appendChild(all);
+    ROLES.forEach(ensureTab);
+  }
+  let searchTimer = 0;
+  $("search").oninput = e => {
+    searchText = e.target.value.toLowerCase();
+    clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 90);
   };
-  if (pinned) document.getElementById("runpick").style.display = "none";
-
-  document.getElementById("pause").onclick = function () {
-    paused = !paused;
-    this.textContent = paused ? "Resume" : "Pause";
+  $("expand").onclick = () => {
+    expanded = !expanded;
+    $("console").classList.toggle("expanded", expanded);
+    $("expand").setAttribute("aria-pressed", String(expanded));
+    $("expand").textContent = expanded ? "Collapse output" : "Expand output";
   };
-  poll();
-  setInterval(poll, 1000);
+  $("kind").onchange = e => { selectedKind = e.target.value; renderConsole(); };
+  $("follow").onclick = () => {
+    follow = true; updateFollow();
+    ["console","log"].forEach(id => { $(id).scrollTop = $(id).scrollHeight; });
+    updateCount();
+  };
+  ["console","log"].forEach(id => $(id).addEventListener("scroll", () => {
+    const box = $(id);
+    if (box.scrollTop + box.clientHeight < box.scrollHeight - 36) { follow = false; updateFollow(); }
+  }, { passive:true }));
+  $("runpick").onchange = () => { selectedRun = $("runpick").value; generation++; reset(null); poll(); };
+  if(window.AgentOffice) {
+    office=window.AgentOffice.create({ canvas:$("office-canvas"),scene:$("office-scene"),world:$("office-world"),
+      bubbles:$("office-bubbles"),viewport:$("office-viewport"),atlas,label,
+      getState:id=>({status:visibleStatus(id),text:statusText(id)}),
+      onSelect:id=>{selectedAgent=id;render();},
+      onHint:message=>{$("office-hint").textContent=message;},
+    });
+    // The office fits its column and refits with the window until the viewer zooms by hand.
+    let autoFit=true;
+    const zoomLabel=value=>{$("office-zoom").textContent=Math.round(value*100)+"%";};
+    $("zoom-in").onclick=()=>{autoFit=false;zoomLabel(office.zoom(.1));};
+    $("zoom-out").onclick=()=>{autoFit=false;zoomLabel(office.zoom(-.1));};
+    $("zoom-fit").onclick=()=>{autoFit=true;zoomLabel(office.fit());};
+    $("office-all-home").onclick=()=>office.allHome();
+    $("office-tour").onclick=()=>{if(paused)setPaused(false);office.tour();};
+    zoomLabel(office.fit());
+    if (typeof ResizeObserver==="function") {
+      let fitFrame=0;
+      new ResizeObserver(()=>{ if(!autoFit)return; cancelAnimationFrame(fitFrame);
+        fitFrame=requestAnimationFrame(()=>zoomLabel(office.fit())); }).observe($("office-viewport"));
+    }
+  } else {
+    $("office-hint").textContent="Office renderer unavailable. The console and run telemetry still work.";
+    ["office-tour","zoom-in","zoom-out","zoom-fit","office-all-home"].forEach(id=>{$(id).disabled=true;});
+  }
+  if (pinned) $("runpick").hidden = true;
+  document.addEventListener("click", e => { if ($("vault").open && !$("vault").contains(e.target)) $("vault").open = false; });
+  function setPaused(value) {
+    paused = value; generation++;
+    $("pause").textContent = value ? "Resume view" : "Pause view"; $("pause").setAttribute("aria-pressed", String(value));
+    $("paused-overlay").style.display = value ? "grid" : "none"; renderTeam();
+    office?.pause(value);
+    if (!value) poll();
+  }
+  $("pause").onclick = () => setPaused(!paused);
+  let audio;
+  function beep(error) {
+    if (!soundOn || paused) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      audio.resume(); const o = audio.createOscillator(), g = audio.createGain();
+      o.type = "sine"; o.frequency.value = error ? 220 : 660; o.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(.035,audio.currentTime); g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.15);
+      o.start(); o.stop(audio.currentTime+.16);
+    } catch (_) { /* Audio is optional. */ }
+  }
+  $("sound").onclick = () => {
+    soundOn = !soundOn; $("sound").textContent = soundOn ? "Sound on" : "Sound off";
+    $("sound").setAttribute("aria-pressed", String(soundOn)); if (soundOn) beep(false);
+  };
+  document.addEventListener("keydown", e => {
+    if (["INPUT","SELECT","TEXTAREA","BUTTON","SUMMARY"].includes(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.code === "Space") { e.preventDefault(); setPaused(!paused); }
+    if (e.key.toLowerCase() === "m") $("sound").click();
+  });
+  render(); poll();
+  setInterval(poll,1000); setInterval(() => { updateClock(); renderTabs(); },1000);
 })();
 </script>
 </body>

@@ -1,0 +1,20 @@
+Mini Characters (2.0)
+Created/distributed by Kenney (www.kenney.nl)
+Creation date: 07-11-2026 11:14
+
+License: Creative Commons Zero (CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+You can use this content for personal, educational, and commercial purposes.
+Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement).
+
+Source: https://kenney.nl/assets/mini-characters
+
+The adjacent characters.json contains locally rendered views of the original
+GLB models, not AI-generated substitutes. Source model filenames and animation
+names are recorded in its sources array. Character order matches the watch
+roles: resolver, designer, design-qa, developer, web-qa, mobile-qa, Jev.
+
+Rebuild with scripts/render-watch-characters.mjs using an unpacked official
+Mini Characters 2.0 download. Rendering uses development-only Three.js 0.181.1,
+Playwright 1.56.1 and Chromium; none are dependencies of the watch viewer.

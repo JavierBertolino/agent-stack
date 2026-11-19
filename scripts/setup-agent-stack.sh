@@ -2149,6 +2149,8 @@ Emit telemetry so observers can follow delegation in realtime:
 - When a subagent report arrives, record it verbatim: `astack run-state event --run <run-id> --type report --detail '<report.schema.json#1 JSON>'`
 - At your own end: `--type agent-end --detail '{"agent":"resolver","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"resolver","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
 - You remain the sole writer of `transition` and `record-*`; telemetry types never change phase or budget.
+- While working, emit concise public activity notes: `astack run-state --root <run-state-project-root> event --run <run-id> --type note --detail '{"agent":"resolver","kind":"thought","doing":"<brief decision summary and next step>"}'`. Use `kind:"command"` for an exact command and `kind:"result"` for its observed result; omit unknown results. Thinking means a short decision summary, never private chain-of-thought or invented narration. Emit after notable steps; never include secrets or unrelated runs.
+- Supply the run-state project root in every delegation (it may differ from the code worktree). On `agent-start`, include the actual model and `variant` when known; omit unknown values. Set `targetAgent` on handoff telemetry when the phase does not uniquely identify the recipient (for example a QA rework). If a specialist cannot emit notes under its role permissions, record its returned public notes verbatim with that specialist's `agent` identity; do not impersonate its reasoning or execution. Keep resolver-executed QA attributed to `resolver`, not a specialist that never ran.
 - Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_RESOLVER_EOF
       ;;
@@ -2254,6 +2256,7 @@ resolver uses `transition` and `record-*`:
 
 - On entry: `--type agent-start --detail '{"agent":"designer","model":"<harness model or pinned id>"}'`
 - On exit: `--type agent-end --detail '{"agent":"designer","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"designer","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- While working, emit concise public activity notes with your actual role: `astack run-state --root <run-state-project-root> event --run <run-id> --type note --detail '{"agent":"designer","kind":"thought","doing":"<brief decision summary and next step>"}'`. Use `kind:"command"` for an exact command and `kind:"result"` for its observed result; omit unknown results. Thinking means a short decision summary, never private chain-of-thought or invented narration. The run-state root is supplied by the resolver and may differ from the code worktree. If shell/event writing is denied, do not bypass the role's permissions: return these notes to the resolver for verbatim recording. Emit after notable steps; never include secrets or unrelated runs.
 - Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_DESIGNER_EOF
       ;;
@@ -2357,6 +2360,7 @@ report already contains:
 
 - On entry: `--type agent-start --detail '{"agent":"design-qa","model":"<harness model or pinned id>"}'`
 - On exit: `--type agent-end --detail '{"agent":"design-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"design-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- While working, emit concise public activity notes with your actual role: `astack run-state --root <run-state-project-root> event --run <run-id> --type note --detail '{"agent":"design-qa","kind":"thought","doing":"<brief decision summary and next step>"}'`. Use `kind:"command"` for an exact command and `kind:"result"` for its observed result; omit unknown results. Thinking means a short decision summary, never private chain-of-thought or invented narration. The run-state root is supplied by the resolver and may differ from the code worktree. If shell/event writing is denied, do not bypass the role's permissions: return these notes to the resolver for verbatim recording. Emit after notable steps; never include secrets or unrelated runs.
 - Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_DESIGN_QA_EOF
       ;;
@@ -2487,6 +2491,7 @@ resolver uses `transition` and `record-*`:
 
 - On entry: `--type agent-start --detail '{"agent":"developer","model":"<harness model or pinned id>"}'`
 - On exit: `--type agent-end --detail '{"agent":"developer","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"developer","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- While working, emit concise public activity notes with your actual role: `astack run-state --root <run-state-project-root> event --run <run-id> --type note --detail '{"agent":"developer","kind":"thought","doing":"<brief decision summary and next step>"}'`. Use `kind:"command"` for an exact command and `kind:"result"` for its observed result; omit unknown results. Thinking means a short decision summary, never private chain-of-thought or invented narration. The run-state root is supplied by the resolver and may differ from the code worktree. If shell/event writing is denied, do not bypass the role's permissions: return these notes to the resolver for verbatim recording. Emit after notable steps; never include secrets or unrelated runs.
 - Never include API keys, session credentials, or unrelated runs in any detail.
 ROLE_DEVELOPER_EOF
       ;;
@@ -2622,6 +2627,7 @@ resolver uses `transition` and `record-*`:
 - On entry: `--type agent-start --detail '{"agent":"web-qa","model":"<harness model or inherit>"}'`
 - Around each Jev call: `--type jev-request --detail '<full {model,state,questions} JSON>'` before the call, `--type jev-response --detail '<full verdict JSON>'` after. Full bodies render collapsed in watch; never include API keys or credentials.
 - On exit: `--type agent-end --detail '{"agent":"web-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"web-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- While working, emit concise public activity notes with your actual role: `astack run-state --root <run-state-project-root> event --run <run-id> --type note --detail '{"agent":"web-qa","kind":"thought","doing":"<brief decision summary and next step>"}'`. Use `kind:"command"` for an exact command and `kind:"result"` for its observed result; omit unknown results. Thinking means a short decision summary, never private chain-of-thought or invented narration. The run-state root is supplied by the resolver and may differ from the code worktree. If shell/event writing is denied, do not bypass the role's permissions: return these notes to the resolver for verbatim recording. Emit after notable steps; never include secrets or unrelated runs.
 ROLE_WEB_QA_EOF
       ;;
     mobile-qa) cat > "$target" <<'ROLE_MOBILE_QA_EOF'
@@ -2781,6 +2787,7 @@ resolver uses `transition` and `record-*`:
 - On entry: `--type agent-start --detail '{"agent":"mobile-qa","model":"<harness model or inherit>"}'`
 - Around each Jev call: `--type jev-request --detail '<full {model,state,questions} JSON>'` before the call, `--type jev-response --detail '<full verdict JSON>'` after. Full bodies render collapsed in watch; never include API keys or credentials.
 - On exit: `--type agent-end --detail '{"agent":"mobile-qa","status":"done|partial|blocked"}'` plus `--type usage --detail '{"agent":"mobile-qa","model":"...","input":N,"output":M,"total":N+M,"source":"self-reported"}'` with numbers copied from the harness session stats; omit unknown fields rather than guessing.
+- While working, emit concise public activity notes with your actual role: `astack run-state --root <run-state-project-root> event --run <run-id> --type note --detail '{"agent":"mobile-qa","kind":"thought","doing":"<brief decision summary and next step>"}'`. Use `kind:"command"` for an exact command and `kind:"result"` for its observed result; omit unknown results. Thinking means a short decision summary, never private chain-of-thought or invented narration. The run-state root is supplied by the resolver and may differ from the code worktree. If shell/event writing is denied, do not bypass the role's permissions: return these notes to the resolver for verbatim recording. Emit after notable steps; never include secrets or unrelated runs.
 ROLE_MOBILE_QA_EOF
       ;;
   esac

@@ -7,6 +7,6 @@
     "packages/cli"
   ],
   "dependencies": {
-    "@fission-ai/openspec": "2.0.0"
+    "@fission-ai/openspec": "2.1.1"
   }
 }
